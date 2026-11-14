@@ -151,6 +151,7 @@
     W.burst(sp.x, sp.y + 0.8, sp.z, 46, 18, 0xfff3c4, { life: 0.55, size: 3, grow: 2.2, alpha: 0.95, grav: 0, up: 0.9 });
     W.burst(sp.x, sp.y + 0.4, sp.z, 80, 12, dustColor(s), { life: 3.4, size: 1.7, grow: 3, alpha: 0.5, up: 1, lift: 5, grav: W.gravity * 0.4 });
     W.cam.shake = Math.max(W.cam.shake, clamp(1.1 - dist / 170, 0.18, 0.85));
+    if (JA.fx && JA.fx.pulse && ctx.outside) { JA.fx.pulse('flash', clamp(0.9 - dist / 260, 0.15, 0.7)); JA.fx.pulse('shock', clamp(1.1 - dist / 200, 0.2, 0.9)); }
     if (mars) k.boom = Math.max(0.05, dist / 240);                 // the boom arrives late: sound is slow in thin air
     var rough = Math.max(10, Math.round(dist / 10) * 10), dir = dirWord(me, sp), sensor = sensorName(s), line;
     if (!ctx.outside) line = 'Thump! The floor just shook. A meteorite has hit the ground outside, about ' + rough + ' metres to the ' + dir + '!';

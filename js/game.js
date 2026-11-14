@@ -570,7 +570,7 @@
         else if (e.machine === 'lab' && s.m.lab.queue.length) say('The Lab used up its power cell, and cores are still waiting.', true);
         else if (e.machine === 'food') say('The grow lamps ran out of power. Plants stop growing in the dark.', true);
       }
-      else if (e.type === 'discovery') { Au.play('discovery'); U.card(e.find); toastAt(B.pos.lab, '+' + e.find.pts + ' ⭐', '#ffd23f'); }
+      else if (e.type === 'discovery') { fxPulse('glow', 0.8); Au.play('discovery'); U.card(e.find); toastAt(B.pos.lab, '+' + e.find.pts + ' ⭐', '#ffd23f'); }
       else if (e.type === 'break') {
         var bl = (JA.VOICE || {})[e.machine + '-broken'];      // the bubble shows what the recorded line says, plus where to look
         Au.play('bad'); Au.play('spark', { at: B.repair[e.machine] });
@@ -580,7 +580,7 @@
       else if (e.type === 'storm') {
         var inside = G.mode === 'inside';
         if (e.phase === 'warning') {
-          Au.play('storm-alert');
+          fxPulse('glitch', 0.7); Au.play('storm-alert');
           say(inside ? 'A solar storm is on its way. Good thing we are inside!' : s.m.comms.on ? 'Mission Control spotted a solar flare! A radiation storm is coming. Head for the airlock!' : 'My sensor just caught a solar storm! The dish is off, so there was no early warning. RUN for the airlock!',
             true, inside ? 'storm-inside' : s.m.comms.on ? 'storm-spotted' : 'storm-no-warning', true);
         }
@@ -590,8 +590,8 @@
         }
         else { Au.play('good'); say('The storm has passed. All clear!', true); }
       }
-      else if (e.type === 'daygoal') { Au.play('discovery'); U.toast('🎯 Challenge done! +' + e.pts + ' ⭐', W.w / 2, W.h * 0.3, '#ffd23f'); say('Today\'s challenge is done: ' + s.day.goal.text.toLowerCase() + '. Nice work!', true, 'hud-challenge-done'); }
-      else if (e.type === 'crisis') crisisModal();
+      else if (e.type === 'daygoal') { fxPulse('glow', 1); Au.play('discovery'); U.toast('🎯 Challenge done! +' + e.pts + ' ⭐', W.w / 2, W.h * 0.3, '#ffd23f'); say('Today\'s challenge is done: ' + s.day.goal.text.toLowerCase() + '. Nice work!', true, 'hud-challenge-done'); }
+      else if (e.type === 'crisis') { fxPulse('glitch', 1); crisisModal(); }
       else if (e.type === 'consequence') showConsequence(e);
       else if (e.type === 'fail') { failNow(e.reason); return; }
       else if (e.type === 'dayEnd') { onDayEnd(); return; }
@@ -682,6 +682,22 @@
     if (G.mode === 'play' || G.mode === 'inside') say(G.pov ? 'Helmet view! You are looking through your own visor now.' : 'Back to the outside view.', true);
   }
   // A postcard of exactly what you see. The picture is made in this browser and never sent anywhere.
+  // ---------- the camera: effects and filters (js/fx.js) ----------
+  function fxPulse(kind, amount) { if (JA.fx && JA.fx.pulse) JA.fx.pulse(kind, amount); }
+  function fxTag() {
+    var el = $('fx-tag'), f = JA.fx && JA.fx.on && !JA.fx.failed ? JA.fx.current() : null, show = !!f && f.id !== 'natural';
+    if (!el) return;
+    U.show(el, show);
+    if (show) el.textContent = f.icon + ' ' + f.name;
+  }
+  function setFx(on) { if (JA.fx) JA.fx.setOn(on); fxTag(); }
+  function nextFilter() {
+    if (!JA.fx || !JA.fx.available()) return;
+    if (!JA.fx.on) JA.fx.setOn(true);
+    var f = JA.fx.nextFilter();
+    Au.play('photo'); fxPulse('flash', 0.18); fxTag();
+    say(f.note, true);
+  }
   function snapPostcard() {
     var s = G.s;
     if (!s || (G.mode !== 'play' && G.mode !== 'inside') || !JA.keepsake || U.modalOpen() || infoOpen()) return;
@@ -743,7 +759,9 @@
         extra('pov', '👁️', 'Helmet view', touch ? 'See through your own visor.' : 'See through your own visor. Key: V', !!G.pov) +
         (JA.keepsake ? extra('snap', '📷', 'Postcard', touch ? 'Save a picture of what you see.' : 'Save a picture of what you see. Key: C') : '') +
         (JA.sunwatch ? extra('sun', '☀️', 'Sun Watch', 'The real NASA flares behind your mission.') : '') +
-        (JA.music ? extra('music', '🎵', 'Music', musicOn() ? 'On. Pick to switch it off.' : 'Off. Pick to switch it on.', musicOn()) : '') + '</div>' +
+        (JA.music ? extra('music', '🎵', 'Music', musicOn() ? 'On. Pick to switch it off.' : 'Off. Pick to switch it on.', musicOn()) : '') +
+        (JA.fx && JA.fx.available() ? extra('filter', JA.fx.current().icon, 'Camera: ' + JA.fx.current().name, touch ? 'See like a real space camera. Pick to change.' : 'See like a real space camera. Key: L') +
+          extra('fx', '✨', 'Film effects', (JA.fx.on ? 'On: glow, lens flare, film grain.' : 'Off: the plain picture.') + (touch ? '' : ' Key: X'), JA.fx.on) : '') + '</div>' +
         '<div class="modal-actions"><button class="btn ghost" data-act="quit">Quit mission</button><button class="btn ghost" data-act="how">How to play</button><button class="btn primary" data-act="ok">Back to work ▶</button></div>',
         { cls: 'wide pause', noFocus: true, actions: {
           shift: function (el) { var v = parseInt(el.getAttribute('data-v'), 10); sim.setDayLength(s, v); G.opts.shift = v; Au.play('tap'); draw(); refocus('[data-act="shift"][data-v="' + v + '"]'); },
@@ -751,6 +769,8 @@
           snap: function () { U.closeModal(); snapPostcard(); },
           sun: function () { Au.play('tap'); ext('sunwatch', 'open', s, G.weather); },
           music: function () { setMusic(!musicOn()); Au.play('tap'); draw(); refocus('[data-act="music"]'); },
+          filter: function () { nextFilter(); draw(); refocus('[data-act="filter"]'); },
+          fx: function () { setFx(!JA.fx.on); Au.play('tap'); draw(); refocus('[data-act="fx"]'); },
           how: function () { Au.play('tap'); howInfo(); },
           quit: function () { Au.play('tap'); U.closeModal(); titleScene(); },
           ok: function () { Au.play('tap'); U.closeModal(); }
@@ -1102,7 +1122,7 @@
   function stepLaunch(dt) {
     var t0 = G.launchT, t = G.launchT += dt;
     if (t <= 0) return;
-    if (t0 <= 0) { B.startLaunch(); Au.play('launch'); }
+    if (t0 <= 0) { B.startLaunch(); Au.play('launch'); fxPulse('flash', 0.5); fxPulse('shock', 0.6); }
     B.rocketPos(W.cam.fixed.look);
     U.banner(t < 0.8 ? '3…' : t < 1.6 ? '2…' : t < 2.4 ? '1…' : t < 6 ? '🚀 LIFTOFF!' : null, 'safe');
     var n = t < 0.8 ? 0 : t < 1.6 ? 1 : t < 2.4 ? 2 : 3;
@@ -1203,7 +1223,7 @@
   function howInfo() {
     var keys = touch
       ? '<div class="keys"><span>🕹️</span><div>Left stick: walk (push all the way to run) · drive the rover</div><span>⏸</span><div>Pause · change how long a day lasts</div><span>👆</span><div>Drag anywhere to look around</div><span>✋</span><div>Use, pick up, plug in, drill (hold)</div><span>🎯</span><div>Hold to aim a throw, let go to throw</div><span>⤴</span><div>Jump</div><span>👁</span><div>Helmet view: see through your own visor</div></div>'
-      : '<div class="keys"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><div>Walk · drive the rover (arrow keys work too)</div><span><kbd>Mouse</kbd></span><div>Drag to look around · wheel to zoom</div><span><kbd>E</kbd></span><div>Use, pick up, plug in, drill (hold)</div><span><kbd>F</kbd></span><div>Hold to aim a throw, let go to throw</div><span><kbd>Space</kbd></span><div>Jump</div><span><kbd>Shift</kbd></span><div>Run (uses more air)</div><span><kbd>Q</kbd></span><div>Put down what you are holding</div><span><kbd>V</kbd></span><div>Helmet view: see through your own visor (A and D turn you)</div><span><kbd>C</kbd></span><div>Save a postcard picture</div></div>';
+      : '<div class="keys"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><div>Walk · drive the rover (arrow keys work too)</div><span><kbd>Mouse</kbd></span><div>Drag to look around · wheel to zoom</div><span><kbd>E</kbd></span><div>Use, pick up, plug in, drill (hold)</div><span><kbd>F</kbd></span><div>Hold to aim a throw, let go to throw</div><span><kbd>Space</kbd></span><div>Jump</div><span><kbd>Shift</kbd></span><div>Run (uses more air)</div><span><kbd>Q</kbd></span><div>Put down what you are holding</div><span><kbd>V</kbd></span><div>Helmet view: see through your own visor (A and D turn you)</div><span><kbd>C</kbd></span><div>Save a postcard picture</div><span><kbd>L</kbd></span><div>Camera filter: see like a real space camera</div><span><kbd>X</kbd></span><div>Film effects on or off</div></div>';
     openInfo('<h2>How to play</h2>' + keys +
       '<div class="info-row"><span class="ic">🔋</span><div><b>Power cells</b><p>The Solar Rack charges a few cells each day. Carry or throw each one into a machine\'s socket: Air Maker, Greenhouse, Soil Bagger, Lab, Radio Dish or Rover.</p></div></div>' +
       '<div class="info-row"><span class="ic">🧊</span><div><b>Ice = air and water</b><p>Mine ice at the far crater. Drop it in the Air Maker to make oxygen, or in the Greenhouse tank to water the plants. The rover bed carries four things.</p></div></div>' +
@@ -1233,6 +1253,7 @@
       '<li>Dust storms (Mars) and shadow days (Moon) are simulated, inspired by the 2018 global dust storm and the low Sun at the lunar south pole.</li>' +
       '<li>The rock sites are invented places. Each discovery describes what a real mission found somewhere on the Moon or Mars, not at this exact spot.</li>' +
       '<li>The meteorite strikes are invented events. The facts on their cards are real: the InSight lander felt a real strike on Mars in 2021, and NASA\'s Lunar Reconnaissance Orbiter has found new craters on the Moon.</li>' +
+      '<li>The picture is styled like a film camera (glow, lens flare, grain). The sparkles and streaks during a solar storm copy what charged particles really do to camera sensors in space. The Heat view filter is pretend: it colours the picture by brightness, not by real temperature.</li>' +
       '<li>Power cells, air, food and points are game units, tuned so that no choice is free.</li>' +
       '<li>Radiation is invisible. The pink glow is BOLT\'s “sensor view” so you can tell a storm is happening.</li></ul>' +
       '<h3>Sources</h3><ul class="src-list">' + links + '</ul>');
@@ -1388,6 +1409,8 @@
       if (e.code === 'KeyH') { if (G.mode === 'play' || G.mode === 'inside') howInfo(); }
       if (e.code === 'KeyV' && !e.repeat && (G.mode === 'play' || G.mode === 'inside')) setPov(!G.pov);
       if (e.code === 'KeyC' && !e.repeat) snapPostcard();
+      if (e.code === 'KeyL' && !e.repeat && (G.mode === 'play' || G.mode === 'inside')) nextFilter();
+      if (e.code === 'KeyX' && !e.repeat && JA.fx && JA.fx.available()) { setFx(!JA.fx.on); if (G.mode === 'play' || G.mode === 'inside') say(JA.fx.on ? 'Camera effects on.' : 'Camera effects off.', true); }
       if (e.code === 'KeyM' && !e.repeat && JA.music) { setMusic(!musicOn()); if (G.mode === 'play') say(musicOn() ? 'Music on.' : 'Music off.', true); }
       if (e.code === 'Escape' || e.code === 'KeyP') { if (G.mode === 'intro') JA.intro.skip(); else pauseModal(); }
     });
@@ -1472,7 +1495,7 @@
     // little moments from the physics
     A.onJump = function () { Au.play('jump'); G.tut.jumped = true; if (G.s) tip('jump', G.s.site.id === 'moon' ? 'Wheee! The Moon\'s gravity is only one-sixth of Earth\'s, so you jump six times higher.' : 'Boing! Mars gravity is about 38% of Earth\'s, so you jump more than twice as high.'); };
     A.onLand = function (rover) { Au.play(rover ? 'thud' : 'land'); if (!rover && !G.room) W.dust(A.astro.pos.x, A.astro.pos.z, 8, 2, 0.45); };
-    A.onBonk = function () { Au.play('thud'); W.cam.shake = Math.max(W.cam.shake, 0.12); tip('bonk', 'Bonk! In low gravity even a small jump reaches the ceiling indoors. Mind your helmet!'); };
+    A.onBonk = function () { fxPulse('shock', 0.45); Au.play('thud'); W.cam.shake = Math.max(W.cam.shake, 0.12); tip('bonk', 'Bonk! In low gravity even a small jump reaches the ceiling indoors. Mind your helmet!'); };
     A.onStep = function (p, yaw, side, sprint) {
       if (G.room) { Au.play('step'); return; }
       var c = Math.cos(yaw), sn = Math.sin(yaw);
@@ -1541,6 +1564,11 @@
       POV.air = G.s.air; POV.moving = Math.hypot(G.input.x, G.input.z) > 0.2; POV.effort = POV.moving && G.input.sprint;
     }
     ext('pov', 'frame', dt, povOn, povOn ? POV : null);
+    if (JA.fx) {
+      var fs = JA.fx.state;
+      fs.mode = G.mode; fs.site = G.s ? G.s.site.id : W.site; fs.room = G.room || ''; fs.pov = povOn;
+      fs.air = G.s && (G.mode === 'play' || G.mode === 'inside') ? G.s.air : 100;
+    }
     var mood = musicMood(); if (mood !== lastMood) { lastMood = mood; ext('music', 'setMood', mood); }
     G.input.jump = false; G.ePressed = false; G.qPressed = false;
   }

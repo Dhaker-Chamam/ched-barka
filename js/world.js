@@ -451,7 +451,7 @@
     var f = cam.target;
     sun.target.position.set(f.x, f.y, f.z);
     sun.position.set(f.x + sunDir.x * 260, f.y + sunDir.y * 260, f.z + sunDir.z * 260);
-    sunSprite.position.copy(camera.position).addScaledVector(sunDir, 2400);
+    sunSprite.position.copy(camera.position).addScaledVector(sunDir, 2400); W.sunSprite = sunSprite;
     skyMesh.position.copy(camera.position); stars.position.copy(camera.position);
 
     env.dustShown = lerp(env.dustShown, env.dust, Math.min(1, dt * 0.8));
@@ -577,6 +577,7 @@
     updateSky(dt);
     ambientParticles(dt);
     updateParticles(dt);
-    if (window.innerWidth && window.innerHeight) renderer.render(scene, camera);
+    // the picture goes through the camera effects (js/fx.js) when they are on and working; otherwise it is drawn plainly
+    if (window.innerWidth && window.innerHeight) { if (!(JA.fx && JA.fx.render && JA.fx.render(renderer, scene, camera, dt))) renderer.render(scene, camera); }
   };
 })(window.JA);

@@ -428,3 +428,8 @@ body.touch #inside b, body.touch #inside p { display: none; }
 body.touch #inside .inside-actions { display: flex; flex-wrap: nowrap; gap: 6px; }
 body.touch #inside .inside-actions .btn { padding: 0.5em 0.8em; font-size: 0.8rem; }
 body.touch.in-room #goals { display: none; }
+
+/* ---------- the camera filter in use (js/fx.js) ---------- */
+#fx-tag { position: fixed; right: calc(14px + var(--safe-r)); top: 44%; z-index: 19; pointer-events: none; padding: 6px 12px; border-radius: 999px; font-size: 0.82rem; font-weight: 600;
+  background: var(--panel); box-shadow: inset 0 0 0 1.5px var(--power), 0 6px 18px rgba(0, 0, 0, 0.4); }
+body.cine #fx-tag { display: none; }
