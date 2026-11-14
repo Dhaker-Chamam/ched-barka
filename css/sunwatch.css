@@ -1,0 +1,89 @@
+/* Astro Outpost — Sun Watch card (built by js/sunwatch.js).
+   Every rule starts with .sunwatch, so nothing in this file can change the rest of the game.
+   Colours come from the variables in style.css. No text is smaller than 0.78rem. */
+
+.sunwatch { text-align: left; }
+.sunwatch .tagline { font-size: 0.78rem; }
+.sunwatch-lead { font-size: 1.02rem; }
+.sunwatch-data { box-shadow: inset 0 0 0 2px var(--line); }
+.sunwatch-how, .sunwatch-note, .sunwatch-src, .sunwatch-sum { font-size: 0.92rem; color: var(--muted); }
+.sunwatch-how b, .sunwatch-sum { color: var(--ink); }
+.sunwatch-src { margin-top: 12px; }
+
+/* ---------- the chart ---------- */
+.sunwatch-fig { margin: 8px 0 4px; padding: 10px 10px 6px; background: var(--panel); border-radius: 16px; box-shadow: inset 0 0 0 2px var(--line); }
+.sunwatch-fig p { margin: 0 0 8px; font-size: 0.92rem; }
+.sunwatch-chart { display: block; width: 100%; overflow: visible; touch-action: pan-y; }
+.sunwatch-chart svg { overflow: visible; }
+.sunwatch-chart:focus { outline: none; }
+.sunwatch-chart:focus-visible { outline: 2px solid var(--air); outline-offset: 3px; border-radius: 8px; }
+.sunwatch-chart text { font-size: 0.78rem; fill: var(--muted); font-family: inherit; }
+.sunwatch-chart .sunwatch-letter { font-size: 1.05rem; font-weight: 700; fill: var(--ink); }
+.sunwatch-chart .sunwatch-cap { font-size: 0.8rem; font-weight: 700; fill: var(--power); letter-spacing: 0.04em; }
+.sunwatch-chart .sunwatch-n { font-weight: 600; fill: var(--ink); }
+.sunwatch-chart .sunwatch-ntoday { font-weight: 700; fill: #2a1c00; }
+.sunwatch-chart .sunwatch-q { font-size: 1.5rem; font-weight: 700; fill: var(--muted); }
+.sunwatch-band { stroke: none; }
+.sunwatch-bx { fill: var(--danger); fill-opacity: 0.13; }
+.sunwatch-bm { fill: var(--power); fill-opacity: 0.07; }
+.sunwatch-bc { fill: var(--air); fill-opacity: 0.07; }
+.sunwatch-grid { stroke: var(--line); stroke-width: 1; }
+.sunwatch-m5 { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 5; opacity: 0.7; }
+.sunwatch-axis { stroke: var(--muted); stroke-width: 1; }
+.sunwatch-mission { fill: var(--power); fill-opacity: 0.08; stroke: var(--power); stroke-width: 1.5; }
+.sunwatch-strip { fill: var(--power); fill-opacity: 0.25; }
+.sunwatch-sep { stroke: var(--power); stroke-width: 1; opacity: 0.3; }
+.sunwatch-todaycol { fill: var(--power); fill-opacity: 0.16; }
+.sunwatch-todaydot { fill: var(--power); }
+.sunwatch-f { stroke: var(--panel-solid); stroke-width: 1.5; }
+.sunwatch-fc { fill: var(--air); }
+.sunwatch-fm { fill: var(--power); }
+.sunwatch-fx { fill: var(--danger); }
+.sunwatch-ring { fill: none; stroke: var(--ink); stroke-width: 2; }
+.sunwatch-cover { fill: var(--panel-solid); fill-opacity: 0.88; stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.sunwatch-pick { display: none; fill: none; stroke: var(--air); stroke-width: 3; stroke-dasharray: 5 3; pointer-events: none; }
+.sunwatch-pick.sunwatch-on { display: inline; }
+.sunwatch-fig .sunwatch-read { min-height: 1.45em; margin: 6px 0 2px; font-weight: 600; color: var(--ink); }
+.sunwatch-fig .sunwatch-read:empty { display: none; }
+
+/* the key under the chart */
+.sunwatch-key { list-style: none; margin: 8px 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; font-size: 0.9rem; line-height: 1.3; }
+.sunwatch-key li { display: flex; gap: 8px; align-items: flex-start; }
+.sunwatch-ic { flex: none; overflow: visible; }
+.sunwatch-ic .sunwatch-f, .sunwatch-ic .sunwatch-fx, .sunwatch-ic .sunwatch-fm, .sunwatch-ic .sunwatch-fc { stroke: none; }
+.sunwatch-ic .sunwatch-q { font-size: 0.85rem; font-weight: 700; fill: var(--muted); }
+.sunwatch-fig .sunwatch-how { margin: 6px 0; }
+
+/* ---------- one row per mission day ---------- */
+.sunwatch-days { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 7px; }
+.sunwatch-day { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 10px; align-items: start; background: rgba(255, 255, 255, 0.06); border-radius: 14px; padding: 9px 12px; border-left: 5px solid var(--line); }
+.sunwatch-l0 { border-left-color: var(--ok); }
+.sunwatch-l1, .sunwatch-l2 { border-left-color: var(--power); }
+.sunwatch-l3 { border-left-color: var(--danger); }
+.sunwatch-now { box-shadow: inset 0 0 0 2px var(--power); }
+.sunwatch-wait { background: none; border: 2px dashed var(--line); border-left-width: 5px; }
+.sunwatch-chip { font-weight: 700; font-size: 0.9rem; white-space: nowrap; background: rgba(255, 255, 255, 0.12); border-radius: 9px; padding: 2px 9px; }
+.sunwatch-now .sunwatch-chip { background: var(--power); color: #2a1c00; }
+.sunwatch-info { min-width: 0; }
+.sunwatch-info b { font-size: 1rem; }
+.sunwatch-info em { font-style: normal; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--power); margin-left: 4px; }
+.sunwatch-info span { display: block; font-size: 0.9rem; line-height: 1.4; color: var(--ink); }
+.sunwatch-info span b { font-size: inherit; }
+.sunwatch-info .sunwatch-res { color: var(--muted); }
+.sunwatch-info .sunwatch-res b { color: var(--ink); }
+.sunwatch-info a { white-space: nowrap; }
+.sunwatch-pill { font-size: 0.85rem; font-weight: 700; white-space: nowrap; border-radius: 999px; padding: 3px 11px; box-shadow: inset 0 0 0 2px currentColor; }
+.sunwatch-p0 { color: var(--ok); }
+.sunwatch-p1 { color: var(--power); }
+.sunwatch-p2 { color: #2a1c00; background: var(--power); box-shadow: none; }
+.sunwatch-p3 { color: #2a0008; background: var(--danger); box-shadow: none; }
+.sunwatch-pq { color: var(--muted); }
+
+/* ---------- phones ---------- */
+@media (max-width: 560px) {
+  .sunwatch-wide { display: none; }
+  .sunwatch-fig { padding: 9px 6px 5px; }
+  .sunwatch-key { grid-template-columns: 1fr; }
+  .sunwatch-day { grid-template-columns: auto 1fr; }
+  .sunwatch-pill { grid-column: 2; justify-self: start; }
+}

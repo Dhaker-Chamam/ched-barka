@@ -10,10 +10,15 @@
 
   // ---------- helpers ----------
   function later(s, d, sol, t, fn) { s.after.push({ sol: sol, t: t, fn: fn, d: d, done: false }); }
-  function inSecs(s, d, secs, fn) { later(s, d, s.sol, s.t + secs, fn); }                 // later today
+  // later today: never past the end of the shift, or it would only show up the next morning
+  function inSecs(s, d, secs, fn) { later(s, d, s.sol, Math.min(s.t + secs, s.dayLength - 0.5), fn); }
   function tomorrow(s, d, fn) { if (s.sol < s.totalSols) later(s, d, s.sol + 1, 5, fn); }   // first thing next morning
   function extra(s, res, text, v) { s.today.extra.push({ res: res, text: text, v: v }); }
   function live(b) { return b.state === 'growing' || b.state === 'ripe'; }
+  // The blown pump fuse and a Greenhouse breakdown are two separate faults. Either one stops the plants,
+  // so mending one must not quietly mend the other.
+  function glitchOn(s, id) { var g = s.glitch; return !!g && g.machine === id && (g.state === 'broken' || g.state === 'asked' || g.state === 'advised'); }
+  function pumpFuse(s, blown) { s.flags.pumpFuse = blown ? s.sol : 0; s.m.food.broken = blown || glitchOn(s, 'food'); }
 
   // ---------- 1 · a leak ----------
   C.leak = {
@@ -66,7 +71,7 @@
       { id: 'cell', icon: '🔋', label: 'Run the backup scrubber on a power cell', text: 'The backup machine cleans the air with electricity. It swallows a whole power cell.',
         run: function (s, d) {
           s.stale = 1;
-          if (s.rack.cells > 0) s.rack.cells--; else s.rack.charge -= 1;
+          if (s.rack.cells > 0) s.rack.cells--; else s.rack.charge = Math.max(0, s.rack.charge - 1);
           inSecs(s, d, 25, function () { return { tone: 'mixed', text: 'The backup scrubber used up a whole power cell. That is one machine that will stay dark today.' }; });
           return { sync: true, now: 'The backup scrubber whirrs and the air clears. The Solar Rack is one power cell poorer.' };
         } },
@@ -169,7 +174,7 @@
     text: function () { return 'A power surge has blown the fuses in the Radio Dish AND the Greenhouse water pump. The toolbox holds exactly one spare fuse.'; },
     science: 'When Apollo 13 lost most of its power, the crew switched off almost everything and kept only the systems they needed to stay alive. Deciding what matters most is a real astronaut skill. And a fuse is a safety part: it is built to melt before the wires do.',
     ok: function () { return true; },
-    start: function (s) { var m = s.m; s.flags.dishWasOn = m.comms.on; m.comms.broken = true; m.comms.on = false; m.food.broken = true; },
+    start: function (s) { var m = s.m; s.flags.dishWasOn = m.comms.on; m.comms.broken = true; m.comms.on = false; pumpFuse(s, true); },
     options: [
       { id: 'radio', icon: '📡', label: 'Put the fuse in the Radio Dish', text: 'Earth can reach you again. The Greenhouse pump stays off.',
         run: function (s, d) {
@@ -179,17 +184,17 @@
         } },
       { id: 'pump', icon: '💧', label: 'Put the fuse in the Greenhouse pump', text: 'The plants keep drinking. The Radio Dish stays off.',
         run: function (s, d) {
-          s.m.food.broken = false;
+          pumpFuse(s, false);
           inSecs(s, d, 35, function () { return { tone: 'mixed', text: 'The Radio Dish is dark. There will be no forecast tonight, only a few seconds of warning if a solar storm comes, and Earth cannot help with repairs today.' }; });
           return { now: 'Water gurgles through the Greenhouse pipes again. The Radio Dish stays dead.' };
         } },
       { id: 'foil', icon: '🧻', label: 'Make a second fuse out of kitchen foil', text: 'Wrap foil where the missing fuse should go. Then both machines can run.',
         run: function (s, d) {
           var m = s.m;
-          m.comms.broken = false; m.comms.on = !!s.flags.dishWasOn; m.food.broken = false;
+          m.comms.broken = false; m.comms.on = !!s.flags.dishWasOn; pumpFuse(s, false);
           inSecs(s, d, 45, function (s2) {
             var m2 = s2.m;
-            m2.comms.broken = true; m2.comms.on = false; m2.food.broken = true; s2.rack.charge = Math.max(0, s2.rack.charge - 1);
+            m2.comms.broken = true; m2.comms.on = false; pumpFuse(s2, true); s2.rack.charge = Math.max(0, s2.rack.charge - 1);
             return { tone: 'bad', spark: true, text: 'A real fuse melts to protect the wires. The foil did not, so the wires overheated instead. Both machines are dead until tonight, and the Solar Rack lost a whole cell of charge.' };
           });
           return { now: 'Both machines hum back to life. The foil is getting warm…' };
@@ -237,7 +242,12 @@
     });
   }
   function startSol(s) {
-    var p = s.crisisPlan[s.sol], D = s.dayLength;
+    var prev = s.crisis, D = s.dayLength, d;
+    // a crisis that never opened (the crew went to bed first, or a storm was in the way) waits for the next free day
+    if (prev && prev.state === 'pending') {
+      for (d = s.sol; d <= s.totalSols; d++) if (!s.crisisPlan[d]) { s.crisisPlan[d] = { id: prev.id, at: 0.24 + s.rng() * 0.3 }; break; }
+    }
+    var p = s.crisisPlan[s.sol];
     s.crisis = null;
     if (p) {
       var def = C[p.id], at = (def.at ? def.at[0] + s.rng() * (def.at[1] - def.at[0]) : p.at) * D;

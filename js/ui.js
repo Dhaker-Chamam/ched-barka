@@ -20,86 +20,161 @@
     });
     var first = root.querySelector('.btn.primary') || root.querySelector('button');
     if (first && !opts.noFocus) { try { first.focus({ preventScroll: true }); } catch (e) { /* older browsers */ } }
-    // a recorded greeting when there is one; with read-aloud on, the whole card is read instead
-    if (!(opts.line && !JA.audio.readingOn() && JA.audio.line(opts.line)) && opts.speak) JA.audio.speak(opts.speak);
+    if (opts.speak) JA.audio.speak(opts.speak);
     return root.firstChild;
   };
   U.closeModal = function () { root.className = ''; root.innerHTML = ''; };
+  // Tab stays inside the open card instead of wandering to the buttons behind it
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Tab') return;
+    var info = $('info-root'), box = info && info.classList.contains('open') ? info : U.modalOpen() ? root : null;
+    if (!box) return;
+    var f = box.querySelectorAll('button:not([disabled]), a[href], input, select, textarea, [tabindex="0"]'), a = document.activeElement;
+    if (!f.length) { e.preventDefault(); return; }
+    var first = f[0], last = f[f.length - 1], inside = box.contains(a);
+    if (e.shiftKey && (!inside || a === first)) { last.focus(); e.preventDefault(); }
+    else if (!e.shiftKey && (!inside || a === last)) { first.focus(); e.preventDefault(); }
+  });
   U.modalOpen = function () { return root.classList.contains('open'); };
   U.fade = function (on) { $('fade').classList.toggle('on', !!on); };
 
   // ---------- top bar ----------
+  // Everything here runs every frame, so each part remembers what it shows and only
+  // touches the page when that changes.
+  // A one-shot CSS animation is restarted by swapping between two copies of it (pop-a / pop-b),
+  // which does not force the browser to lay the page out again.
+  function pop(o, el) { o.flip = !o.flip; el.classList.toggle('pop-a', o.flip); el.classList.toggle('pop-b', !o.flip); }
   var meters = {};
   Array.prototype.forEach.call(document.querySelectorAll('.meter'), function (m) {
-    meters[m.getAttribute('data-res')] = { el: m, val: m.querySelector('.m-val'), bar: m.querySelector('.m-bar i'), note: m.querySelector('.m-note'), last: null, w: null, n: null, wasLow: null };
+    meters[m.getAttribute('data-res')] = { el: m, val: m.querySelector('.m-val'), bar: m.querySelector('.m-bar i'), note: m.querySelector('.m-note'),
+      last: null, w: null, n: null, low: null, bad: null, dir: '', flip: false };
   });
   function setMeter(id, value, low, note, bad) {
     var m = meters[id], v = Math.round(value);
     if (m.last !== v) {
-      if (m.last !== null && Math.abs(v - m.last) >= 3) { m.el.classList.remove('bump'); void m.el.offsetWidth; m.el.classList.add('bump'); }
+      if (m.last !== null && Math.abs(v - m.last) >= 3) {
+        // the number pops green when things get better, pink when worse (more radiation is worse)
+        var dir = (id === 'dose' ? v < m.last : v > m.last) ? 'good' : 'bad';
+        if (m.dir !== dir) { m.dir = dir; m.el.setAttribute('data-dir', dir); }
+        pop(m, m.el);
+      }
       m.last = v; m.val.textContent = v + (id === 'dose' ? '%' : '');
     }
     var w = Math.round(Math.max(0, Math.min(100, value)));
     if (m.w !== w) { m.w = w; m.bar.style.width = w + '%'; }
-    m.el.classList.toggle('low', !!low);
-    if (low && m.wasLow === false) JA.audio.play('low');          // a soft ping the moment a meter turns red
-    m.wasLow = !!low;
+    low = !!low; bad = !!bad;
+    if (m.low !== low) { m.low = low; m.el.classList.toggle('low', low); }
     if (m.n !== note) { m.n = note; m.note.textContent = note || ''; }
-    m.note.classList.toggle('bad', !!bad);
+    if (m.bad !== bad) { m.bad = bad; m.note.classList.toggle('bad', bad); }
   }
-  var lastSci = null, lastSol = '', lastTime = '';
+  var hud = { sol: $('sol-text'), site: $('site-text'), fill: $('clock-fill'), sun: $('clock-sun'), storm: $('clock-storm'), left: $('time-left'), sci: $('sci-val') };
+  var stars = document.querySelector('#hud .stars'), plus = stars.querySelector('.sci-plus'), starPop = { flip: false }, plusPop = { flip: false };
+  var lastSol = '', lastTime = '', lastF = -1, lastStorm = '', stormNow = false;
+  // mission points count up to the new score instead of jumping
+  var sciTo = null, sciShown = 0, sciFrom = 0, sciT0 = 0;
+  function clock() { return window.performance && performance.now ? performance.now() : Date.now(); }
   U.setHud = function (s) {
     var L = s.level, left = Math.max(0, 1 - s.t / s.dayLength), last = s.sol >= s.totalSols;
     var solText = s.site.dayWord + ' ' + s.sol + ' of ' + s.totalSols;
-    if (solText !== lastSol) { lastSol = solText; $('sol-text').textContent = solText; $('site-text').textContent = s.site.short + ' · ' + L.name; }
+    if (solText !== lastSol) {
+      lastSol = solText;
+      hud.sol.innerHTML = '<small>' + esc(s.site.dayWord) + '</small> <span class="n">' + s.sol + '</span> <span class="of">of ' + s.totalSols + '</span>';
+      hud.site.textContent = s.site.short + ' · ' + L.name;
+    }
     var airNeed = (sim.airDrain(s) * s.stale + s.leak) * left, airBad = s.air < airNeed, dinner = sim.dinner(s);
     var dinnerBad = !last && s.food < dinner;
     var airNote = s.leak > 0 ? 'leaking!' : s.stale > 1 ? 'stale air: draining fast' : airBad ? 'not enough for today!' : 'enough for today';
     setMeter('air', s.air, s.air < 18 || airBad || s.leak > 0, airNote, airBad || s.leak > 0 || s.stale > 1);
     setMeter('food', s.food, dinnerBad, last ? 'no dinner: launch day' : (dinnerBad ? 'dinner needs ' + dinner + '!' : 'dinner tonight −' + dinner), dinnerBad);
     var secs = Math.max(0, Math.ceil(s.dayLength - s.t)), tl = Math.floor(secs / 60) + ':' + ('0' + (secs % 60)).slice(-2) + ' left';
-    if (tl !== lastTime) { lastTime = tl; $('time-left').textContent = tl; $('time-left').classList.toggle('low', left < 0.15); }
+    if (tl !== lastTime) { lastTime = tl; hud.left.textContent = tl; hud.left.classList.toggle('low', left < 0.15); }
     setMeter('dose', s.dose, s.dose >= 75, 'home shield ' + Math.round(sim.shield(s) * 100) + '%', false);
-    var sci = Math.round(s.sci);
-    if (lastSci !== sci) {
-      if (lastSci !== null) { var st = document.querySelector('.stars'); st.classList.remove('bump'); void st.offsetWidth; st.classList.add('bump'); }
-      lastSci = sci; $('sci-val').textContent = sci;
+    // points: count up, pop the gold pill and float a "+5" under it
+    var sci = Math.round(s.sci), t = clock();
+    if (sci !== sciTo) {
+      if (sciTo !== null && sci > sciTo) {
+        sciFrom = sciShown; sciT0 = t;
+        plus.textContent = '+' + (sci - sciTo); pop(plusPop, plus); pop(starPop, stars);
+      } else { sciShown = sciFrom = sci; hud.sci.textContent = sci; }
+      sciTo = sci;
     }
-    var f = Math.min(1, s.t / s.dayLength);
-    $('clock-fill').style.width = (f * 100) + '%'; $('clock-sun').style.left = (f * 100) + '%';
-    var cs = $('clock-storm'), st2 = s.storm;
-    if (st2 && st2.warned) { cs.classList.add('show'); cs.style.left = (st2.start / s.dayLength * 100) + '%'; cs.style.width = ((st2.end - st2.start) / s.dayLength * 100) + '%'; }
-    else cs.classList.remove('show');
+    if (sciShown !== sciTo) {
+      var k = Math.min(1, (t - sciT0) / 700), shown;
+      k = 1 - (1 - k) * (1 - k) * (1 - k);
+      shown = Math.round(sciFrom + (sciTo - sciFrom) * k);
+      if (shown !== sciShown) { sciShown = shown; hud.sci.textContent = shown; }
+    }
+    // the shift bar moves in steps of 0.1%, so it is written a few times a second, not every frame
+    var f = Math.round(Math.min(1, s.t / s.dayLength) * 1000) / 10;
+    if (f !== lastF) { lastF = f; hud.fill.style.width = f + '%'; hud.sun.style.left = f + '%'; }
+    var st = s.storm, sk = st && st.warned ? (st.start / s.dayLength * 100).toFixed(2) + '|' + ((st.end - st.start) / s.dayLength * 100).toFixed(2) : '';
+    if (sk !== lastStorm) {
+      lastStorm = sk;
+      hud.storm.classList.toggle('show', !!sk);
+      if (sk) { hud.storm.style.left = sk.split('|')[0] + '%'; hud.storm.style.width = sk.split('|')[1] + '%'; }
+    }
+    var inStorm = !!sk && s.t >= st.start && s.t < st.end;
+    if (inStorm !== stormNow) { stormNow = inStorm; hud.storm.classList.toggle('now', inStorm); }
   };
 
   // ---------- goals ----------
-  var goalKey = '';
+  // Must-do jobs first, then the bonus jobs (optional: the ⭐ challenge, shield, science...).
+  // Rows are kept and updated in place (found again by their emoji), so when a job gets done
+  // its tick can animate instead of the whole list being redrawn.
+  var goalKey = '', goalTitle = null, goalRows = {}, goalBox = $('goals'), goalUl = $('goal-list');
+  var goalCount = goalBox.querySelector('.g-count'), goalProg = goalBox.querySelector('.g-prog i'), goalSep = document.createElement('li');
+  goalSep.className = 'g-sep'; goalSep.textContent = 'Bonus jobs';
+  function goalRow() {
+    var li = document.createElement('li');
+    li.innerHTML = '<span class="g-ic"></span><span class="g-tx"><span></span></span><em class="g-now">Now</em>';
+    return { el: li, ic: li.firstChild, tx: li.childNodes[1].firstChild, cls: null, icon: null, text: null };
+  }
   U.setGoals = function (title, list) {
-    var key = title + '|' + list.map(function (g) { return g.text + (g.done ? 1 : 0) + (g.now ? 2 : 0); }).join('|');
+    var key = title + '|' + list.map(function (g) { return g.icon + g.text + (g.done ? 1 : 0) + (g.now ? 2 : 0) + (g.optional ? 4 : 0); }).join('|');
     if (key === goalKey) return;
     goalKey = key;
-    $('goals-title').textContent = title;
-    $('goal-list').innerHTML = list.map(function (g) { return '<li class="' + (g.done ? 'done' : g.now ? 'now' : '') + '">' + esc(g.text) + '</li>'; }).join('');
+    if (title !== goalTitle) { goalTitle = title; $('goals-title').textContent = title; }
+    var must = list.filter(function (g) { return !g.optional; }), extra = list.filter(function (g) { return g.optional; });
+    var done = must.filter(function (g) { return g.done; }).length, seen = {}, rows = [], i;
+    goalCount.textContent = done + '/' + must.length;
+    goalProg.style.width = (must.length ? Math.round(done / must.length * 100) : 0) + '%';
+    goalBox.classList.toggle('empty', !list.some(function (g) { return g.now; }));
+    must.concat(extra).forEach(function (g) {
+      if (g === extra[0] && must.length) rows.push(goalSep);
+      var id = g.icon || '•', n = 1;
+      while (seen[id + n]) n++;
+      id += n; seen[id] = true;
+      var r = goalRows[id] || (goalRows[id] = goalRow());
+      var cls = 'goal' + (g.optional ? ' g-opt' : '') + (g.done ? ' done' : g.now ? ' now' : '');
+      if (r.cls !== cls) { r.cls = cls; r.el.className = cls; }
+      if (r.icon !== g.icon) { r.icon = g.icon; r.ic.textContent = g.icon || '•'; }
+      if (r.text !== g.text) { r.text = g.text; r.tx.textContent = g.text; }
+      rows.push(r.el);
+    });
+    // put the rows in order, moving only the ones that are out of place
+    for (i = 0; i < rows.length; i++) if (goalUl.children[i] !== rows[i]) goalUl.insertBefore(rows[i], goalUl.children[i] || null);
+    while (goalUl.children.length > rows.length) goalUl.removeChild(goalUl.lastChild);
+    Object.keys(goalRows).forEach(function (id) { if (!seen[id]) delete goalRows[id]; });
   };
 
   // ---------- banner, buddy, prompt, hands ----------
   var bannerText = null;
   U.banner = function (text, cls) {
     var b = $('banner');
-    if (!text) { if (bannerText !== null) { bannerText = null; b.classList.add('hidden'); } return; }
+    if (!text) { if (bannerText !== null) { bannerText = null; b.classList.add('hidden'); document.body.classList.remove('has-banner'); } return; }
     if (bannerText === text + cls) return;
+    document.body.classList.add('has-banner');
     bannerText = text + cls; b.className = cls || ''; b.textContent = text;
   };
   var lastSay = '';
-  // vid: the recorded voice line for these words (a list plays one after the other); without one, read-aloud speaks them
-  U.say = function (text, vid) {
+  U.say = function (text, quiet) {
     if (!text || text === lastSay) return;
     lastSay = text;
     var b = $('bolt');
     b.classList.remove('hidden');
     $('bolt-text').textContent = text;
     b.classList.remove('say'); void b.offsetWidth; b.classList.add('say');
-    if (!JA.audio.line(vid)) JA.audio.speak(text);
+    if (!quiet) JA.audio.speak(text);
   };
   var promptKey = null;
   U.prompt = function (text, key, info) {
@@ -155,26 +230,29 @@
   };
 
   // ---------- discovery cards (do not pause the game) ----------
-  var cardQ = [], cardTimer = null;
+  // The card's time on screen is counted in game time (see tickCards), so a card is never
+  // used up behind a pause, a crisis or a hidden tab.
+  var cardQ = [], cardOn = false, cardLeft = 0;
   function nextCard() {
     var c = $('card');
-    cardTimer = null;
+    cardOn = false; cardLeft = 0;
     if (!cardQ.length) { c.classList.add('hidden'); return; }
     var f = cardQ.shift(), src = JA.SOURCES[f.src];
     c.classList.remove('hidden'); c.style.animation = 'none'; void c.offsetWidth; c.style.animation = '';
     c.className = f.kind === 'conseq' ? 'conseq ' + (f.tone || 'mixed') : '';
     $('card-icon').textContent = f.icon || '🧪';
     $('card-kicker').textContent = f.kind === 'conseq' ? 'What your choice led to'
-      : (f.kind === 'core' ? 'Discovery at ' + f.place : f.kind === 'inst' ? 'Instrument online' : 'Postcard') + ' · +' + f.pts + ' ⭐';
+      : (f.kind === 'core' ? 'Discovery at ' + f.place : f.kind === 'inst' ? 'Instrument online' : f.kind === 'meteor' ? 'A rock from space' : 'Postcard') + ' · +' + f.pts + ' ⭐';
     $('card-title').textContent = f.title;
     $('card-text').textContent = f.text + (f.perk ? ' ' + f.perk : '');
     $('card-src').textContent = src ? 'Source: ' + src.name : f.kind === 'conseq' ? 'Tap to close' : '';
     JA.audio.speak(f.kind === 'conseq' ? f.text : f.title + '. ' + f.text);
-    cardTimer = setTimeout(nextCard, f.kind === 'conseq' ? 14000 : 11000);
+    cardOn = true; cardLeft = f.kind === 'conseq' ? 14 : 11;
   }
-  U.card = function (find) { cardQ.push(find); if (!cardTimer) nextCard(); };
-  U.clearCards = function () { cardQ = []; if (cardTimer) clearTimeout(cardTimer); cardTimer = null; $('card').classList.add('hidden'); };
-  $('card').addEventListener('click', function () { if (cardTimer) clearTimeout(cardTimer); nextCard(); });
+  U.card = function (find) { cardQ.push(find); if (!cardOn) nextCard(); };
+  U.clearCards = function () { cardQ = []; cardOn = false; cardLeft = 0; $('card').classList.add('hidden'); };
+  U.tickCards = function (dt) { if (cardOn && (cardLeft -= dt) <= 0) nextCard(); };
+  $('card').addEventListener('click', nextCard);
 
   // ---------- in-world tags and waypoint markers (re-used DOM nodes) ----------
   var tagPool = [], markPool = [];
@@ -204,10 +282,11 @@
     for (; i < markPool.length; i++) markPool[i].el.style.display = 'none';
   };
   U.stormFx = function (mode) { var e = $('storm-fx'); if (e.className !== (mode || '')) e.className = mode || ''; };
+  // floating "+12 💨" pills over the world; --c tints the pill's ring and glow
   U.toast = function (text, x, y, color) {
     var t = document.createElement('div');
     t.className = 'toast'; t.textContent = text;
-    t.style.left = x + 'px'; t.style.top = y + 'px'; t.style.color = color || '#fff';
+    t.style.left = x + 'px'; t.style.top = y + 'px'; t.style.color = color || '#fff'; t.style.setProperty('--c', color || '#fff');
     $('toasts').appendChild(t);
     setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 1350);
   };
@@ -227,7 +306,7 @@
         '<p>' + U.dataTag(s) + 'On ' + date + ' NASA recorded ' + what + '. No radiation storm.</p></div></div>';
     }
     return '<div class="info-row alert"><span class="ic">🌩️</span><div><b>' + U.stormWords(w.level) + ' ' + when + '!</b>' +
-      '<p>' + U.dataTag(s) + 'On ' + date + ' the real Sun fired a class <b>' + esc(w.cls) + '</b> flare' + (w.time ? ' at ' + w.time + ' UTC' : '') +
+      '<p>' + U.dataTag(s) + 'On ' + date + ' the real Sun fired a class <b>' + esc(w.cls) + '</b> flare' + (w.time ? ' at ' + esc(w.time) + ' UTC' : '') +
       '. Soil bags on the dome help — and do not get caught far from home!</p></div></div>';
   };
   U.findRow = function (f) {

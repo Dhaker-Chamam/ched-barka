@@ -13,6 +13,7 @@
   var env = W.env = { t: 0.25, dust: 0, dustShown: 0, storm: 0, stormShown: 0, dark: 0 };
   var cam = W.cam = { yaw: 0, pitch: 0.4, dist: 11, mode: 'title', pos: new T.Vector3(0, 24, 60), look: new T.Vector3(0, 3, 0),
     target: new T.Vector3(0, 2, 8), shake: 0, focus: null, fixed: null,
+    fp: false, fpPitch: 0.06, eye: null,        // first person: look out of the astronaut's own helmet
     cine: { pos: new T.Vector3(), look: new T.Vector3(), fov: 52, roll: 0 } };
   var v1 = new T.Vector3(), v2 = new T.Vector3(), c1 = new T.Color(), c2 = new T.Color(), c3 = new T.Color();
 
@@ -152,11 +153,14 @@
     var kinds = rockGeos ? 4 : 1, per = count / kinds, insts = [];
     for (i = 0; i < kinds; i++) {
       var im = new T.InstancedMesh(rockGeos ? rockGeos[i * 2] : new T.DodecahedronGeometry(1, 0), rockMat, per);
-      im.castShadow = true; im.receiveShadow = true; root.add(im); insts.push(im);
+      im.castShadow = true; im.receiveShadow = true; im.frustumCulled = false; root.add(im); insts.push(im);
     }
     for (i = 0; i < count; i++) {
       var ra = rnd() * Math.PI * 2, rd = i < 160 ? 30 + rnd() * 34 : 60 + Math.pow(rnd(), 1.3) * 300;
-      var rx = Math.cos(ra) * rd, rz = Math.sin(ra) * rd, sc = i < 160 ? 0.08 + rnd() * 0.22 : 0.15 + Math.pow(rnd(), 2.2) * 0.8;
+      var rx = Math.cos(ra) * rd, rz = Math.sin(ra) * rd;
+      var cdx = rx - Tn.L.colony[0], cdz = rz - Tn.L.colony[1], cdd = Math.hypot(cdx, cdz);
+      if (cdd < 30) { rx = Tn.L.colony[0] + cdx / (cdd || 1) * (30 + (30 - cdd) * 0.5); rz = Tn.L.colony[1] + cdz / (cdd || 1) * (30 + (30 - cdd) * 0.5); }      // the colony site stays clear
+      var sc = i < 160 ? 0.08 + rnd() * 0.22 : 0.15 + Math.pow(rnd(), 2.2) * 0.8;
       var r1 = rnd(), r2 = rnd(), r3 = rnd(), r4 = rnd();
       if (rockGeos) { dummy.position.set(rx, Tn.height(rx, rz) - sc * 0.12, rz); dummy.rotation.set((r1 - 0.5) * 0.5, r2 * 6.28, (r3 - 0.5) * 0.5); }
       else { dummy.position.set(rx, Tn.height(rx, rz) + sc * 0.2, rz); dummy.rotation.set(r1 * 3, r2 * 3, r3 * 3); }
@@ -198,7 +202,7 @@
     root.add(hemi);
     sun = new T.DirectionalLight(look.sunColor, look.sunInt);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.mapSize.set(W.lite ? 1024 : 2048, W.lite ? 1024 : 2048);
     var sc = sun.shadow.camera;
     sc.left = -75; sc.right = 75; sc.top = 75; sc.bottom = -75; sc.near = 20; sc.far = 700;
     sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.06;
@@ -283,15 +287,19 @@
   }
 
   // ---------- particles (dust, sparks, exhaust, storm specks) ----------
-  var PN = 1600, pGeo, pPos, pCol, pAlpha, pSize, pMesh, pUni, pNext = 0;
+  var PN = 2400, pGeo, pPos, pCol, pAlpha, pSize, pMesh, pUni, pNext = 0;
   var pv = new Float32Array(PN * 3), pLife = new Float32Array(PN), pMax = new Float32Array(PN), pGrav = new Float32Array(PN),
     pS0 = new Float32Array(PN), pS1 = new Float32Array(PN), pA0 = new Float32Array(PN);
+  // Particle sizes are in metres. gl_PointSize is in device pixels, so the scale needs the pixel ratio too.
+  function pointScale() { return W.h * 0.5 / Math.tan(camera.fov * Math.PI / 360) * (renderer ? renderer.getPixelRatio() : 1); }
+  // How many particles to emit this frame for a stream tuned as `perFrame` at 60 frames a second.
+  W.rate = function (perFrame, dt) { var n = perFrame * Math.min(dt, 0.05) * 60; return Math.floor(n) + (Math.random() < n % 1 ? 1 : 0); };
   function buildParticles() {
     pGeo = new T.BufferGeometry();
     pPos = new T.BufferAttribute(new Float32Array(PN * 3), 3); pCol = new T.BufferAttribute(new Float32Array(PN * 3), 3);
     pAlpha = new T.BufferAttribute(new Float32Array(PN), 1); pSize = new T.BufferAttribute(new Float32Array(PN), 1);
     pGeo.setAttribute('position', pPos); pGeo.setAttribute('aColor', pCol); pGeo.setAttribute('aAlpha', pAlpha); pGeo.setAttribute('aSize', pSize);
-    pUni = { uScale: { value: 600 } };
+    pUni = { uScale: { value: pointScale() } };
     pMesh = new T.Points(pGeo, new T.ShaderMaterial({
       uniforms: pUni, transparent: true, depthWrite: false, fog: false,
       vertexShader: 'attribute vec3 aColor; attribute float aAlpha; attribute float aSize; varying vec3 vC; varying float vA; uniform float uScale;' +
@@ -370,7 +378,8 @@
   // ---------- set-up ----------
   W.init = function (canvas) {
     try { renderer = new T.WebGLRenderer({ canvas: canvas, antialias: true, powerPreference: 'high-performance' }); } catch (e) { return false; }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    W.lite = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);      // phones and tablets
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, W.lite ? 1.5 : 2));
     renderer.outputEncoding = T.sRGBEncoding;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = T.PCFSoftShadowMap;
@@ -390,7 +399,7 @@
     renderer.setSize(w, h, false);
     camera.aspect = w / h; camera.updateProjectionMatrix();
     W.w = w; W.h = h;
-    if (pUni) pUni.uScale.value = h * 0.5 / Math.tan(camera.fov * Math.PI / 360);
+    if (pUni) pUni.uScale.value = pointScale();
   };
 
   W.build = function (site, suitColor) {
@@ -398,8 +407,11 @@
       scene.remove(root);
       root.traverse(function (o) {
         if (o.geometry) o.geometry.dispose();
-        var m = o.material;
-        if (m && !Array.isArray(m)) { if (m.map) m.map.dispose(); if (m.normalMap) m.normalMap.dispose(); }
+        (Array.isArray(o.material) ? o.material : o.material ? [o.material] : []).forEach(function (m) {
+          if (m.map) m.map.dispose(); if (m.normalMap) m.normalMap.dispose();
+          m.dispose();
+        });
+        if (o.isLight && o.shadow && o.shadow.dispose) o.shadow.dispose();
       });
     }
     siteId = W.site = site; look = LOOKS[site]; W.gravity = JA.SITES[site].gravity;
@@ -409,6 +421,10 @@
     if (JA.models.prepare) JA.models.prepare(renderer, look);   // reflections for the Blender models (js/models.js)
     JA.base.build(root, site);
     JA.actors.build(root, site, suitColor);
+    ['interior', 'colony', 'alien'].forEach(function (k) {         // optional extras: the world still works without them
+      var m = JA[k];
+      if (m && typeof m.build === 'function') { try { m.build(root, site); } catch (e) { if (window.console) console.warn('Astro Outpost add-on ' + k + '.build failed:', e); } }
+    });
     env.dust = env.dustShown = env.storm = env.stormShown = 0;
     W.resize();
   };
@@ -419,7 +435,11 @@
   };
   // direction vectors on the ground for "forward" and "right" as seen by the camera
   W.forward = function (out) { return out.set(-Math.sin(cam.yaw), 0, -Math.cos(cam.yaw)); };
-  W.lookBy = function (dx, dy) { cam.yaw -= dx; cam.pitch = clamp(cam.pitch + dy, 0.06, 1.25); };
+  W.lookBy = function (dx, dy) {
+    cam.yaw -= dx;
+    if (cam.fp) cam.fpPitch = clamp(cam.fpPitch + dy * 1.3, -1.45, 1.2);       // positive = looking down; nearly straight up is allowed
+    else cam.pitch = clamp(cam.pitch + dy, -0.55, 1.25);                        // below zero the camera crouches and tilts up at the sky
+  };
   W.zoomBy = function (d) { cam.dist = clamp(cam.dist * (1 + d), 5.5, 26); };
 
   // ---------- every frame ----------
@@ -472,14 +492,14 @@
   function ambientParticles(dt) {
     var f = cam.target, i, n;
     if (env.stormShown > 0.03) {
-      n = Math.round(env.stormShown * 26);
+      n = W.rate(env.stormShown * 26, dt);
       for (i = 0; i < n; i++) {
         W.emit(f.x + (Math.random() - 0.5) * 70 + sunDir.x * 20, f.y + Math.random() * 26 + 6, f.z + (Math.random() - 0.5) * 70 + sunDir.z * 20,
           { vx: -sunDir.x * 46, vy: -sunDir.y * 46 - 10, vz: -sunDir.z * 46, life: 0.9, size: 0.34, grow: 0.6, color: 0xff48c8, alpha: 0.9 });
       }
     }
     if (siteId === 'mars' && env.dustShown > 0.03) {
-      n = Math.round(env.dustShown * 12);
+      n = W.rate(env.dustShown * 12, dt);
       for (i = 0; i < n; i++) {
         W.emit(f.x - 40 + Math.random() * 30, f.y + Math.random() * 14 - 1, f.z + (Math.random() - 0.5) * 80,
           { vx: 16 + Math.random() * 14, vy: (Math.random() - 0.5) * 2, vz: 3, life: 3, size: 0.9, grow: 2.4, color: 0xe2b98c, alpha: 0.28 });
@@ -503,11 +523,21 @@
       // the landing film drives the camera directly (no smoothing: the film does its own)
       want.copy(cam.cine.pos); lookAt.copy(cam.cine.look); sp = 1;
       cam.target.set(want.x, Tn.height(want.x, want.z) + 2, want.z);
+    } else if (cam.fp && cam.eye) {
+      // first person: the camera IS the astronaut's eyes (cam.yaw is the way you face)
+      cam.eye(cam.target);
+      want.copy(cam.target);
+      var cq = Math.cos(cam.fpPitch);
+      lookAt.set(want.x - Math.sin(cam.yaw) * cq * 20, want.y - Math.sin(cam.fpPitch) * 20, want.z - Math.cos(cam.yaw) * cq * 20);
+      sp = 1;
     } else {
       if (cam.focus) cam.focus(cam.target);
-      var cp = Math.cos(cam.pitch), dist = cam.dist * (camera.aspect < 1 ? 1.25 : 1);
-      want.set(cam.target.x + Math.sin(cam.yaw) * cp * dist, cam.target.y + Math.sin(cam.pitch) * dist, cam.target.z + Math.cos(cam.yaw) * cp * dist);
-      lookAt.copy(cam.target); sp = Math.min(1, dt * 12);
+      var pitch = cam.pitch, up = 0;
+      if (pitch < 0.06) { up = 0.06 - pitch; pitch = 0.06 - up * 0.35; }
+      var cp = Math.cos(pitch), dist = cam.dist * (camera.aspect < 1 ? 1.25 : 1);
+      want.set(cam.target.x + Math.sin(cam.yaw) * cp * dist, cam.target.y + Math.sin(pitch) * dist, cam.target.z + Math.cos(cam.yaw) * cp * dist);
+      lookAt.copy(cam.target); lookAt.y += up * Math.max(dist, 4) * 1.8; sp = Math.min(1, dt * 12);
+      if (cam.room) keepInRoom(want, cam.target, cam.room);
     }
     var floor = Tn.height(want.x, want.z) + 0.7;
     if (want.y < floor) want.y = floor;
@@ -520,9 +550,20 @@
       cam.shake *= Math.max(0, 1 - dt * 4);
     }
     camera.lookAt(cam.look);
-    var cine = cam.mode === 'cine' && cam.cine, fov = cine ? cam.cine.fov || 52 : 52;
+    var cine = cam.mode === 'cine' && cam.cine, fov = cine ? cam.cine.fov || 52 : (cam.mode === 'play' && cam.fp && cam.eye ? 66 : 52);
     if (cine && cam.cine.roll) camera.rotateZ(cam.cine.roll);
     if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
+  }
+  // Inside a room the camera must not go through the walls: slide it toward the astronaut until it fits.
+  function keepInRoom(want, from, R) {
+    var dx = want.x - from.x, dy = want.y - from.y, dz = want.z - from.z, t = 1;
+    var ox = from.x - R.cx, oz = from.z - R.cz, oy = R.type === 'dome' ? from.y - R.cy : 0;
+    var a = dx * dx + dz * dz + (R.type === 'dome' ? dy * dy : 0), b = 2 * (ox * dx + oz * dz + (R.type === 'dome' ? oy * dy : 0));
+    var c = ox * ox + oz * oz + oy * oy - R.r * R.r, disc = b * b - 4 * a * c;
+    if (a > 1e-6 && disc >= 0) { var hit = (-b + Math.sqrt(disc)) / (2 * a); if (hit < 1) t = Math.max(0, hit * 0.94); }
+    want.set(from.x + dx * t, from.y + dy * t, from.z + dz * t);
+    if (want.y < R.floor) want.y = R.floor;
+    if (R.top != null && want.y > R.top) want.y = R.top;
   }
   W.snapCamera = function () { updateCamera(100); };
   W.setLamp = function (x, y, z, dx, dz) { if (!lamp) return; lamp.position.set(x, y, z); lamp.target.position.set(x + dx * 8, y - 2.4, z + dz * 8); };
@@ -532,6 +573,7 @@
     if (window.innerWidth !== W.w || window.innerHeight !== W.h) W.resize();
     time += dt; W.time = time;
     updateCamera(dt);
+    if (pUni) pUni.uScale.value = pointScale();      // the film changes the lens, so keep particles the right size
     updateSky(dt);
     ambientParticles(dt);
     updateParticles(dt);

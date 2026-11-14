@@ -4,9 +4,7 @@
      2. the hatch, and the first bootprint
      3. the walk across the dust
      4. sitting down on a rock and taking in the view
-   It uses the real game world (no video), so the outpost you see is the one you will run.
-   Sound: inside the lander everything is clear; once the hatch opens you hear the place itself
-   (see the scenes in audio.js), and music joins for the last view. */
+   It uses the real game world (no video), so the outpost you see is the one you will run. */
 (function (JA) {
   'use strict';
   var T = window.THREE, W = JA.world, Tn = JA.terrain, B = JA.base, A = JA.actors, Au = JA.audio, U = JA.ui;
@@ -139,10 +137,10 @@
     e.roll = Math.sin(t * 0.9) * 0.035 * k; e.fov = 58;
     if (!landed) {
       W.cam.shake = Math.max(W.cam.shake, 0.04 + 0.22 * u * u);
-      Au.loop('descent', { f: 40 + u * 18, v: 0.07 + 0.06 * u, type: 'sawtooth', rate: 0.85 + u * 0.3, vol: 0.55 + 0.45 * u });
+      Au.loop('descent', 40 + u * 18, 0.07 + 0.06 * u, 'sawtooth');
       st.rum -= dt; if (st.rum <= 0) { st.rum = 0.24; Au.play('rumble'); }
       if (alt < 60) {
-        var n = Math.round((1 - alt / 60) * 9), gy = Tn.height(p.x + ox, p.z + oz) + 0.4;
+        var n = W.rate((1 - alt / 60) * 9, dt), gy = Tn.height(p.x + ox, p.z + oz) + 0.4;
         for (var i = 0; i < n; i++) {
           var a = Math.random() * 6.283, r0 = 2 + Math.random() * 4, sp = 12 + Math.random() * 22;
           W.emit(p.x + ox + Math.cos(a) * r0, gy, p.z + oz + Math.sin(a) * r0, { vx: Math.cos(a) * sp, vy: 0.4 + Math.random() * 1.6, vz: Math.sin(a) * sp, life: 1.25, size: 1.5, grow: 3.6, color: st.dustCol, alpha: 0.42, grav: 0 });
@@ -266,10 +264,10 @@
       { t: TM.land, fn: touchdown },
       { t: TM.fade1, fn: function () { U.fade(true); } },
       { t: TM.fade1 + 0.9, fn: function () { cls('win', false); cls('data', false); title('Hatch open', '', ''); Au.play('hiss'); } },
-      { t: TM.step - 0.7, fn: function () { title(); cls('visor', true); cls('data', true); st.body = true; U.fade(false); Au.scene({ place: 'out', site: s.site.id, dust: W.env.dust }); } },
+      { t: TM.step - 0.7, fn: function () { title(); cls('visor', true); cls('data', true); st.body = true; U.fade(false); } },
       { t: TM.cut, fn: function () { U.fade(true); } },
       { t: TM.cut + 0.75, fn: function () { st.w.dist = 0; st.w.hop = 0; st.w.air = false; U.fade(false); } },
-      { t: TM.vista + 0.4, fn: function () { cls('bars', true); cls('soft', true); cls('data', false); if (!Au.music('vista')) Au.play('pad'); } },
+      { t: TM.vista + 0.4, fn: function () { cls('bars', true); cls('soft', true); cls('data', false); Au.play('pad'); } },
       { t: TM.title, fn: function () { title(s.site.dayWord + ' 1 · ' + s.site.place, 'Astro Outpost', 'Your mission begins'); } },
       { t: TM.fade2, fn: function () { U.fade(true); } }
     ];
@@ -297,7 +295,6 @@
       dustCol: moon ? 0xb8b9c4 : 0xd9a070, cues: script(s), ci: 0, ev: events(s), ei: 0, breath: 2
     };
     st.rig = buildRig(JA.game.opts.suit);
-    Au.music(null); Au.scene({ place: 'cabin', site: site });
     st.cues.forEach(function (c) { if (c.vo) Au.preloadVoice(VO + c.vo + '.mp3'); });   // this film's lines, ready before they are needed
     A.astro.mode = 'hidden';
     W.env.t = moon ? 0.12 : 0.2;

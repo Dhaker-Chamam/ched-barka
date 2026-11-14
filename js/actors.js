@@ -215,7 +215,8 @@
   };
   A.handPos = function (out) {
     var s = Math.sin(astro.yaw), c = Math.cos(astro.yaw);
-    return out.set(astro.pos.x + s * 0.72, astro.pos.y + 1.15, astro.pos.z + c * 0.72);
+    var f = astro.fp ? 0.95 : 0.72;      // in first person, hold things a little higher and further out so you can see them
+    return out.set(astro.pos.x + s * f, astro.pos.y + (astro.fp ? 1.25 : 1.15), astro.pos.z + c * f);
   };
   A.setDown = function () {
     var it = astro.carrying; if (!it) return null;
@@ -292,6 +293,7 @@
     rover = A.rover = buildRover();
     buildDevils();
     A.resetAstro();
+    if (A.fp) A.setFirstPerson(true);        // a new world keeps the view you chose
   };
   A.resetAstro = function () {
     var d = B.spots.door;
@@ -308,6 +310,15 @@
       if (d < min && d > 0.0001) { p.x = c.x + dx / d * min; p.z = c.z + dz / d * min; return c; }
     }
     return null;
+  }
+  // Stay inside a round room and out of its furniture. room: { cx, cz, r, colliders: [{x, z, r}] }
+  function roomKeep(p, room, r) {
+    var dx = p.x - room.cx, dz = p.z - room.cz, d = Math.hypot(dx, dz), max = room.r - r, i;
+    if (d > max) { p.x = room.cx + dx / d * max; p.z = room.cz + dz / d * max; }
+    for (i = 0; room.colliders && i < room.colliders.length; i++) {
+      var c = room.colliders[i], cx = p.x - c.x, cz = p.z - c.z, cd = Math.hypot(cx, cz), min = c.r + r;
+      if (cd < min && cd > 0.0001) { p.x = c.x + cx / cd * min; p.z = c.z + cz / cd * min; }
+    }
   }
   function inBounds(p) {
     var r = Math.hypot(p.x, p.z);
@@ -326,6 +337,12 @@
       a.body.rotation.x = 0; a.drill.visible = false;
       return;
     }
+    // dancing: another module (js/alien.js) poses the body through A.pose(astro, dt)
+    if (a.mode === 'dance') {
+      a.drill.visible = false;
+      if (A.pose) A.pose(a, dt); else { a.group.position.copy(a.pos); a.group.rotation.y = a.yaw; }
+      return;
+    }
     if (a.mode === 'walk' && input) { ix = input.x; iz = input.z; jump = input.jump; sprint = input.sprint; }
     var len = Math.hypot(ix, iz);
     if (len > 1) { ix /= len; iz /= len; len = 1; }
@@ -336,9 +353,13 @@
     a.vel.x += (mx * speed - a.vel.x) * k; a.vel.z += (mz * speed - a.vel.z) * k;
     a.pos.x += a.vel.x * dt; a.pos.z += a.vel.z * dt;
     a.moved += Math.hypot(a.vel.x, a.vel.z) * dt;
-    if (!inBounds(a.pos) && A.onEdge) A.onEdge();
-    if (collideCircle(a.pos, 0.5)) collideCircle(a.pos, 0.5);
-    var ground = Tn.height(a.pos.x, a.pos.z), landed = false;
+    var room = A.room;      // inside the habitat or the rocket: a flat floor, round walls, a ceiling
+    if (room) roomKeep(a.pos, room, 0.42);
+    else {
+      if (!inBounds(a.pos) && A.onEdge) A.onEdge();
+      if (collideCircle(a.pos, 0.5)) collideCircle(a.pos, 0.5);
+    }
+    var ground = room ? room.floor : Tn.height(a.pos.x, a.pos.z), landed = false;
     if (a.onGround) {
       if (a.pos.y - ground > 0.35) a.onGround = false; else a.pos.y = ground;
       if (jump) { a.vy = 3.7; a.onGround = false; if (A.onJump) A.onJump(); }
@@ -346,10 +367,14 @@
     if (!a.onGround) {
       a.vy -= grav * dt; a.pos.y += a.vy * dt;
       if (a.pos.y <= ground) { landed = a.vy < -1.2; a.pos.y = ground; a.vy = 0; a.onGround = true; if (landed) a.squash = 1; }
+      if (room && room.ceil) {                  // a low-gravity jump indoors ends at the ceiling
+        var top = room.ceil(a.pos.x, a.pos.z);
+        if (a.pos.y > top) { a.pos.y = top; if (a.vy > 0) { a.vy = -0.4; if (A.onBonk) A.onBonk(); } }
+      }
     }
     if (landed && A.onLand) A.onLand();
     a.moving = lerp(a.moving, len, Math.min(1, dt * 10));
-    if (a.aim) a.yaw = angLerp(a.yaw, Math.atan2(v1.x, v1.z), Math.min(1, dt * 14));
+    if (a.aim || a.fp) a.yaw = angLerp(a.yaw, Math.atan2(v1.x, v1.z), Math.min(1, dt * 14));      // in first person the body faces where you look
     else if (len > 0.1) a.yaw = angLerp(a.yaw, Math.atan2(mx, mz), Math.min(1, dt * 12));
     if (a.spin > 0) { a.spin -= dt; a.yaw += dt * 9; }
     if (len > 0.1 && a.onGround) {
@@ -428,7 +453,7 @@
       it.age += dt;
       if (it.state === 'held') {
         A.handPos(it.pos);
-        if (astro.aim) it.pos.y += 0.5;
+        if (astro.aim) it.pos.y += astro.fp ? 0.12 : 0.5;
         it.mesh.rotation.set(0, astro.yaw, 0);
       } else if (it.state === 'bed') {
         var b = BED[it.slot]; roverLocal(b[0], b[1], b[2], it.pos);
@@ -453,6 +478,11 @@
         it.mesh.rotation.y += dt * 0.8;
       }
       it.mesh.position.copy(it.pos);
+      // helmet view: what you carry sits small in the corner of your eye instead of filling the visor
+      if (it.state === 'held' && astro.fp) {
+        it.mesh.position.x -= Math.cos(astro.yaw) * 0.4; it.mesh.position.z += Math.sin(astro.yaw) * 0.4; it.mesh.position.y -= 0.14;
+        if (!it.small) { it.small = true; it.mesh.scale.setScalar(0.5); }
+      } else if (it.small) { it.small = false; it.mesh.scale.setScalar(1); }
     }
   }
 
@@ -467,6 +497,13 @@
     if (f) {
       buddy.group.visible = true;
       v1.set(f.x + Math.cos(astro.yaw) * 1.5, f.y + (astro.mode === 'drive' ? 3.2 : 2.5) + Math.sin(W.time * 2.2) * 0.16, f.z - Math.sin(astro.yaw) * 1.5);
+      if (astro.fp) { v1.x += Math.sin(astro.yaw) * (A.room ? 1.6 : 3.2); v1.z += Math.cos(astro.yaw) * (A.room ? 1.6 : 3.2); v1.y -= 0.5; }      // BOLT floats ahead, in the corner of your eye
+      if (A.buddyHome) { v1.copy(A.buddyHome); v1.y += Math.sin(W.time * 2.2) * 0.05; }      // indoors BOLT rests in his spot
+      else if (A.room) {
+        var Rm = A.room, bx = v1.x - Rm.cx, bz = v1.z - Rm.cz, bd = Math.hypot(bx, bz), bmax = Rm.r - 0.5;
+        if (bd > bmax) { v1.x = Rm.cx + bx / bd * bmax; v1.z = Rm.cz + bz / bd * bmax; }
+        if (Rm.ceil) v1.y = Math.min(v1.y, Rm.ceil(v1.x, v1.z) + 1.7);
+      }
       buddy.pos.lerp(v1, Math.min(1, dt * 4));
       buddy.group.position.copy(buddy.pos);
       buddy.group.lookAt(W.camera.position);
@@ -480,6 +517,29 @@
   A.exitRover = function () {
     rover.driver = false; astro.mode = 'walk';
     A.roverSpot('door', astro.pos); astro.pos.y = Tn.height(astro.pos.x, astro.pos.z); astro.vy = 0; astro.onGround = true;
+  };
+  // ---------- first-person view ----------
+  A.eye = function (out) {
+    var p = astro.group.position, s = Math.sin(astro.yaw), c = Math.cos(astro.yaw);
+    return out.set(p.x + s * 0.12, p.y + (astro.mode === 'drive' ? 1.2 : 1.7), p.z + c * 0.12);      // lower when sitting in the rover
+  };
+  // In first person your own helmet and chest must not block the view, but they still have to throw a shadow.
+  // So they swap to a material that draws nothing and still casts shadows. Arms and legs stay visible.
+  var ghost = null;
+  A.setFirstPerson = function (on) {
+    A.fp = !!on;
+    if (!astro) return;
+    astro.fp = A.fp;
+    if (!ghost) ghost = new T.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
+    var keep = [astro.armL, astro.armR, astro.legL, astro.legR, astro.drill];
+    astro.body.children.forEach(function (part) {
+      if (keep.indexOf(part) >= 0) return;
+      part.traverse(function (o) {
+        if (!o.isMesh) return;
+        if (A.fp) { if (!o.userData.seen) o.userData.seen = o.material; o.material = ghost; }
+        else if (o.userData.seen) { o.material = o.userData.seen; o.userData.seen = null; }
+      });
+    });
   };
   A.focus = function (out) {
     if (rover.driver) return out.set(rover.pos.x, rover.pos.y + 2.4, rover.pos.z);

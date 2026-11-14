@@ -1,0 +1,12 @@
+/* Astro Outpost — keepsake cards: the certificate and postcard previews, the name field and the save row.
+   Load after style.css: it reuses that file's colours and its .btn and .modal rules. */
+.keepsake { text-align: left; }
+.keepsake-name { display: block; margin: 12px 0 4px; }
+.keepsake-name span { display: block; margin-bottom: 6px; font-size: 0.95rem; font-weight: 600; color: var(--muted); }
+.keepsake-name input { display: block; width: min(320px, 100%); font-family: inherit; font-size: 1.1rem; font-weight: 600; color: var(--ink); background: rgba(255, 255, 255, 0.08); border: 0; border-radius: 14px; padding: 0.55em 0.9em; box-shadow: inset 0 0 0 2px var(--line); user-select: text; -webkit-user-select: text; touch-action: manipulation; }
+.keepsake-name input:focus { outline: 3px solid #fff; outline-offset: 3px; }
+.keepsake-preview { margin: 14px 0 0; text-align: center; line-height: 0; }
+/* the whole picture stays visible: never wider than the card, never taller than about half the screen */
+.keepsake-preview canvas { display: inline-block; width: auto; max-width: 100%; height: auto; max-height: 48vh; max-height: max(48vh, 210px); border-radius: 12px; background: #060914; box-shadow: 0 0 0 2px var(--line), 0 10px 26px rgba(0, 0, 0, 0.45); }
+.keepsake-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: 18px; }
+.keepsake-status { color: var(--muted); font-size: 0.95rem; line-height: 1.3; }

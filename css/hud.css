@@ -1,0 +1,328 @@
+/* Astro Outpost — the top bar (day, meters, points, buttons), the goal list, the floating
+   "+12" pills and the end-of-day / end-of-mission statistics.
+   Loaded after style.css, so these rules win over the older ones there. */
+:root {
+  --glass: linear-gradient(180deg, rgba(36, 48, 96, 0.84), rgba(12, 17, 42, 0.88));
+  --glass-solid: linear-gradient(180deg, rgba(32, 43, 88, 0.95), rgba(12, 17, 42, 0.96));
+  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  --glass-drop: 0 8px 22px rgba(2, 4, 14, 0.36);
+  --gold: linear-gradient(180deg, #ffe88f 0%, #ffcb3d 48%, #f5a815 100%);
+  --gold-ink: #3a2400;
+  --gain: #7dffb6; --gain-bg: rgba(77, 255, 154, 0.15); --gain-edge: rgba(77, 255, 154, 0.5);
+  --loss: #ffa3b1; --loss-bg: rgba(255, 84, 104, 0.16); --loss-edge: rgba(255, 84, 104, 0.55);
+}
+
+/* ---------- glass panels (only a handful of them blur what is behind) ---------- */
+#hud .chip, #hud .meter, #goals {
+  background: var(--glass); box-shadow: var(--glass-edge), var(--glass-drop);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+}
+/* phones: no blur at all, just a little more solid */
+body.touch #hud .sol-chip, body.touch #hud .meter, body.touch #goals { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--glass-solid); }
+
+#hud { gap: 10px; align-items: flex-start; }
+#hud .meters { gap: 8px; justify-content: center; }
+#hud .hud-right { gap: 7px; align-items: center; }
+
+/* ---------- the day chip ---------- */
+#hud .sol-chip { flex: none; display: flex; flex-direction: row; align-items: center; gap: 10px; width: 200px; min-width: 0; padding: 6px 13px 6px 7px; border-radius: 18px; line-height: 1.1; }
+#hud #sol-text { flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 50px; height: 50px; border-radius: 14px; line-height: 1; font-size: 1rem;
+  background: linear-gradient(160deg, rgba(255, 210, 63, 0.3), rgba(255, 140, 60, 0.1)); box-shadow: inset 0 0 0 1.5px rgba(255, 210, 63, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.25); }
+#hud #sol-text small { font-size: 0.58rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--power); }
+#hud #sol-text .n { font-size: 1.55rem; font-weight: 700; margin: 1px 0 0; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.3); }
+#hud #sol-text .of { font-size: 0.6rem; font-weight: 500; color: #d5dcf7; }
+#hud .day-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+#hud #site-text { font-size: 0.76rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* the shift bar: the sun rides along it; a striped pink block marks the storm window */
+#hud .clock { height: 8px; margin: 11px 0 6px; border-radius: 99px; background: rgba(255, 255, 255, 0.12); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5); }
+#hud #clock-fill { border-radius: 99px; background: linear-gradient(90deg, #ff8f4d, #ffd23f 65%, #fff0a6); box-shadow: 0 0 8px rgba(255, 196, 60, 0.5); }
+#hud #clock-sun { z-index: 2; font-size: 1rem; line-height: 1; filter: drop-shadow(0 0 4px rgba(255, 200, 60, 0.95)); }
+#hud #clock-storm { z-index: 1; top: -3px; bottom: -3px; min-width: 6px; border-radius: 4px; opacity: 0; transition: opacity 0.3s;
+  background: repeating-linear-gradient(-45deg, #ff6fb1 0 3px, #9b2c6a 3px 6px); box-shadow: 0 0 0 1.5px rgba(255, 160, 205, 0.95), 0 0 10px rgba(255, 111, 177, 0.75); }
+#hud #clock-storm.show { opacity: 1; }
+#hud #clock-storm::before { content: '⚡'; position: absolute; left: 50%; bottom: 100%; margin-bottom: 1px; transform: translateX(-50%); font-size: 0.66rem; line-height: 1; }
+#hud #clock-storm.now { animation: hud-flash 0.7s ease-in-out infinite alternate; }
+#hud #time-left { margin: 0; font-size: 0.8rem; font-weight: 600; color: #e6ebff; white-space: nowrap; }
+#hud #time-left::before { content: '⏱ '; font-size: 0.85em; }
+#hud #time-left.low { color: #ffa3b1; }
+
+/* ---------- Air, Food, Radiation ---------- */
+#hud .meter { --c: var(--air); --c-deep: #13628f; --c-hi: #b8f3ff; --c-glow: rgba(79, 216, 255, 0.5); --flash: #fff;
+  position: relative; flex: 1 1 0; width: auto; max-width: 236px; min-width: 0; animation: none;
+  display: grid; grid-template-columns: 40px minmax(0, 1fr); grid-template-areas: "ic top" "ic bar" "ic note"; gap: 0 10px; align-items: center; align-content: center;
+  padding: 6px 13px 6px 8px; border-radius: 18px; }
+#hud .meter[data-res=food] { --c: var(--food); --c-deep: #2b7a2c; --c-hi: #d4ffc4; --c-glow: rgba(123, 227, 106, 0.5); }
+#hud .meter[data-res=dose] { --c: var(--dose); --c-deep: #8f2560; --c-hi: #ffd0e6; --c-glow: rgba(255, 111, 177, 0.5); }
+#hud .meter[data-dir=good] { --flash: var(--gain); }
+#hud .meter[data-dir=bad] { --flash: #ff8fa0; }
+#hud .m-icon { grid-area: ic; position: relative; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; font-size: 1.3rem; line-height: 1;
+  background: radial-gradient(circle at 50% 22%, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0) 55%), linear-gradient(165deg, var(--c-deep), #0c1230);
+  box-shadow: inset 0 0 0 2px var(--c), 0 0 12px var(--c-glow); }
+#hud .m-top { grid-area: top; display: flex; align-items: baseline; justify-content: space-between; gap: 6px; min-width: 0; font-size: 0.88rem; line-height: 1.1; }
+#hud .m-top b { font-weight: 600; color: #e9eeff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#hud .m-val { display: inline-block; font-size: 1.35rem; font-weight: 700; line-height: 1; color: #fff; font-variant-numeric: tabular-nums; transform-origin: 70% 60%; }
+/* the bar: ten segments, a soft glow, and on the radiation badge a red "danger" end */
+#hud .m-bar { grid-area: bar; position: relative; height: 10px; margin: 5px 0 4px; border-radius: 99px; overflow: visible; background: rgba(255, 255, 255, 0.1); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.55); }
+#hud .meter[data-res=dose] .m-bar { background: linear-gradient(90deg, rgba(255, 255, 255, 0.1) 75%, rgba(255, 84, 104, 0.38) 75%); }
+#hud .m-bar i { position: absolute; left: 0; top: 0; bottom: 0; height: auto; border-radius: 99px;
+  background: linear-gradient(90deg, var(--c-deep), var(--c) 70%, var(--c-hi)); box-shadow: 0 0 10px var(--c-glow), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  transition: width 0.5s cubic-bezier(.2, .9, .3, 1); }
+#hud .m-bar::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: repeating-linear-gradient(90deg, rgba(0, 0, 0, 0) 0 calc(10% - 2px), rgba(9, 13, 34, 0.85) calc(10% - 2px) 10%); }
+#hud .m-note { grid-area: note; display: block; height: auto; margin: 0; font-size: 0.74rem; line-height: 1.15; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#hud .m-note.bad { color: #ffb3bf; font-weight: 600; }
+#hud .m-note.bad::before { content: '⚠ '; }
+/* warning: a slow glowing edge and a red "!" on the badge (the number and the note say it too) */
+#hud .meter::before { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity 0.3s;
+  box-shadow: inset 0 0 0 2px var(--danger), 0 0 18px rgba(255, 84, 104, 0.7); }
+#hud .meter.low { box-shadow: var(--glass-edge), var(--glass-drop); }
+#hud .meter.low::before { opacity: 1; animation: hud-glow 1.3s ease-in-out infinite alternate; }
+#hud .meter.low .m-icon::after { content: '!'; position: absolute; right: -5px; top: -5px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 0.75rem; font-weight: 700; color: #fff; background: var(--danger); box-shadow: 0 0 0 2px #10173a, 0 0 8px rgba(255, 84, 104, 0.8); }
+#hud .meter.low .m-bar i { background: linear-gradient(90deg, #b51f37, #ff5468 60%, #ff9a86); box-shadow: 0 0 10px rgba(255, 84, 104, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.4); }
+#hud .meter.low .m-val { color: #ffc2cb; }
+/* the number pops when it jumps */
+#hud .meter.pop-a .m-val { animation: hud-num-a 0.55s ease-out; }
+#hud .meter.pop-b .m-val { animation: hud-num-b 0.55s ease-out; }
+@keyframes hud-num-a { 0% { transform: scale(1); } 30% { transform: scale(1.32); color: var(--flash); } 100% { transform: scale(1); } }
+@keyframes hud-num-b { 0% { transform: scale(1); } 30% { transform: scale(1.32); color: var(--flash); } 100% { transform: scale(1); } }
+@keyframes hud-glow { from { opacity: 0.4; } to { opacity: 1; } }
+@keyframes hud-flash { from { filter: brightness(1); } to { filter: brightness(1.5); } }
+
+/* ---------- mission points: a gold pill with a star medal ---------- */
+#hud .stars { position: relative; display: flex; align-items: center; gap: 7px; height: 44px; padding: 0 16px 0 5px; border-radius: 999px; font-size: 1rem; color: var(--gold-ink);
+  background: var(--gold); -webkit-backdrop-filter: none; backdrop-filter: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), inset 0 -3px 0 rgba(170, 95, 0, 0.35), 0 0 0 1.5px rgba(255, 236, 170, 0.45), 0 6px 16px rgba(255, 170, 30, 0.3); }
+#hud .star-badge { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; font-size: 1.1rem; line-height: 1;
+  background: radial-gradient(circle at 40% 28%, #4a50a8, #1a1e52 75%); box-shadow: inset 0 0 0 2px #fff1b8, 0 2px 5px rgba(120, 60, 0, 0.4); }
+#hud #sci-val { min-width: 1.5em; font-size: 1.35rem; font-weight: 700; line-height: 1; text-align: left; font-variant-numeric: tabular-nums; text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55); }
+#hud .sci-plus { position: absolute; right: 10px; top: 100%; margin-top: 5px; opacity: 0; pointer-events: none; white-space: nowrap;
+  font-style: normal; font-size: 1.05rem; font-weight: 700; color: #ffd23f; text-shadow: 0 1px 0 #3a2400, 0 0 6px rgba(0, 0, 0, 0.85), 0 0 2px #000; }
+#hud .stars.pop-a { animation: hud-bump-a 0.45s cubic-bezier(.3, 1.6, .5, 1); }
+#hud .stars.pop-b { animation: hud-bump-b 0.45s cubic-bezier(.3, 1.6, .5, 1); }
+#hud .stars.pop-a .star-badge { animation: hud-twirl-a 0.7s ease-out; }
+#hud .stars.pop-b .star-badge { animation: hud-twirl-b 0.7s ease-out; }
+#hud .sci-plus.pop-a { animation: hud-plus-a 1.2s ease-out; }
+#hud .sci-plus.pop-b { animation: hud-plus-b 1.2s ease-out; }
+@keyframes hud-bump-a { 0% { transform: scale(1); } 35% { transform: scale(1.14); } 100% { transform: scale(1); } }
+@keyframes hud-bump-b { 0% { transform: scale(1); } 35% { transform: scale(1.14); } 100% { transform: scale(1); } }
+@keyframes hud-twirl-a { 0% { transform: rotate(0) scale(1); } 40% { transform: rotate(-30deg) scale(1.25); } 100% { transform: rotate(0) scale(1); } }
+@keyframes hud-twirl-b { 0% { transform: rotate(0) scale(1); } 40% { transform: rotate(-30deg) scale(1.25); } 100% { transform: rotate(0) scale(1); } }
+@keyframes hud-plus-a { 0% { opacity: 0; transform: translateY(12px) scale(0.7); } 20% { opacity: 1; transform: translateY(0) scale(1.12); } 70% { opacity: 1; transform: translateY(-3px) scale(1); } 100% { opacity: 0; transform: translateY(-8px); } }
+@keyframes hud-plus-b { 0% { opacity: 0; transform: translateY(12px) scale(0.7); } 20% { opacity: 1; transform: translateY(0) scale(1.12); } 70% { opacity: 1; transform: translateY(-3px) scale(1); } 100% { opacity: 0; transform: translateY(-8px); } }
+
+/* ---------- round buttons ---------- */
+#hud .icon-btn { width: 42px; height: 42px; border-radius: 50%; font-size: 1.12rem; line-height: 1;
+  background: linear-gradient(180deg, rgba(50, 64, 120, 0.92), rgba(15, 21, 50, 0.94));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 0 0 1px rgba(255, 255, 255, 0.13), 0 6px 14px rgba(2, 4, 14, 0.35);
+  transition: transform 0.12s, box-shadow 0.2s, filter 0.2s, opacity 0.2s; }
+@media (hover: hover) { #hud .icon-btn:hover { transform: translateY(-1px); filter: brightness(1.2); } }
+#hud .icon-btn:active { transform: translateY(1px) scale(0.95); }
+#hud .icon-btn.on { background: linear-gradient(180deg, rgba(120, 96, 22, 0.95), rgba(54, 40, 8, 0.95));
+  box-shadow: inset 0 0 0 2px var(--power), inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 0 14px rgba(255, 210, 63, 0.45); }
+/* off: the icon goes grey and dim and gets a slash, but the button stays solid on bright ground */
+#hud .icon-btn { position: relative; }
+#hud .icon-btn.off { opacity: 1; filter: grayscale(1); }
+#hud .icon-btn.off::after { content: ''; position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0) 45%, rgba(220, 228, 255, 0.85) 45%, rgba(220, 228, 255, 0.85) 52%, rgba(0, 0, 0, 0) 52%), rgba(14, 19, 44, 0.45); }
+/* keyboard focus: a white ring with a dark halo, so it shows on bright ground and dark sky */
+#hud .icon-btn:focus-visible { outline: 3px solid #fff; outline-offset: 3px; box-shadow: inset 0 0 0 2px var(--power), 0 0 0 9px rgba(6, 9, 20, 0.6); }
+
+/* ---------- the goal list ---------- */
+#goals { width: 268px; padding: 10px 9px 9px; border-radius: 20px; }
+/* wide screens: right under the top bar; mid widths: under the banner's row (top 86px in style.css),
+   because a centred banner reaches the panel there */
+@media (min-width: 1180px) { #goals { top: calc(var(--hud-b, 84px) + 10px); } }
+@media (min-width: 641px) and (max-width: 1179px) { #goals { top: calc(max(var(--hud-b, 84px), 86px) + 50px); } }
+#goals .g-head { display: flex; align-items: center; gap: 8px; padding: 0 3px 0 6px; }
+#goals h4 { flex: 1; min-width: 0; margin: 0; font-size: 0.76rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--power); text-shadow: 0 0 10px rgba(255, 210, 63, 0.35); }
+#goals .g-count { flex: none; padding: 2px 8px 2px 7px; border-radius: 999px; font-size: 0.74rem; font-weight: 700; font-variant-numeric: tabular-nums; color: #e8fff0;
+  background: rgba(77, 255, 154, 0.13); box-shadow: inset 0 0 0 1px rgba(77, 255, 154, 0.4); }
+#goals .g-count::before { content: '✓ '; color: var(--ok); }
+#goals .g-prog { height: 4px; margin: 7px 6px 6px; border-radius: 99px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+#goals .g-prog i { display: block; width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #ffd23f, #4dff9a); transition: width 0.6s cubic-bezier(.2, .9, .3, 1); }
+#goal-list { gap: 2px; }
+#goal-list li::before, #goal-list li.done::before, #goal-list li.now::before { content: none; animation: none; }
+#goal-list li.goal { position: relative; display: grid; grid-template-columns: 24px minmax(0, 1fr); align-items: center; gap: 8px; padding: 3px 6px 3px 4px; border-radius: 11px;
+  font-size: 0.84rem; font-weight: 500; line-height: 1.2; color: #e3e8ff; text-decoration: none; transition: background-color 0.3s, box-shadow 0.3s, color 0.3s; }
+#goal-list .g-ic { position: relative; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 8px; font-size: 0.88rem; line-height: 1;
+  background: rgba(255, 255, 255, 0.08); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.13); transition: background-color 0.3s, box-shadow 0.3s; }
+/* done: a green tick pops over the icon, a line sweeps through the words, and the row shrinks to one line */
+#goal-list .g-ic::after { content: '✓'; position: absolute; inset: -1px; display: grid; place-items: center; border-radius: 50%; font-size: 0.86rem; font-weight: 700; color: #053a1d;
+  background: radial-gradient(circle at 40% 30%, #c4ffdd, #4dff9a 55%, #17c466); box-shadow: 0 0 10px rgba(77, 255, 154, 0.5);
+  opacity: 0; transform: scale(0) rotate(-40deg); transition: transform 0.45s cubic-bezier(.3, 1.8, .5, 1), opacity 0.2s; }
+#goal-list li.done .g-ic::after { opacity: 1; transform: none; }
+#goal-list .g-tx > span { background: linear-gradient(currentColor, currentColor) no-repeat 0 56% / 0 2px; transition: background-size 0.5s ease 0.15s; }
+#goal-list li.done { color: #9aa5cc; }
+#goal-list li.done .g-tx { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#goal-list li.done .g-tx > span { background-size: 100% 2px; }
+/* now: gold card, a "NOW" tag and a slow breathing glow */
+#goal-list .g-now { display: none; position: absolute; top: -7px; right: 9px; padding: 0 7px; border-radius: 999px; font-style: normal; font-size: 0.6rem; font-weight: 700; line-height: 1.45;
+  letter-spacing: 0.12em; text-transform: uppercase; color: #2a1c00; background: linear-gradient(180deg, #ffe58a, #ffc93a); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); }
+#goal-list li.now { grid-template-columns: 28px minmax(0, 1fr); margin: 7px 0 3px; padding: 6px 8px 6px 5px; color: #fff; font-weight: 600;
+  background: linear-gradient(90deg, rgba(255, 210, 63, 0.24), rgba(255, 210, 63, 0.07)); box-shadow: inset 0 0 0 1.5px rgba(255, 210, 63, 0.85), 0 0 16px rgba(255, 210, 63, 0.16); }
+#goal-list li.now .g-now { display: block; }
+#goal-list li.now .g-ic { width: 28px; height: 28px; border-radius: 9px; font-size: 1rem; background: rgba(255, 210, 63, 0.22); box-shadow: inset 0 0 0 1.5px rgba(255, 210, 63, 0.9); }
+#goal-list li.now::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; box-shadow: 0 0 18px 2px rgba(255, 210, 63, 0.45); animation: hud-breathe 2.2s ease-in-out infinite; }
+@keyframes hud-breathe { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+/* bonus jobs: smaller and quieter, under their own little heading */
+#goal-list .g-sep { display: flex; align-items: center; gap: 8px; margin: 6px 6px 2px; font-size: 0.64rem; font-weight: 700; line-height: 1.2; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(255, 210, 63, 0.8); }
+#goal-list .g-sep::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(255, 210, 63, 0.45), rgba(255, 255, 255, 0)); }
+#goal-list li.g-opt { grid-template-columns: 22px minmax(0, 1fr); padding: 2px 6px 2px 5px; font-size: 0.78rem; color: #b8c2e8; }
+#goal-list li.g-opt .g-ic { width: 22px; height: 22px; border-radius: 7px; font-size: 0.8rem; background: transparent; }
+#goal-list li.g-opt.now { grid-template-columns: 28px minmax(0, 1fr); padding: 6px 8px 6px 5px; font-size: 0.82rem; color: #fff; }
+#goal-list li.g-opt.now .g-ic { width: 28px; height: 28px; font-size: 0.95rem; }
+#goal-list li.g-opt.done { color: #8f9ac2; }
+/* touch screens: only the job to do now, as one small gold-edged chip */
+body.touch #goals { padding: 4px 14px 4px 4px; border-radius: 999px; box-shadow: inset 0 0 0 1.5px rgba(255, 210, 63, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 6px 16px rgba(2, 4, 14, 0.4); }
+body.touch #goals .g-head, body.touch #goals .g-prog { display: none; }
+body.touch #goal-list li.now { display: grid; grid-template-columns: 28px auto; margin: 0; padding: 0; gap: 8px; font-size: 0.84rem; line-height: 1.2; background: none; box-shadow: none; }
+body.touch #goal-list li.now .g-ic { border-radius: 50%; }
+body.touch #goal-list li.now::after, body.touch #goal-list li.now .g-now { display: none; }
+
+/* ---------- floating "+12 💨" pills ---------- */
+.toast { padding: 3px 13px 4px; border-radius: 999px; font-size: 1.22rem; font-weight: 700; line-height: 1.2;
+  background: linear-gradient(180deg, rgba(32, 42, 86, 0.93), rgba(10, 14, 34, 0.93)); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  box-shadow: inset 0 0 0 2px var(--c, #fff), inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 0 16px -3px var(--c, #fff), 0 6px 14px rgba(0, 0, 0, 0.4);
+  animation: hud-rise 1.3s cubic-bezier(.2, .8, .3, 1) forwards; will-change: transform, opacity; }
+@keyframes hud-rise {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+  14% { opacity: 1; transform: translate(-50%, -50%) scale(1.14); }
+  26% { transform: translate(-50%, -60%) scale(1); }
+  72% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, calc(-50% - 80px)) scale(0.96); }
+}
+@keyframes hud-fade { 0% { opacity: 0; } 15%, 75% { opacity: 1; } 100% { opacity: 0; } }
+
+/* ---------- night report: before → after, and each + / − line ---------- */
+.modal .rep { grid-template-columns: 46px minmax(0, 1fr) auto; gap: 2px 12px; padding: 12px 14px; border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.035)); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.08); }
+.rep .ic { align-self: start; display: grid; place-items: center; width: 46px; height: 46px; border-radius: 14px; font-size: 1.55rem; line-height: 1;
+  background: rgba(255, 255, 255, 0.08); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.13); }
+.rep .nm { align-self: center; font-size: 1.1rem; }
+.rep .chg { align-self: center; display: flex; align-items: center; gap: 4px; font-size: 1.3rem; }
+.rep .chg small { font-size: 1rem; }
+.rep .chg > span { padding: 2px 12px; border-radius: 999px; background: rgba(255, 255, 255, 0.1); box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.2); }
+.rep .chg > .up, .rep li b.up { color: var(--gain); background: var(--gain-bg); box-shadow: inset 0 0 0 1.5px var(--gain-edge); }
+.rep .chg > .down, .rep li b.down { color: var(--loss); background: var(--loss-bg); box-shadow: inset 0 0 0 1.5px var(--loss-edge); }
+.rep ul { display: grid; gap: 3px; margin-top: 7px; font-size: 0.9rem; }
+.rep li { align-items: center; padding: 3px 4px 3px 10px; border-radius: 10px; background: rgba(0, 0, 0, 0.2); line-height: 1.3; }
+.rep li b { flex: none; min-width: 3.4em; padding: 1px 9px; border-radius: 999px; text-align: center; font-weight: 700; }
+
+/* ---------- mission end: rank, points, badges, discoveries ---------- */
+.rank .big-icon { position: relative; isolation: isolate; display: inline-grid; place-items: center; width: 1.7em; height: 1.7em; border-radius: 50%; font-size: 4.2rem;
+  background: radial-gradient(circle, rgba(255, 210, 63, 0.32), rgba(255, 210, 63, 0) 68%); }
+.rank:has(> p) .big-icon::before { content: ''; position: absolute; inset: -18%; z-index: -1; border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 210, 63, 0.2) 0 9deg, rgba(255, 210, 63, 0) 9deg 22.5deg);
+  -webkit-mask-image: radial-gradient(circle, #000 30%, transparent 70%); mask-image: radial-gradient(circle, #000 30%, transparent 70%); animation: hud-spin 24s linear infinite; }
+@keyframes hud-spin { to { transform: rotate(360deg); } }
+.rank h2 { font-size: 2.3rem; margin-top: 2px; color: var(--power); text-shadow: 0 3px 0 rgba(120, 70, 0, 0.45), 0 0 24px rgba(255, 210, 63, 0.35); }
+/* the points line (the one with an inline style) becomes a big gold pill */
+.rank p[style] { display: inline-block; margin: 10px auto 4px; padding: 6px 24px 7px; border-radius: 999px; color: var(--gold-ink); background: var(--gold);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), inset 0 -3px 0 rgba(170, 95, 0, 0.35), 0 8px 22px rgba(255, 170, 30, 0.3); }
+.badges { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.badges .badge { position: relative; gap: 11px; padding: 10px 12px; border-radius: 16px;
+  background: linear-gradient(160deg, rgba(255, 210, 63, 0.15), rgba(255, 255, 255, 0.04) 60%); box-shadow: inset 0 0 0 1.5px rgba(255, 210, 63, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  animation: hud-badge 0.5s cubic-bezier(.2, 1.4, .4, 1) both; }
+.badges .badge:nth-child(2) { animation-delay: 0.08s; } .badges .badge:nth-child(3) { animation-delay: 0.16s; } .badges .badge:nth-child(4) { animation-delay: 0.24s; }
+.badges .badge:nth-child(5) { animation-delay: 0.32s; } .badges .badge:nth-child(n+6) { animation-delay: 0.4s; }
+@keyframes hud-badge { from { opacity: 0; transform: translateY(10px) scale(0.92); } to { opacity: 1; transform: none; } }
+.badges .badge em { flex: none; display: grid; place-items: center; width: 46px; height: 46px; border-radius: 50%; font-size: 1.45rem; line-height: 1;
+  background: radial-gradient(circle at 40% 30%, #3d4396, #161a44 80%); box-shadow: inset 0 0 0 2.5px #ffd23f, inset 0 0 0 4px rgba(120, 80, 0, 0.55), 0 3px 8px rgba(0, 0, 0, 0.4), 0 0 12px rgba(255, 210, 63, 0.28); }
+.badges .badge b { color: #fff3c4; font-size: 1rem; }
+.badges .badge span { display: block; font-size: 0.8rem; line-height: 1.3; }
+.modal .find { align-items: center; gap: 12px; padding: 10px 12px; border-radius: 16px;
+  background: linear-gradient(180deg, rgba(79, 216, 255, 0.09), rgba(255, 255, 255, 0.03)); box-shadow: inset 0 0 0 1px rgba(79, 216, 255, 0.25); }
+.find em { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 13px; font-size: 1.45rem; line-height: 1;
+  background: rgba(79, 216, 255, 0.12); box-shadow: inset 0 0 0 1.5px rgba(79, 216, 255, 0.4); }
+.find > div { flex: 1; min-width: 0; }
+.find i { flex: none; align-self: center; padding: 3px 11px; border-radius: 999px; font-size: 0.92rem; color: var(--gold-ink); background: var(--gold);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75), 0 3px 8px rgba(255, 170, 30, 0.22); }
+
+/* ---------- smaller screens ---------- */
+@media (max-width: 1180px) {
+  #hud .meter { grid-template-columns: 34px minmax(0, 1fr); gap: 0 8px; padding: 6px 11px 6px 7px; }
+  #hud .m-icon { width: 34px; height: 34px; font-size: 1.1rem; }
+  #hud .m-top { font-size: 0.8rem; }
+  #hud .m-val { font-size: 1.2rem; }
+  #hud .m-note { font-size: 0.7rem; }
+  #hud .sol-chip { width: 182px; }
+}
+/* small laptops, tablets and phones on their side: the icon moves up next to the number,
+   so the bar and the note get the whole width */
+@media (max-width: 1100px) {
+  #hud .meter { grid-template-columns: 26px minmax(0, 1fr); grid-template-areas: "ic top" "bar bar" "note note"; gap: 0 6px; padding: 5px 10px 5px 7px; border-radius: 16px; }
+  #hud .m-icon { width: 26px; height: 26px; font-size: 0.88rem; box-shadow: inset 0 0 0 1.5px var(--c), 0 0 8px var(--c-glow); }
+  #hud .m-top { align-items: center; }
+  #hud .m-val { font-size: 1.15rem; }
+  #hud .m-bar { height: 8px; margin: 4px 0 3px; }
+  #hud .meter.low .m-icon::after { width: 14px; height: 14px; right: -4px; top: -4px; font-size: 0.6rem; }
+  #hud .hud-right { gap: 5px; }
+  #hud .icon-btn { width: 38px; height: 38px; font-size: 1rem; }
+  #hud .stars { height: 40px; padding: 0 13px 0 4px; gap: 6px; }
+  #hud .star-badge { width: 31px; height: 31px; font-size: 0.98rem; }
+}
+@media (max-width: 1000px) {
+  /* the word goes (the icon, the colour and the tooltip still say what it is) but stays for screen readers */
+  #hud .m-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  #hud .m-top { justify-content: flex-start; }
+}
+@media (max-width: 900px) {
+  #hud { gap: 8px; }
+  #hud .sol-chip { width: 158px; gap: 8px; padding: 6px 10px 6px 6px; border-radius: 16px; }
+  #hud #sol-text { width: 42px; height: 46px; border-radius: 12px; }
+  #hud #sol-text .n { font-size: 1.3rem; }
+  #hud #site-text { font-size: 0.7rem; }
+  #hud .clock { margin: 9px 0 5px; }
+  #hud #time-left { font-size: 0.74rem; }
+  #hud .meter { padding: 5px 9px 5px 6px; }
+  #hud .m-icon { width: 24px; height: 24px; font-size: 0.8rem; }
+  #hud .m-val { font-size: 1.12rem; }
+  #hud .m-bar { margin: 4px 0 3px; }
+  /* narrow meters: a long note takes two short lines instead of being cut off
+     (the bar stays under 86px, where style.css puts the banner on these widths) */
+  #hud .m-note { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; font-size: 0.66rem; line-height: 1.08; }
+  #hud .m-note.bad::before { content: none; }
+  #hud .hud-right { gap: 5px; }
+  #hud .icon-btn { width: 36px; height: 36px; font-size: 0.98rem; }
+  #hud .stars { height: 38px; padding: 0 12px 0 4px; gap: 5px; }
+  #hud .star-badge { width: 29px; height: 29px; font-size: 0.92rem; }
+  #hud #sci-val { font-size: 1.15rem; min-width: 1.2em; }
+  #goals { width: 238px; }
+  #goal-list li.goal { font-size: 0.8rem; }
+  #goal-list li.g-opt { font-size: 0.76rem; }
+}
+/* phones upright: day chip and buttons share the first row (the chip takes what is left), the meters get the second */
+@media (max-width: 640px) {
+  #hud { gap: 6px; }
+  #hud .sol-chip { flex: 1 1 0; width: auto; min-width: 0; max-width: 220px; gap: 7px; padding: 5px 9px 5px 5px; }
+  #hud #sol-text { width: 38px; height: 42px; border-radius: 11px; }
+  #hud #sol-text .n { font-size: 1.15rem; }
+  #hud #sol-text small, #hud #sol-text .of { font-size: 0.54rem; }
+  #hud #site-text { font-size: 0.66rem; }
+  #hud .clock { margin: 8px 0 4px; }
+  #hud #time-left { font-size: 0.7rem; }
+  #hud #time-left::before { content: none; }
+  #hud .hud-right { flex: none; gap: 4px; }
+  #hud .icon-btn { width: 32px; height: 32px; font-size: 0.88rem; }
+  #hud .stars { height: 34px; padding: 0 9px 0 3px; gap: 4px; }
+  #hud .star-badge { width: 26px; height: 26px; font-size: 0.8rem; }
+  #hud #sci-val { font-size: 1.05rem; min-width: 1em; }
+  #hud .meters { gap: 6px; }
+  #hud .meter { max-width: none; padding: 5px 7px 5px 6px; }
+  #hud .m-icon { display: grid; width: 24px; height: 24px; font-size: 0.8rem; }
+  #hud .m-val { font-size: 1.05rem; }
+  #hud .m-note { font-size: 0.64rem; }
+}
+
+/* ---------- less motion: nothing loops, nothing bounces ---------- */
+@media (prefers-reduced-motion: reduce) {
+  #hud .meter.low::before, #hud #clock-storm.now, #goal-list li.now::after, .rank .big-icon::before { animation: none; }
+  #goal-list li.now::after { opacity: 0.5; }
+  #hud .meter.pop-a .m-val, #hud .meter.pop-b .m-val, #hud .stars.pop-a, #hud .stars.pop-b,
+  #hud .stars.pop-a .star-badge, #hud .stars.pop-b .star-badge, .badges .badge { animation: none; }
+  #hud .sci-plus.pop-a, #hud .sci-plus.pop-b { animation: hud-fade 1.2s ease-out; }
+  .toast { animation: hud-fade 1.3s ease-out forwards; transform: translate(-50%, -50%); }
+  #goal-list .g-ic::after { transform: none; transition: opacity 0.2s; }
+  #hud .m-bar i, #goals .g-prog i { transition: none; }
+}

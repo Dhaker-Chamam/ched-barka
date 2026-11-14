@@ -126,17 +126,26 @@
     var gp = s.glitchPlan[s.sol];
     s.glitch = gp ? { machine: gp.machine, at: gp.at * s.dayLength, state: 'pending', replyAt: 0, misses: 0, asked: false } : null;
     s.today = { breath: 0, airMade: 0, ice: 0, crates: 0, doseBase: 0, doseStorm: 0, sci: [], cells: {}, bags: 0, late: false, repair: null,
-      panels: {}, dishEarly: false, leaked: 0, goalDone: false, extra: [] };
+      panels: {}, dishEarly: false, leaked: 0, goalDone: false, extra: [],
+      bagRoom: R.shieldSlots - s.bags, coreRoom: s.cores.length * 2 - s.finds.filter(function (f) { return f.kind === 'core'; }).length };
     s.day = dayInfo(s);
     s.morning = { air: s.air, food: s.food, dose: s.dose, sci: s.sci };
     if (JA.crisis) JA.crisis.startSol(s);
   }
 
   // Has today's challenge been met? (checked every tick; pays out once)
+  // How many the challenge really asks for. It never asks for more than is left to do: a player who
+  // covered the dome or studied the cores early must not lose the challenge for working ahead.
+  function goalNeed(s) {
+    var g = s.day.goal, t = s.today; if (!g || !g.n) return 0;
+    if (g.id === 'bags') return Math.max(0, Math.min(g.n, t.bagRoom));
+    if (g.id === 'cores') return Math.max(0, Math.min(g.n, t.coreRoom));
+    return g.n;
+  }
   function dayGoalDone(s) {
     var g = s.day.goal, t = s.today; if (!g) return false;
-    if (g.id === 'bags') return t.bags >= g.n;
-    if (g.id === 'cores') return s.finds.filter(function (f) { return f.kind === 'core' && f.sol === s.sol; }).length >= g.n;
+    if (g.id === 'bags') return t.bags >= goalNeed(s);
+    if (g.id === 'cores') return s.finds.filter(function (f) { return f.kind === 'core' && f.sol === s.sol; }).length >= goalNeed(s);
     if (g.id === 'dish') return t.dishEarly;
     if (g.id === 'crates') return t.crates >= g.n;
     if (g.id === 'panels') return Object.keys(t.panels).length >= g.n;
@@ -150,7 +159,8 @@
     var v = g.id === 'bags' ? t.bags : g.id === 'cores' ? s.finds.filter(function (f) { return f.kind === 'core' && f.sol === s.sol; }).length
       : g.id === 'crates' ? t.crates : g.id === 'panels' ? Object.keys(t.panels).length
       : g.id === 'inst' ? Object.keys(s.inst).length : g.id === 'ice' ? t.ice : s.finds.filter(function (f) { return f.kind === 'core'; }).length;
-    return ' (' + Math.min(v, g.n) + '/' + g.n + ')';
+    var need = goalNeed(s);
+    return ' (' + Math.min(v, need) + '/' + need + ')';
   }
 
   // The player changed how long a working day lasts. Keep the same point in the day.
@@ -163,7 +173,7 @@
     }
     if (g) { if (g.state === 'pending') g.at = g.at / D * D2; g.replyAt += shift; }
     if (c && c.state === 'pending') { c.at = c.at / D * D2; c.until = c.until / D * D2; }
-    s.after.forEach(function (a) { if (a.sol === s.sol) a.t += shift; });
+    s.after.forEach(function (a) { if (a.sol === s.sol && !a.done) a.t = Math.min(a.t + shift, D2 - 0.5); });
     s.t = t2; s.dayLength = D2;
   }
 
@@ -377,7 +387,8 @@
   function repairMiss(s) { s.glitch.misses++; s.rack.charge = Math.max(0, s.rack.charge - 0.5); }
   function repairDone(s) {
     var g = s.glitch;
-    machine(s, g.machine).broken = false;
+    // a Greenhouse repair does not replace a blown pump fuse (that is a crisis, see crisis.js)
+    machine(s, g.machine).broken = g.machine === 'food' && s.flags.pumpFuse === s.sol;
     g.state = 'fixed'; s.stats.repairs++;
     s.today.repair = { machine: g.machine, misses: g.misses, asked: g.asked };
   }
@@ -470,7 +481,8 @@
       var list = JA.FACTS.filter(function (f) { return !s.seenFacts[f.id] && (f.site === 'any' || f.site === s.site.id) && f.tags.indexOf(tags[i]) >= 0; });
       if (list.length) { var f = list[Math.floor(s.rng() * list.length)]; s.seenFacts[f.id] = 1; return f; }
     }
-    return JA.FACTS[0];
+    var rest = JA.FACTS.filter(function (f) { return f.site === 'any' || f.site === s.site.id; });
+    return rest[Math.floor(s.rng() * rest.length)] || JA.FACTS[0];
   }
 
   function rankFor(s) { var best = JA.RANKS[0]; JA.RANKS.forEach(function (r, i) { if (s.sci >= s.level.rankMins[i]) best = r; }); return best; }
@@ -487,6 +499,9 @@
     if (s.inst.seismo && s.inst.beam && s.inst.rad) b.push({ icon: '🛰️', name: 'Science Station', text: 'Set up all three instruments' });
     if (s.stats.bestThrow >= 15) b.push({ icon: '🎯', name: 'Sharpshooter', text: 'Landed a throw from ' + Math.round(s.stats.bestThrow) + ' m away' });
     if (s.stats.drive >= 150) b.push({ icon: '🚙', name: 'Road Tripper', text: 'Drove the rover for ' + Math.round(s.stats.drive) + ' seconds' });
+    if (s.sky && s.sky.found) b.push({ icon: '☄️', name: 'Space Rock Hunter', text: 'Picked up ' + s.sky.found + ' meteorite' + (s.sky.found > 1 ? 's' : '') + ' from a fresh crater' });
+    if (s.colony && s.colony.stage) b.push({ icon: '🏘️', name: 'Town Founder', text: 'Your outpost looked after itself so well that ' + (s.colony.stage > 1 ? 'settlers came' : 'a supply ship came') + ' from Earth' });
+    if (s.flags.alienDance) b.push({ icon: '👽', name: 'Dance Buddy', text: 'Found the secret alien and danced together' + (s.flags.alienBest ? ' (groove score ' + s.flags.alienBest + ')' : '') });
     if (s.dose < 40) b.push({ icon: '💚', name: 'Healthy Crew', text: 'Kept radiation under 40%' });
     if (s.stats.dayGoals >= s.totalSols - 2) b.push({ icon: '🎓', name: 'Star Student', text: 'Finished every daily challenge' });
     if (s.decisions.length) b.push({ icon: '🧭', name: 'Decision Maker', text: 'Made ' + s.decisions.length + ' big call' + (s.decisions.length > 1 ? 's' : '') + ' with no checklist' });

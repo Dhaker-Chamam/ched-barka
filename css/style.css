@@ -366,3 +366,65 @@ body.cine #fade { z-index: 27; }      /* during the film, titles and subtitles s
   .modal, .rank .big-icon, #card { animation: none; }
   .crisis-head small, .crisis-head .big-icon, #cine-visor .breath { animation: none; }
 }
+
+/* ---------- phones and touch screens ---------- */
+:root { --safe-l: env(safe-area-inset-left, 0px); --safe-r: env(safe-area-inset-right, 0px); }
+#hud { left: calc(12px + var(--safe-l)); right: calc(12px + var(--safe-r)); }
+#stick { left: calc(22px + var(--safe-l)); }
+#touch-btns { right: calc(18px + var(--safe-r)); }
+.chip, .meter, #goals, #bolt { -webkit-backdrop-filter: blur(8px); }
+#stick, #touch-btns button, #scene { -webkit-touch-callout: none; }
+/* Touch: the whole checklist does not fit, so show only the step to do now, where the banner goes.
+   --hud-b is the bottom edge of the top bar, measured by game.js. */
+body.touch #goals { display: block; left: 50%; top: calc(var(--hud-b, 86px) + 8px); transform: translateX(-50%); width: max-content; max-width: min(92vw, 520px); padding: 7px 14px; border-radius: 18px; }
+body.touch.has-banner #goals, body.touch #goals.empty { display: none; }
+body.touch #goals h4 { display: none; }
+body.touch #goal-list li { display: none; }
+body.touch #goal-list li.now { display: grid; font-size: 0.86rem; }
+body.touch #bolt { top: calc(var(--hud-b, 86px) + 58px); left: calc(12px + var(--safe-l)); }
+@media (max-width: 640px) {
+  /* keep the day chip and the buttons on one row, so the top bar is two rows tall, not three */
+  .hud-right { gap: 4px; } .stars { padding: 7px 8px; gap: 4px; } .stars b { min-width: 1.1em; } .sol-chip { min-width: 104px; }
+  #banner { top: calc(var(--hud-b, 150px) + 8px); white-space: normal; text-align: center; }
+  #goals { top: calc(var(--hud-b, 150px) + 56px); }
+  body.touch #goals { top: calc(var(--hud-b, 150px) + 8px); }
+  body.touch #bolt { top: calc(var(--hud-b, 150px) + 64px); }
+  #card { top: calc(var(--hud-b, 150px) + 56px); }
+}
+
+/* ---------- helmet view (first person) ---------- */
+#visor { position: fixed; inset: 0; z-index: 4; pointer-events: none; overflow: hidden; }
+#visor .rim { position: absolute; inset: 0; background: radial-gradient(ellipse 60% 68% at 50% 47%, rgba(255, 196, 90, 0.03) 60%, rgba(6, 8, 16, 0.45) 82%, #04060c 99%); }
+#visor .glint { position: absolute; inset: 0; background: linear-gradient(122deg, rgba(255, 255, 255, 0) 30%, rgba(255, 255, 255, 0.06) 38%, rgba(255, 255, 255, 0) 46%); }
+#visor .breath { position: absolute; left: 50%; bottom: -10vh; width: 70vw; height: 30vh; transform: translateX(-50%); border-radius: 50%; background: radial-gradient(ellipse at center, rgba(220, 235, 255, 0.45), rgba(220, 235, 255, 0) 68%); opacity: 0; animation: fog 4.6s ease-in-out infinite; }
+#visor-compass { position: absolute; left: 50%; top: calc(134px + var(--safe-t)); width: 300px; height: 26px; margin-left: -150px; overflow: hidden; border-bottom: 1.5px solid rgba(141, 255, 192, 0.45); background: rgba(6, 10, 20, 0.3);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 16%, #000 84%, transparent); mask-image: linear-gradient(90deg, transparent, #000 16%, #000 84%, transparent); }
+#visor-compass::after { content: ''; position: absolute; left: 50%; bottom: 0; width: 2px; height: 8px; margin-left: -1px; background: #8dffc0; }
+#visor-strip { position: absolute; left: 50%; top: 0; }
+#visor-strip span { position: absolute; left: 0; top: 2px; width: 2.6em; margin-left: -1.3em; text-align: center; font: 700 0.86rem ui-monospace, 'Cascadia Mono', Consolas, monospace; color: #8dffc0; text-shadow: 0 0 8px rgba(77, 255, 154, 0.6), 0 1px 3px #000; will-change: transform; }
+#visor-strip span.minor { font-weight: 500; font-size: 0.74rem; top: 4px; }
+#visor-strip span.pin { font-size: 0.95rem; top: 0; }
+#visor-data { position: absolute; left: 50%; top: calc(168px + var(--safe-t)); transform: translateX(-50%); font: 600 0.8rem ui-monospace, 'Cascadia Mono', Consolas, monospace; letter-spacing: 0.1em; color: #8dffc0; text-shadow: 0 0 10px rgba(77, 255, 154, 0.6), 0 1px 3px #000; white-space: pre; opacity: 0.95; background: rgba(6, 10, 20, 0.42); padding: 3px 12px; border-radius: 9px; }
+body.touch #visor-compass, body.touch #visor-data, body.touch #btn-view { display: none; }
+@media (max-width: 900px) { #visor-compass, #visor-data, #btn-view { display: none; } }
+@media (prefers-reduced-motion: reduce) { #visor .breath { animation: none; } }
+/* the helmet-view button sits above the other touch buttons */
+#touch-btns #t-view { grid-column: 2; grid-row: 1; width: 46px; height: 46px; font-size: 1.2rem; justify-self: center; }
+#touch-btns #t-throw { grid-column: 1; grid-row: 2; }
+#touch-btns #t-jump { grid-column: 1; grid-row: 3; }
+#touch-btns #t-use { grid-column: 2; grid-row: 2 / 4; }
+#touch-btns button.on { box-shadow: inset 0 0 0 3px var(--power); }
+.modal-actions { flex-wrap: wrap; }
+
+/* ---------- inside the habitat or the rocket: a small panel, so you can see the room ---------- */
+#inside { left: auto; right: calc(14px + var(--safe-r)); top: auto; bottom: calc(16px + var(--safe-b)); transform: none; width: min(310px, 40vw); padding: 12px 14px 14px; text-align: left; }
+#inside b { font-size: 1rem; }
+#inside p { margin: 4px 0 10px; font-size: 0.84rem; line-height: 1.3; }
+#inside .inside-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+#inside .inside-actions .btn { padding: 0.55em 0.6em; font-size: 0.86rem; }
+#inside #btn-out { grid-column: 1 / -1; }
+body.touch #inside { top: calc(var(--hud-b, 96px) + 8px); bottom: auto; left: 50%; right: auto; transform: translateX(-50%); width: max-content; max-width: 94vw; padding: 6px 8px; border-radius: 18px; }
+body.touch #inside b, body.touch #inside p { display: none; }
+body.touch #inside .inside-actions { display: flex; flex-wrap: nowrap; gap: 6px; }
+body.touch #inside .inside-actions .btn { padding: 0.5em 0.8em; font-size: 0.8rem; }
+body.touch.in-room #goals { display: none; }

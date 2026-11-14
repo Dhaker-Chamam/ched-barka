@@ -5,41 +5,63 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Astro Outpost — Junior Astronaut Mission Trainer</title>
 <meta name="description" content="Be the astronaut. Carry power cells, mine ice, shield your home, drive the rover and dodge real solar storms on the Moon or Mars.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E%F0%9F%9A%80%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/sunwatch.css">
+<link rel="stylesheet" href="css/keepsake.css">
+<link rel="stylesheet" href="css/hud.css">
+<link rel="stylesheet" href="css/alien.css">
+<link rel="stylesheet" href="css/colony.css">
 </head>
 <body>
 <canvas id="scene" aria-label="3D view of your outpost"></canvas>
+<!-- helmet view: the inside of your own visor (first person) -->
+<div id="visor" class="hidden" aria-hidden="true">
+  <i class="rim"></i><i class="glint"></i><i class="breath"></i>
+  <div id="visor-compass"><div id="visor-strip"></div></div>
+  <div id="visor-data"></div>
+</div>
 <div id="storm-fx" aria-hidden="true"></div>
 <div id="tags" aria-hidden="true"></div>
 <div id="toasts" aria-hidden="true"></div>
 
 <!-- top bar -->
 <header id="hud" class="hidden">
+  <!-- the day: a big day number, then the place, the shift bar (sun + storm window) and the time left -->
   <div class="chip sol-chip">
-    <b id="sol-text">Sol 1 of 5</b>
-    <small id="site-text">Mars</small>
-    <div class="clock" title="Time left in today's shift"><i id="clock-fill"></i><em id="clock-storm"></em><span id="clock-sun">☀️</span></div>
-    <small id="time-left" title="Time left in today's shift. Press ⏸ to change how long a day lasts.">5:00 left</small>
+    <b id="sol-text" class="day-tile">Sol 1 of 5</b>
+    <div class="day-info">
+      <small id="site-text">Mars</small>
+      <div class="clock" title="Time left in today's shift"><i id="clock-fill"></i><em id="clock-storm" title="Solar storm"></em><span id="clock-sun">☀️</span></div>
+      <small id="time-left" title="Time left in today's shift. Press ⏸ to change how long a day lasts.">5:00 left</small>
+    </div>
   </div>
   <div class="meters">
     <div class="meter" data-res="air" title="Air: what the crew breathes">
-      <span class="m-icon">💨</span>
-      <div class="m-body"><div class="m-top"><b>Air</b><span class="m-val">60</span></div><div class="m-bar"><i></i></div><small class="m-note"></small></div>
+      <span class="m-icon" aria-hidden="true">💨</span>
+      <div class="m-top"><b class="m-name">Air</b><span class="m-val">60</span></div>
+      <div class="m-bar"><i></i></div>
+      <small class="m-note"></small>
     </div>
     <div class="meter" data-res="food" title="Food: meals for the crew">
-      <span class="m-icon">🥬</span>
-      <div class="m-body"><div class="m-top"><b>Food</b><span class="m-val">45</span></div><div class="m-bar"><i></i></div><small class="m-note"></small></div>
+      <span class="m-icon" aria-hidden="true">🥬</span>
+      <div class="m-top"><b class="m-name">Food</b><span class="m-val">45</span></div>
+      <div class="m-bar"><i></i></div>
+      <small class="m-note"></small>
     </div>
     <div class="meter" data-res="dose" title="Radiation badge: when it is full, the mission is over">
-      <span class="m-icon">☢️</span>
-      <div class="m-body"><div class="m-top"><b>Radiation</b><span class="m-val">0</span></div><div class="m-bar"><i></i></div><small class="m-note"></small></div>
+      <span class="m-icon" aria-hidden="true">☢️</span>
+      <div class="m-top"><b class="m-name">Radiation</b><span class="m-val">0</span></div>
+      <div class="m-bar"><i></i></div>
+      <small class="m-note"></small>
     </div>
   </div>
   <div class="hud-right">
-    <div class="chip stars" title="Mission points"><span>⭐</span><b id="sci-val">0</b></div>
+    <div class="chip stars" title="Mission points"><span class="star-badge" aria-hidden="true">⭐</span><b id="sci-val">0</b><em class="sci-plus" aria-hidden="true"></em></div>
+    <button id="btn-view" class="icon-btn" aria-label="Helmet view: see through your own visor" aria-pressed="false" title="Helmet view (V)">👁️</button>
     <button id="btn-pause" class="icon-btn" aria-label="Pause and change the day length" title="Pause · day length (P)">⏸</button>
     <button id="btn-sound" class="icon-btn" aria-label="Sound on or off" title="Sound">🔊</button>
     <button id="btn-read" class="icon-btn" aria-label="Read text aloud" title="Read aloud">🗣️</button>
@@ -47,7 +69,11 @@
   </div>
 </header>
 
-<aside id="goals" class="hidden"><h4 id="goals-title">Today</h4><ul id="goal-list"></ul></aside>
+<aside id="goals" class="hidden" aria-label="Goals">
+  <div class="g-head"><h4 id="goals-title">Today</h4><span class="g-count" title="Must-do jobs done"></span></div>
+  <div class="g-prog" aria-hidden="true"><i></i></div>
+  <ul id="goal-list"></ul>
+</aside>
 <div id="banner" class="hidden"></div>
 
 <!-- robot buddy speech -->
@@ -74,9 +100,10 @@
 
 <!-- inside the habitat -->
 <div id="inside" class="hidden">
-  <b>🏠 Inside the habitat</b>
+  <b id="inside-title">🏠 Inside the habitat</b>
   <p id="inside-text">Safe and cosy.</p>
   <div class="inside-actions">
+    <button class="btn ghost" id="btn-sun">☀️ Sun Watch</button>
     <button class="btn ghost" id="btn-fast">⏩ Fast-forward</button>
     <button class="btn ghost" id="btn-sleep">😴 End the day</button>
     <button class="btn primary" id="btn-out">🧑‍🚀 Go outside</button>
@@ -89,6 +116,7 @@
 <!-- touch controls -->
 <div id="stick" class="hidden"><i></i></div>
 <div id="touch-btns" class="hidden">
+  <button id="t-view" aria-label="Helmet view" aria-pressed="false">👁</button>
   <button id="t-throw" aria-label="Throw">🎯</button>
   <button id="t-use" aria-label="Use">✋</button>
   <button id="t-jump" aria-label="Jump">⤴</button>
@@ -138,11 +166,18 @@
 <script src="js/world.js"></script>
 <script src="js/base.js"></script>
 <script src="js/actors.js"></script>
-<script src="js/sfx-data.js"></script>
-<script src="js/audio-list.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/intro.js"></script>
+<!-- optional extras: the game runs without any of them -->
+<script src="js/pov.js"></script>
+<script src="js/skyfall.js"></script>
+<script src="js/music.js"></script>
+<script src="js/sunwatch.js"></script>
+<script src="js/keepsake.js"></script>
+<script src="js/interior.js"></script>
+<script src="js/colony.js"></script>
+<script src="js/alien.js"></script>
 <script src="js/game.js"></script>
 </body>
 </html>

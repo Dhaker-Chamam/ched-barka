@@ -56,20 +56,21 @@
 
   // ---------- habitat ----------
   function hab() {
-    var g = group(L.hab), white = soft(0xf2f3f7), blue = soft(0x3d7dff), i, doorLight, beacon, flag;
+    var g = group(L.hab), white = soft(0xf2f3f7), blue = soft(0x3d7dff), i, doorLight, beacon, flag, habWins = [];
     var mdl = model('habitat'), fm = model('flag'), scope = model('telescope');
     if (mdl) {
       // the habitat made in Blender: dome, airlock, windows, beacon, and the pantry chute with its funnel
       g.add(mdl);
       doorLight = mdl.getObjectByName('hab_doorLight'); beacon = mdl.getObjectByName('hab_beacon');
       B.spots.hoppers.pantry = wp(g, 5.9, 2.9, 1.2);
+      var hull = mdl.getObjectByName('hab_main'); if (hull) habWins.push(hull);   // the outer hull and windows: hidden while you are inside, so the room and the view show
     } else {
       add(g, cyl(5.4, 5.8, 1.3, 30), soft(0xd7dae3), 0, 0.65, 0);
       add(g, new T.SphereGeometry(5.3, 34, 16, 0, Math.PI * 2, 0, Math.PI / 2), white, 0, 1.3, 0);
       add(g, new T.TorusGeometry(5.36, 0.18, 8, 40), blue, 0, 1.36, 0).rotation.x = Math.PI / 2;
       var winM = glow(0xffe59a, 1.3);
       [-1.25, -0.55, 0.55, 2.4, 3.6].forEach(function (a) {
-        var w = add(g, ball(0.62, 14, 12), winM, Math.sin(a) * 4.55, 3.9, Math.cos(a) * 4.55, true);
+        var w = add(g, ball(0.62, 14, 12), winM, Math.sin(a) * 4.55, 3.9, Math.cos(a) * 4.55, true); habWins.push(w); w.userData.a = a;
         w.scale.set(1, 1, 0.4); w.lookAt(g.position.x + Math.sin(a) * 12, 7, g.position.z + Math.cos(a) * 12);
       });
       add(g, box(3.0, 2.9, 4.2), soft(0xc3c7d2), 0, 1.45, 6.7);
@@ -102,7 +103,7 @@
         bags.push(b);
       });
     });
-    P.hab = { bags: bags, doorLight: doorLight, beacon: beacon, flag: flag };
+    P.hab = { bags: bags, doorLight: doorLight, beacon: beacon, flag: flag, group: g, windows: habWins };
     B.spots.door = wp(g, 0, 0, 10.2);
     B.spots.hoppers.dome = wp(g, 0, 2.4, 0);
     B.pos.hab = wp(g, 0, 9.8, 0);
@@ -306,12 +307,13 @@
     var ang = Math.atan2(-L.rocket[0], -L.rocket[1]);                 // face the habitat
     var dir = new T.Vector3(Math.sin(ang), 0, Math.cos(ang));
     var rk = new T.Group(); rk.rotation.y = ang; pad.add(rk);
-    var tw = new T.Group(), tl, mdl = model('rocket');
+    var tw = new T.Group(), tl, mdl = model('rocket'), rkWins = [];
     if (mdl) {
       // the rocket made in Blender: the ship (lifts off), the pad, and the gantry tower beside it
       var ship = mdl.getObjectByName('rocket_ship'), padM = mdl.getObjectByName('rocket_pad'), gantry = mdl.getObjectByName('rocket_gantry');
       tl = mdl.getObjectByName('rocket_towerLight');
       pad.add(padM); rk.add(ship);
+      rkWins.push(ship);     // the hull: hidden while you are inside the cockpit, so its walls do not block the window
       tw.rotation.y = ang; pad.add(tw); tw.add(gantry);             // the gantry sits at (-5.6, 0, -1.5) in the rocket's own frame
     } else {
       var disc = add(pad, cyl(11.5, 12, 0.3, 40), soft(0x4a4f63), 0, 0.15, 0, true); disc.receiveShadow = true;
@@ -327,7 +329,7 @@
         var fin = add(rk, box(0.2, 4.2, 2.3), red, Math.sin(a) * 2.9, 5.9, Math.cos(a) * 2.9); fin.rotation.y = a;
       }
       var winM = glow(0x9fe8ff, 1.2);
-      [11.4, 13.4].forEach(function (y) { var w = add(rk, ball(0.62, 14, 12), winM, 0, y, 2.36, true); w.scale.z = 0.4; });
+      [11.4, 13.4].forEach(function (y) { var w = add(rk, ball(0.62, 14, 12), winM, 0, y, 2.36, true); w.scale.z = 0.4; rkWins.push(w); });
       add(rk, box(1.5, 2.0, 0.14), dark, 0, 8.0, 2.66);
       add(rk, box(1.0, 7.4, 0.12), soft(0x8a8fa0), 0, 3.5, 3.05).rotation.x = -0.12;
       // cargo basket at the foot of the ladder
@@ -342,7 +344,7 @@
     flame.rotation.x = Math.PI; flame.visible = false;
     var fl = new T.PointLight(0xffa040, 0, 90, 1.6); fl.position.set(0, 0, 0); rk.add(fl);
     var twX = -dir.z * 5.6 - dir.x * 1.5, twZ = dir.x * 5.6 - dir.z * 1.5;          // where the gantry stands
-    P.rocket = { group: rk, flame: flame, light: fl, towerLight: tl, y: 0, v: 0, base: wp(pad, 0, 0, 0) };
+    P.rocket = { group: rk, flame: flame, light: fl, towerLight: tl, y: 0, v: 0, base: wp(pad, 0, 0, 0), pad: pad, windows: rkWins, dir: dir };
     B.spots.hoppers.cargo = wp(pad, dir.x * 4.9, 1.6, dir.z * 4.9);
     B.spots.rocketDoor = wp(pad, dir.x * 6.8 + dir.z * 2, 0, dir.z * 6.8 - dir.x * 2);
     B.pos.rocket = wp(pad, 0, 23.5, 0);
@@ -373,12 +375,12 @@
       if (site === 'mars' && i === 1) {            // "blueberries"
         var bb = new T.InstancedMesh(ball(0.07, 6, 5), new T.MeshStandardMaterial({ color: 0x4a5a78, roughness: 0.5 }), 220), d = new T.Object3D();
         for (k = 0; k < 220; k++) { var a = k * 2.4, r = 0.6 + Math.sqrt(k) * 0.55; d.position.set(Math.cos(a) * r, Tn.height(p[0] + Math.cos(a) * r, p[1] + Math.sin(a) * r) - g.position.y + 0.06, Math.sin(a) * r); d.updateMatrix(); bb.setMatrixAt(k, d.matrix); }
-        g.add(bb);
+        bb.frustumCulled = false; g.add(bb);
       }
       if (site === 'moon' && i === 1) {            // orange glass beads
         var gb = new T.InstancedMesh(ball(0.06, 6, 5), glow(0xff9a3a, 0.7), 200), d2 = new T.Object3D();
         for (k = 0; k < 200; k++) { var a2 = k * 2.4, r2 = 0.5 + Math.sqrt(k) * 0.5; d2.position.set(Math.cos(a2) * r2, Tn.height(p[0] + Math.cos(a2) * r2, p[1] + Math.sin(a2) * r2) - g.position.y + 0.05, Math.sin(a2) * r2); d2.updateMatrix(); gb.setMatrixAt(k, d2.matrix); }
-        g.add(gb);
+        gb.frustumCulled = false; g.add(gb);
       }
       if (site === 'mars' && i === 2) [[-0.5, 0.2], [0.3, -0.3], [0.1, 0.5]].forEach(function (s, n) { var st = add(g, box(2.2, 0.06, 0.14), glow(0xffffff, 0.35), s[0], 0.68, s[1], true); st.rotation.y = 0.5 + n * 0.5; });
       if (i === 3) for (k = 0; k < 5; k++) { var ic = add(g, new T.OctahedronGeometry(0.5 + (k % 3) * 0.2, 0), new T.MeshStandardMaterial({ color: 0xdff7ff, emissive: 0x6fcff5, emissiveIntensity: 0.5, flatShading: true }), Math.cos(k * 1.3) * 2.6, 0.2, Math.sin(k * 1.3) * 2.6); ic.rotation.set(k, k * 2, 0); }
@@ -589,7 +591,7 @@
       rk.light.intensity = L2.t > 1.2 ? 4 + Math.random() * 2 : 0;
       if (burn) { rk.v += (2.2 + L2.t * 1.4) * dt; rk.y += rk.v * dt; }
       rk.group.position.y = rk.y;
-      if (L2.t > 1.2) for (i = 0; i < 6; i++) {
+      if (L2.t > 1.2) for (i = W.rate(6, dt); i > 0; i--) {
         var ang = Math.random() * 6.28, sp = burn ? 9 + Math.random() * 12 : 3 + Math.random() * 4;
         W.emit(rk.base.x + Math.cos(ang) * 1.2, rk.base.y + Math.max(0.4, rk.y * 0.55) + 0.6, rk.base.z + Math.sin(ang) * 1.2,
           { vx: Math.cos(ang) * sp * (rk.y < 14 ? 1 : 0.15), vy: rk.y < 14 ? 1.5 + Math.random() * 3 : -6, vz: Math.sin(ang) * sp * (rk.y < 14 ? 1 : 0.15), life: 2.4, size: 1.6, grow: 4, color: Math.random() < 0.3 ? 0xffc27a : 0xe6e0d8, alpha: 0.6 });
