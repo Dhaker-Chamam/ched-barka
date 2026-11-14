@@ -1,0 +1,92 @@
+/* Astro Outpost — the wrist tablet's holograms (built by js/holo.js).
+   Every rule starts with #holo-root or .holo-, so nothing in this file can change the rest of the game.
+   The two fonts come from the variables in style.css, with a fallback if they are missing.
+   No text is smaller than 0.78rem, and every button is at least 44 px tall. */
+
+#holo-root { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 8px; background: rgba(3, 7, 18, 0.76); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); font-family: var(--font, 'Lexend', 'Segoe UI', system-ui, -apple-system, sans-serif); color: #eaf6ff; }
+#holo-root.holo-hidden { display: none; }
+#holo-root *, #holo-root *::before, #holo-root *::after { box-sizing: border-box; }
+
+/* ---------- the glass panel ---------- */
+.holo-panel { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; width: min(764px, 100%); max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); overflow-x: hidden; overflow-y: auto; padding: 14px 18px 12px; border-radius: 24px; background: linear-gradient(180deg, rgba(11, 34, 58, 0.94), rgba(6, 15, 36, 0.96)); box-shadow: inset 0 0 0 1.5px rgba(92, 240, 255, 0.5), inset 0 0 36px rgba(92, 240, 255, 0.08), 0 0 46px rgba(92, 240, 255, 0.2), 0 24px 70px rgba(0, 0, 0, 0.6); touch-action: pan-y; }
+
+.holo-head { display: flex; align-items: center; gap: 12px; }
+.holo-icon { flex: none; display: grid; place-items: center; width: 46px; height: 46px; border-radius: 14px; font-size: 1.65rem; line-height: 1; background: rgba(92, 240, 255, 0.1); box-shadow: inset 0 0 0 1.5px rgba(92, 240, 255, 0.35); }
+.holo-names { flex: 1; min-width: 0; }
+.holo-kicker { display: block; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.16em; color: #5cf0ff; text-shadow: 0 0 10px rgba(92, 240, 255, 0.6); }
+.holo-title { margin: 1px 0 0; font: 700 1.5rem/1.12 var(--font-display, 'Exo 2', 'Segoe UI', system-ui, sans-serif); letter-spacing: -0.01em; color: #f5fbff; }
+.holo-x { flex: none; width: 44px; height: 44px; border: 0; border-radius: 50%; font: 600 1.1rem var(--font, 'Lexend', 'Segoe UI', system-ui, sans-serif); color: #eaf6ff; cursor: pointer; background: rgba(92, 240, 255, 0.1); box-shadow: inset 0 0 0 1.5px rgba(92, 240, 255, 0.4); }
+.holo-x:hover { background: rgba(92, 240, 255, 0.2); }
+
+/* ---------- the picture, with the wrist tablet projecting it from the corner ---------- */
+.holo-view { position: relative; justify-self: center; width: min(100%, 720px, calc(52vh * 16 / 9)); padding-bottom: 12px; }
+.holo-stage { position: relative; aspect-ratio: 16 / 9; border-radius: 16px; overflow: hidden; background: #06132b; box-shadow: 0 0 26px rgba(92, 240, 255, 0.16); }
+.holo-canvas { display: block; width: 100%; height: 100%; }
+/* thin scan lines, a slow bright band drifting down, and the frame */
+.holo-scan { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; box-shadow: inset 0 0 0 1.5px rgba(92, 240, 255, 0.45), inset 0 0 44px rgba(3, 8, 20, 0.75);
+  background: linear-gradient(to bottom, rgba(92, 240, 255, 0), rgba(92, 240, 255, 0.07) 50%, rgba(92, 240, 255, 0)) 0 -30% / 100% 26% no-repeat, repeating-linear-gradient(to bottom, rgba(92, 240, 255, 0.05) 0 1px, rgba(92, 240, 255, 0) 1px 4px);
+  animation: holo-band 7s linear infinite; }
+@keyframes holo-band { from { background-position: 0 -40%, 0 0; } to { background-position: 0 140%, 0 0; } }
+/* the wrist tablet: a strap, a small dark screen, and on the screen a light and a line of text */
+.holo-tab { position: absolute; left: -8px; bottom: 0; width: 46px; height: 44px; pointer-events: none; transform: rotate(-8deg); transform-origin: 0 100%; }
+.holo-tab::before { content: ''; position: absolute; left: 11px; right: 11px; top: 0; bottom: 0; border-radius: 7px; background: #4d5a86; box-shadow: 0 0 0 2px #071226; }
+.holo-tab b { position: absolute; left: 0; right: 0; top: 7px; bottom: 7px; display: flex; align-items: center; justify-content: center; gap: 5px; border-radius: 9px; background: #0c1a33; box-shadow: inset 0 0 0 2.5px #eaf3ff, 0 0 0 2px #071226, 0 0 18px rgba(92, 240, 255, 0.65); }
+.holo-tab i { width: 7px; height: 7px; border-radius: 50%; background: #5cf0ff; box-shadow: 0 0 8px #5cf0ff; animation: holo-glow 2.4s ease-in-out infinite; }
+.holo-tab i + i { width: 14px; height: 4px; border-radius: 2px; animation-delay: 1.2s; }
+@keyframes holo-glow { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* ---------- the sentence and the buttons ---------- */
+.holo-cap { margin: 0; min-height: 2.8em; font-size: 1.14rem; line-height: 1.4; color: #f2f8ff; }
+.holo-foot { display: flex; align-items: center; gap: 10px; }
+.holo-dots { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; min-width: 0; }
+.holo-dot { width: 10px; height: 10px; border-radius: 999px; background: rgba(92, 240, 255, 0.16); box-shadow: inset 0 0 0 1.5px rgba(92, 240, 255, 0.55); transition: width 0.2s, background 0.2s; }
+.holo-dot.holo-done { background: #5cf0ff; }
+.holo-dot.holo-now { width: 26px; background: #ffd23f; box-shadow: 0 0 10px rgba(255, 210, 63, 0.6); }
+.holo-btn { flex: none; min-width: 48px; min-height: 48px; padding: 0 18px; border: 0; border-radius: 999px; font: 600 1.02rem var(--font, 'Lexend', 'Segoe UI', system-ui, sans-serif); color: #eaf6ff; white-space: nowrap; cursor: pointer; background: rgba(92, 240, 255, 0.1); box-shadow: inset 0 0 0 2px rgba(92, 240, 255, 0.45), 0 4px 0 rgba(0, 0, 0, 0.35); transition: transform 0.08s, filter 0.15s; }
+.holo-btn:hover { background: rgba(92, 240, 255, 0.2); }
+.holo-btn:active { transform: translateY(3px); }
+.holo-btn[disabled] { opacity: 0.35; pointer-events: none; }
+.holo-next { min-width: 128px; color: #2a1c00; background: #ffd23f; box-shadow: 0 4px 0 #b98a00, 0 0 22px rgba(255, 190, 0, 0.25); }
+.holo-next:hover { background: #ffd23f; filter: brightness(1.07); }
+.holo-btn:focus-visible, .holo-x:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+.holo-src { display: block; min-height: 1.2em; font-size: 0.78rem; line-height: 1.3; color: #a9bbdc; }
+
+/* ---------- it switches on like a projector ---------- */
+#holo-root.holo-on .holo-panel { animation: holo-pop 0.3s cubic-bezier(.2, 1.2, .4, 1); }
+#holo-root.holo-on .holo-stage { animation: holo-flicker 0.75s linear; }
+@keyframes holo-pop { from { transform: translateY(12px) scale(0.95); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes holo-flicker { 0% { opacity: 0; } 12% { opacity: 0.85; } 18% { opacity: 0.3; } 28% { opacity: 1; } 36% { opacity: 0.6; } 46%, 100% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  #holo-root.holo-on .holo-panel, #holo-root.holo-on .holo-stage, .holo-scan, .holo-tab i { animation: none; }
+  .holo-dot, .holo-btn { transition: none; }
+}
+
+/* ---------- phones held upright ---------- */
+@media (max-width: 560px) {
+  .holo-panel { padding: 12px 12px 10px; border-radius: 20px; }
+  .holo-head { gap: 10px; }
+  .holo-icon { width: 40px; height: 40px; font-size: 1.4rem; border-radius: 12px; }
+  .holo-title { font-size: 1.22rem; }
+  .holo-cap { font-size: 1.02rem; min-height: 5.6em; }
+  .holo-foot { gap: 8px; }
+  .holo-btn { padding: 0 14px; }
+  .holo-replay span { display: none; }
+  .holo-next { min-width: 112px; }
+  .holo-tab { left: -6px; transform: rotate(-8deg) scale(0.86); }
+}
+/* ---------- phones held sideways: the picture on the left, the words on the right ---------- */
+@media (max-height: 520px) and (min-width: 561px) {
+  .holo-panel { width: min(900px, 100%); grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto 1fr auto auto; column-gap: 16px; row-gap: 6px; padding: 8px 14px 8px; border-radius: 20px; }
+  .holo-head { grid-column: 1 / 3; gap: 10px; }
+  .holo-view { grid-column: 1; grid-row: 2 / 5; align-self: start; width: min(54vw, calc(56vh * 16 / 9)); }
+  .holo-cap, .holo-foot, .holo-src { grid-column: 2; }
+  .holo-icon { width: 36px; height: 36px; font-size: 1.25rem; border-radius: 11px; }
+  .holo-title { font-size: 1.15rem; }
+  .holo-x { margin: -2px 0; }
+  .holo-cap { font-size: 0.98rem; line-height: 1.36; min-height: 0; }
+  .holo-foot { gap: 8px; align-self: end; }
+  .holo-btn { min-width: 44px; min-height: 44px; padding: 0 13px; }
+  .holo-replay span { display: none; }
+  .holo-next { min-width: 104px; }
+  .holo-tab { left: -6px; transform: rotate(-8deg) scale(0.8); }
+}

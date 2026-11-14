@@ -52,6 +52,7 @@
   });
   function setMeter(id, value, low, note, bad) {
     var m = meters[id], v = Math.round(value);
+    if (!m) return;
     if (m.last !== v) {
       if (m.last !== null && Math.abs(v - m.last) >= 3) {
         // the number pops green when things get better, pink when worse (more radiation is worse)
@@ -59,7 +60,7 @@
         if (m.dir !== dir) { m.dir = dir; m.el.setAttribute('data-dir', dir); }
         pop(m, m.el);
       }
-      m.last = v; m.val.textContent = v + (id === 'dose' ? '%' : '');
+      m.last = v; m.val.textContent = v + (id === 'dose' ? '%' : '');      // the filter's % sign is added by css/learn.css, where there is room
     }
     var w = Math.round(Math.max(0, Math.min(100, value)));
     if (m.w !== w) { m.w = w; m.bar.style.width = w + '%'; }
@@ -79,14 +80,18 @@
       hud.sol.innerHTML = '<small>' + esc(s.site.dayWord) + '</small> <span class="n">' + s.sol + '</span> <span class="of">of ' + s.totalSols + '</span>';
       hud.site.textContent = s.site.short + ' · ' + L.name;
     }
-    var airNeed = (sim.airDrain(s) * s.stale + s.leak) * left, airBad = s.air < airNeed, dinner = sim.dinner(s);
+    var stale = sim.stale(s), airNeed = (sim.airDrain(s) * stale + s.leak) * left, airBad = s.air < airNeed, dinner = sim.dinner(s);
     var dinnerBad = !last && s.food < dinner;
-    var airNote = s.leak > 0 ? 'leaking!' : s.stale > 1 ? 'stale air: draining fast' : airBad ? 'not enough for today!' : 'enough for today';
-    setMeter('air', s.air, s.air < 18 || airBad || s.leak > 0, airNote, airBad || s.leak > 0 || s.stale > 1);
+    var airNote = s.leak > 0 ? 'leaking!' : stale > 1 ? 'stale air: draining fast' : airBad ? 'not enough for today!' : 'enough for today';
+    setMeter('air', s.air, s.air < 18 || airBad || s.leak > 0, airNote, airBad || s.leak > 0 || stale > 1);
     setMeter('food', s.food, dinnerBad, last ? 'no dinner: launch day' : (dinnerBad ? 'dinner needs ' + dinner + '!' : 'dinner tonight −' + dinner), dinnerBad);
     var secs = Math.max(0, Math.ceil(s.dayLength - s.t)), tl = Math.floor(secs / 60) + ':' + ('0' + (secs % 60)).slice(-2) + ' left';
     if (tl !== lastTime) { lastTime = tl; hud.left.textContent = tl; hud.left.classList.toggle('low', left < 0.15); }
-    setMeter('dose', s.dose, s.dose >= 75, 'home shield ' + Math.round(sim.shield(s) * 100) + '%', false);
+    // the notes get sharper as things get worse, and say what it means
+    var d = s.dose, fl = s.filter, wt = s.water;
+    setMeter('dose', d, d >= 75, d >= 90 ? 'almost full: stay indoors!' : d >= 75 ? 'danger: shelter and shield' : d >= 50 ? 'half full · never goes down' : 'home shield ' + Math.round(sim.shield(s) * 100) + '%', d >= 75);
+    setMeter('filter', fl, fl < R.filterWarn, fl <= 0 ? 'full: air drains faster' : fl < R.filterWarn ? 'nearly full: bake it' : fl < 60 ? 'soaking up CO₂' : 'clean', fl < R.filterWarn);
+    setMeter('water', wt, wt < R.waterWarn, wt < 1 ? 'empty: plants stop' : wt < R.waterWarn ? 'low: plants thirsty first' : 'crew and plants', wt < R.waterWarn);
     // the shift bar moves in steps of 0.1%, so it is written a few times a second, not every frame
     var f = Math.round(Math.min(1, s.t / s.dayLength) * 1000) / 10;
     if (f !== lastF) { lastF = f; hud.fill.style.width = f + '%'; hud.sun.style.left = f + '%'; }
@@ -152,11 +157,12 @@
   var lastSay = '';
   // Mission Control on Earth, over the radio.
   // vid: the recorded voice line for these words (a list plays one after the other); without one, read-aloud speaks them
-  U.say = function (text, vid) {
+  U.say = function (text, vid, why) {
     if (!text || text === lastSay) return;
     lastSay = text;
     var b = $('radio');
     b.classList.remove('hidden');
+    b.classList.toggle('can-why', !!why);
     $('radio-text').textContent = text;
     b.classList.remove('say'); void b.offsetWidth; b.classList.add('say');
     if (!JA.audio.line(vid)) JA.audio.speak(text);
@@ -181,11 +187,11 @@
     }
     $('power-fill').style.width = Math.round((power || 0) * 100) + '%';
   };
-  U.roverHud = function (charge, on) {
+  U.roverHud = function (charge, on, cap) {
     var h = $('rover-hud');
     show(h, !!on); if (!on) return;
     $('rover-text').textContent = charge > 0 ? 'Rover battery · ' + Math.ceil(charge) + ' s' : 'Battery empty — crawling!';
-    $('rover-fill').style.width = Math.round(Math.min(1, charge / R.roverMax) * 100) + '%';
+    $('rover-fill').style.width = Math.round(Math.min(1, charge / (cap || R.roverMax)) * 100) + '%';
   };
 
   // ---------- mini-games ----------
@@ -217,27 +223,37 @@
   // ---------- discovery cards (do not pause the game) ----------
   // The card's time on screen is counted in game time (see tickCards), so a card is never
   // used up behind a pause, a crisis or a hidden tab.
-  var cardQ = [], cardOn = false, cardLeft = 0;
+  // A "why" card explains something that just happened. When the wrist tablet has a hologram for it, tapping the
+  // card (or pressing T) plays it: U.onHolo is set by the game.
+  var cardQ = [], cardOn = false, cardLeft = 0, cardNow = null;
+  var coarse = (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || ('ontouchstart' in window);
   function nextCard() {
     var c = $('card');
-    cardOn = false; cardLeft = 0;
+    cardOn = false; cardLeft = 0; cardNow = null;
     if (!cardQ.length) { c.classList.add('hidden'); return; }
-    var f = cardQ.shift(), src = JA.SOURCES[f.src];
+    var f = cardQ.shift(), src = JA.SOURCES[f.src], why = f.kind === 'why';
     c.classList.remove('hidden'); c.style.animation = 'none'; void c.offsetWidth; c.style.animation = '';
-    c.className = f.kind === 'conseq' ? 'conseq ' + (f.tone || 'mixed') : '';
+    c.className = f.kind === 'conseq' ? 'conseq ' + (f.tone || 'mixed') : why ? 'why' + (f.holo ? ' has-holo' : '') : '';
     $('card-icon').textContent = f.icon || '🧪';
-    $('card-kicker').textContent = f.kind === 'conseq' ? 'What your choice led to'
+    $('card-kicker').textContent = f.kind === 'conseq' ? 'What your choice led to' : why ? 'Why did that happen?' + (f.fresh ? ' · 📓 new page' : '')
       : (f.kind === 'core' ? 'Discovery at ' + f.place : f.kind === 'inst' ? 'Instrument online' : f.kind === 'meteor' ? 'A rock from space' : 'Postcard');
     $('card-title').textContent = f.title;
     $('card-text').textContent = f.text + (f.perk ? ' ' + f.perk : '');
-    $('card-src').textContent = src ? 'Source: ' + src.name : f.kind === 'conseq' ? 'Tap to close' : '';
+    $('card-src').textContent = why && f.holo ? (coarse ? '▶ Tap to see how it works' : '▶ Tap, or press T, to see how it works')
+      : src ? 'Source: ' + src.name : f.kind === 'conseq' ? 'Tap to close' : '';
     JA.audio.speak(f.kind === 'conseq' ? f.text : f.title + '. ' + f.text);
-    cardOn = true; cardLeft = f.kind === 'conseq' ? 14 : 11;
+    cardOn = true; cardNow = f; cardLeft = f.kind === 'conseq' ? 14 : why ? 13 : 11;
   }
   U.card = function (find) { cardQ.push(find); if (!cardOn) nextCard(); };
-  U.clearCards = function () { cardQ = []; cardOn = false; cardLeft = 0; $('card').classList.add('hidden'); };
+  U.clearCards = function () { cardQ = []; cardOn = false; cardLeft = 0; cardNow = null; $('card').classList.add('hidden'); };
   U.tickCards = function (dt) { if (cardOn && (cardLeft -= dt) <= 0) nextCard(); };
-  $('card').addEventListener('click', nextCard);
+  U.cardNow = function () { return cardOn ? cardNow : null; };
+  U.nextCard = nextCard;
+  $('card').addEventListener('click', function () {
+    var f = cardNow;
+    nextCard();
+    if (f && f.holo && U.onHolo) U.onHolo(f.holo);
+  });
 
   // ---------- in-world tags and waypoint markers (re-used DOM nodes) ----------
   var tagPool = [], markPool = [];

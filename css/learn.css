@@ -1,0 +1,141 @@
+/* Astro Outpost — the learning layer: two extra meters (air filter, water), the "why did that happen?"
+   cards, the "Why?" chip in the radio panel, the Field Journal and the science rows of the night report.
+   Loaded after hud.css, so these rules win over the older ones there. */
+
+/* ---------- five meters: Air, Food, Radiation, then the two life-support helpers ---------- */
+/* every meter is a button: tapping it plays the hologram that explains it */
+#hud .meter { pointer-events: auto; cursor: pointer; -webkit-user-select: none; user-select: none; }
+#hud .meter:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+@media (hover: hover) { #hud .meter:hover { filter: brightness(1.14); } }
+#hud .meter[data-res=filter] { --c: #8fe8d0; --c-deep: #1f6f60; --c-hi: #d9fff5; --c-glow: rgba(143, 232, 208, 0.5); }
+#hud .meter[data-res=water] { --c: #5aa8ff; --c-deep: #1b4f9a; --c-hi: #cfe6ff; --c-glow: rgba(90, 168, 255, 0.5); }
+#hud .meter[data-res=filter] .m-val::after { content: '%'; }
+/* the helpers are narrower, with the icon up beside the number */
+#hud .meter.mini { flex: 0.72 1 0; max-width: 150px; grid-template-columns: 26px minmax(0, 1fr); grid-template-areas: "ic top" "bar bar" "note note"; gap: 0 6px; padding: 6px 10px 6px 8px; }
+#hud .meter.mini .m-icon { width: 26px; height: 26px; font-size: 0.88rem; box-shadow: inset 0 0 0 1.5px var(--c), 0 0 8px var(--c-glow); }
+#hud .meter.mini .m-top { align-items: center; font-size: 0.78rem; }
+#hud .meter.mini .m-val { font-size: 1.12rem; }
+#hud .meter.mini .m-bar { height: 8px; margin: 5px 0 3px; }
+#hud .meter.mini .m-note { font-size: 0.68rem; }
+#hud .meter.mini.low .m-icon::after { width: 14px; height: 14px; right: -4px; top: -4px; font-size: 0.6rem; }
+/* laptops: five meters only fit with the icon beside the number and the word left out
+   (the icon, the colour and the tooltip still say what each one is) */
+@media (max-width: 1500px) {
+  #hud .meter { grid-template-columns: 26px minmax(0, 1fr); grid-template-areas: "ic top" "bar bar" "note note"; gap: 0 6px; padding: 5px 10px 5px 7px; border-radius: 16px; }
+  #hud .m-icon { width: 26px; height: 26px; font-size: 0.88rem; box-shadow: inset 0 0 0 1.5px var(--c), 0 0 8px var(--c-glow); }
+  #hud .m-top { align-items: center; justify-content: flex-start; }
+  #hud .m-val { font-size: 1.15rem; }
+  #hud .m-bar { height: 8px; margin: 4px 0 3px; }
+  #hud .meter.low .m-icon::after { width: 14px; height: 14px; right: -4px; top: -4px; font-size: 0.6rem; }
+  #hud .m-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  #hud .m-note { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; font-size: 0.68rem; line-height: 1.1; }
+  #hud .m-note.bad::before { content: none; }
+}
+@media (max-width: 1100px) {
+  #hud .meter.mini { padding: 5px 8px 5px 6px; }
+  #hud .meter.mini .m-val { font-size: 1rem; }
+  #hud .meter[data-res=filter] .m-val::after { content: none; }
+  #hud .hud-right { gap: 4px; }
+}
+/* small phones on their side: everything tightens */
+@media (min-width: 641px) and (max-width: 800px) {
+  #hud .meter { gap: 0 4px; }
+  #hud .m-icon { width: 20px; height: 20px; font-size: 0.7rem; }
+  #hud .m-val { font-size: 1rem; }
+  #hud .meter.mini .m-icon { width: 20px; height: 20px; }
+}
+/* phones on their side */
+@media (min-width: 641px) and (max-width: 900px) {
+  #hud .meter { padding: 5px 7px 5px 5px; }
+  #hud .m-note { font-size: 0.62rem; }
+  #hud .meter.mini { flex: 0.5 1 0; padding: 5px 6px 5px 5px; }
+  #hud .meter.mini .m-note { display: none; }
+}
+/* the smallest phones on their side: the two helpers shrink to an icon over a bar; a red "!" still marks trouble */
+@media (min-width: 641px) and (max-width: 800px) {
+  #hud .meter.mini { flex: 0.42 1 0; grid-template-columns: minmax(0, 1fr); grid-template-areas: "ic" "bar"; justify-items: center; padding: 5px 5px; }
+  #hud .meter.mini .m-top { display: none; }
+  #hud .meter.mini .m-bar { width: 100%; margin: 5px 0 2px; }
+}
+/* phones upright: the meters have a row to themselves, all five the same width */
+@media (max-width: 640px) {
+  #hud .meter, #hud .meter.mini { flex: 1 1 0; max-width: none; padding: 5px 6px 5px 5px; }
+  #hud .meter.mini .m-icon, #hud .m-icon { width: 22px; height: 22px; font-size: 0.74rem; }
+  #hud .meter.mini .m-val, #hud .m-val { font-size: 1rem; }
+  #hud .meter[data-res=filter] .m-val::after { content: none; }
+  #hud .m-note, #hud .meter.mini .m-note { font-size: 0.6rem; }
+}
+
+/* ---------- the radio panel: tap the round badge, or the chip, and the wrist tablet projects a hologram that explains ---------- */
+#radio-ask { padding: 0; cursor: pointer; transition: transform 0.12s; }
+#radio-ask:active { transform: scale(0.94); }
+#radio-ask:focus-visible, #radio-why:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+#radio-why { display: none; flex: none; align-items: center; gap: 6px; white-space: nowrap; padding: 6px 11px; border-radius: 999px;
+  font: 700 0.8rem var(--font-display, var(--font)); color: #06222a; background: linear-gradient(180deg, #a9f8ff, #4fd8ff);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 0 12px rgba(79, 216, 255, 0.55); animation: learn-glow 1.5s ease-in-out infinite alternate; }
+#radio.can-why #radio-why { display: inline-flex; }
+#radio-why kbd { min-width: 20px; height: 20px; padding: 0 5px; border-radius: 6px; font-size: 0.72rem; background: #06222a; color: #a9f8ff; box-shadow: none; }
+body.touch #radio-why kbd { display: none; }
+@keyframes learn-glow { from { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 0 6px rgba(79, 216, 255, 0.35); } to { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 0 16px rgba(79, 216, 255, 0.85); } }
+
+/* ---------- "why did that happen?" cards ---------- */
+#card.why { background: linear-gradient(135deg, #0d3441, #1b2a5e); box-shadow: inset 0 0 0 2px #5cf0ff, 0 0 26px rgba(92, 240, 255, 0.25), 0 16px 40px rgba(0, 0, 0, 0.55); }
+#card.why #card-kicker { color: #8ff5ff; }
+#card.why.has-holo #card-src { display: inline-block; margin-top: 7px; padding: 4px 10px; border-radius: 999px; font-weight: 700; color: #06222a; background: linear-gradient(180deg, #a9f8ff, #4fd8ff); }
+
+/* ---------- the night report: why things happened today ---------- */
+.whys { display: grid; gap: 7px; margin: 8px 0 4px; }
+.why-row { display: flex; gap: 11px; align-items: flex-start; padding: 10px 12px; border-radius: 14px; text-align: left; background: rgba(92, 240, 255, 0.07); box-shadow: inset 0 0 0 1.5px rgba(92, 240, 255, 0.3); }
+.why-row em { flex: none; font-style: normal; font-size: 1.4rem; line-height: 1.15; }
+.why-row > div { flex: 1; min-width: 0; }
+.why-row b { display: block; font-size: 0.95rem; }
+.why-row span { display: block; margin-top: 2px; font-size: 0.86rem; line-height: 1.38; color: #e6ebff; }
+.why-row small { display: block; margin-top: 3px; font-size: 0.72rem; color: var(--muted); }
+.holo-btn { margin-top: 7px; padding: 5px 11px; border-radius: 999px; font: 700 0.78rem var(--font-display, var(--font)); color: #06222a; background: linear-gradient(180deg, #a9f8ff, #4fd8ff); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7); }
+.holo-btn:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.new-page { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #3a2400; background: var(--power); vertical-align: 2px; }
+
+/* ---------- the wrist tablet's list of holograms ---------- */
+.holo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 9px; margin: 12px 0 4px; }
+.holo-grid .pick { padding: 10px 12px; box-shadow: inset 0 0 0 1.5px rgba(92, 240, 255, 0.35); background: rgba(92, 240, 255, 0.06); }
+.holo-grid .pick b { font-size: 0.98rem; }
+.holo-grid .pick em { font-size: 1.5rem; }
+@media (hover: hover) { .holo-grid .pick:hover { background: rgba(92, 240, 255, 0.14); } }
+
+/* ---------- the Field Journal ---------- */
+.modal.journal { width: min(880px, 100%); }
+.jr-tabs { display: flex; gap: 8px; margin: 12px 0 9px; }
+.jr-tab { flex: 1; padding: 10px 12px; border-radius: 14px; font: 600 1rem var(--font-display, var(--font)); color: var(--ink); background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1.5px var(--line); }
+.jr-tab.sel { background: rgba(79, 216, 255, 0.16); box-shadow: inset 0 0 0 2px var(--air); }
+.jr-tab b { margin-left: 6px; color: var(--power); font-variant-numeric: tabular-nums; }
+.jr-tab:focus-visible, .jr-group summary:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.jr-bar { height: 10px; border-radius: 99px; background: rgba(255, 255, 255, 0.1); overflow: hidden; box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5); }
+.jr-bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #4fd8ff, #7be36a 60%, #ffd23f); transition: width 0.5s; }
+.jr-count { margin: 7px 0 10px; font-size: 0.9rem; color: var(--muted); }
+.jr-count b { color: #fff; font-size: 1.05rem; }
+.jr-group { margin-top: 8px; border-radius: 16px; background: rgba(255, 255, 255, 0.04); box-shadow: inset 0 0 0 1px var(--line); }
+.jr-group summary { display: flex; align-items: center; gap: 9px; padding: 11px 14px; cursor: pointer; list-style: none; font: 600 1rem var(--font-display, var(--font)); border-radius: 16px; }
+.jr-group summary::-webkit-details-marker { display: none; }
+.jr-group summary::before { content: '▸'; color: var(--muted); transition: transform 0.15s; }
+.jr-group[open] summary::before { transform: rotate(90deg); }
+.jr-group summary span { flex: 1; }
+.jr-group summary i { flex: none; padding: 2px 10px; border-radius: 999px; font-style: normal; font-size: 0.84rem; font-weight: 700; color: #3a2400; background: linear-gradient(180deg, #ffe88f, #f5a815); font-variant-numeric: tabular-nums; }
+.jr-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; padding: 0 10px 10px; }
+.jr { display: flex; gap: 10px; padding: 10px 11px; border-radius: 13px; text-align: left; background: rgba(79, 216, 255, 0.07); box-shadow: inset 0 0 0 1px rgba(79, 216, 255, 0.28); }
+.jr em { flex: none; font-style: normal; font-size: 1.45rem; line-height: 1.15; }
+.jr > div { flex: 1; min-width: 0; }
+.jr b { display: block; margin-bottom: 2px; font-size: 0.94rem; }
+.jr p { margin: 0; font-size: 0.84rem; line-height: 1.38; color: #e6ebff; }
+.jr small { display: block; margin-top: 4px; font-size: 0.7rem; color: var(--muted); }
+.jr.off { background: rgba(255, 255, 255, 0.025); box-shadow: none; outline: 1.5px dashed rgba(255, 255, 255, 0.18); outline-offset: -1.5px; }
+.jr.off em { opacity: 0.6; }
+.jr.off b { color: var(--muted); }
+.jr.off p { color: var(--muted); font-style: italic; }
+.jr-holo { margin-top: 7px; padding: 5px 11px; border-radius: 999px; font: 700 0.78rem var(--font-display, var(--font)); color: #06222a; background: linear-gradient(180deg, #a9f8ff, #4fd8ff); }
+.jr-holo:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) { #radio-why { animation: none; } }
+
+/* while the Settings menu is open, a card behind its see-through panel fades back so the menu stays readable */
+#card { transition: opacity 0.2s; }
+#hud:has(#settings-menu:not(.hidden)) ~ #card { opacity: 0.12; }

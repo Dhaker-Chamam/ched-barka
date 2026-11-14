@@ -37,7 +37,10 @@ window.JA = window.JA || {};
       env: {
         sun: { cells: 7, icon: '☀️', label: 'Bright sunshine', why: 'The Sun skims along the crater rim and the solar panels drink it up.' },
         lowsun: { cells: 5, icon: '🌥️', label: 'Long shadows', why: 'At the Moon\'s south pole the Sun stays very low. A mountain is starting to block it.' },
-        shadow: { cells: 3, icon: '🌑', label: 'In the shadow', why: 'The Sun is hiding behind a mountain. The panels will charge very slowly today!' }
+        shadow: { cells: 3, icon: '🌑', label: 'In the shadow', why: 'The Sun is hiding behind a mountain. The panels will charge very slowly today!' },
+        // GAME: one whole day with almost no Sun on the longer missions (see sim.makeEnv). REAL: even the
+        // best-lit rims at the lunar south pole are in shadow for part of the year.
+        dark: { cells: 1, icon: '🌚', label: 'The long dark', why: 'A mountain on the crater rim hides the Sun all day. The panels make almost nothing, so today runs on the power cells you saved.' }
       }
     },
     mars: {
@@ -100,7 +103,28 @@ window.JA = window.JA || {};
     labCharges: 3, analyzeTime: 8, labQueue: 4,
     roverPerCell: 100, roverMax: 200, roverBed: 4,
     stormDuration: 28, warnDish: 45, warnNoDish: 12, radWarn: 10,
-    sprintAir: 1.5, lateAir: 6
+    sprintAir: 1.5, lateAir: 6,
+    // --- the CO2 filter: it fills as the crew breathes; a power cell at the Air Scrubber bakes it clean ---
+    filterPerAir: 0.9,             // filter used up for each point of air breathed (so running fills it faster too)
+    filterWarn: 30, filterFull: 85, staleRate: 1.35,    // with a full filter the tanks must push out a third more air
+    // --- water: one tank for the crew and the plants; only ice adds new water ---
+    waterPerIce: 30, waterWarn: 15, crewWater: 30,      // what the crew uses in a day, before recycling
+    recycle: 0.9, recycleMin: 0.75,                     // REAL: the Space Station gets back about 98%. GAME: 90%, wearing down a little each day
+    dryDinner: 4,                                       // extra food eaten when there is no water to cook dried food with
+    // --- soil bags also block the skylights: past the free ones, each bag costs a little solar power ---
+    bagsFreeShade: 8, bagShade: 0.015,
+    // --- wear that comes from how you treat the tools ---
+    jamWear: 0.08, jamWearMax: 0.4,                     // each drill jam makes the drill heat this much faster, for good
+    flatWear: 0.1, flatWearMax: 0.3,                    // each time the rover battery runs flat it holds this much less
+    scarPerLevel: 0.01, scarMax: 0.08,                  // solar power lost for good after a medium or big solar storm
+    whyGap: 18                                          // seconds between two "why did that happen?" cards
+  };
+
+  // Two crops with different trade-offs. growSols: days of light and water until ripe. food: what one crate
+  // adds to the pantry. drink: water one bed drinks in a day of growing. All GAME numbers.
+  JA.CROPS = {
+    lettuce: { id: 'lettuce', name: 'lettuce', icon: '🥬', growSols: 0.8, food: 10, drink: 8, crate: 'lettuce crate', line: 'ready fast, small crate' },
+    potato: { id: 'potato', name: 'potatoes', icon: '🥔', growSols: 1.6, food: 24, drink: 6, crate: 'potato crate', line: 'slow, big crate' }
   };
 
   JA.MACHINES = {
@@ -110,7 +134,8 @@ window.JA = window.JA || {};
     bag: { name: 'Soil Bagger', icon: '🛡️', color: '#c9a6ff' },
     lab: { name: 'Science Lab', icon: '🔬', color: '#ffb84d' },
     comms: { name: 'Radio Dish', icon: '📡', color: '#ff8fb8' },
-    rover: { name: 'Rover', icon: '🚙', color: '#9fe8ff' }
+    rover: { name: 'Rover', icon: '🚙', color: '#9fe8ff' },
+    scrub: { name: 'Air Scrubber', icon: '🫧', color: '#8fe8d0' }
   };
 
   JA.ITEMS = {
@@ -274,8 +299,75 @@ window.JA = window.JA || {};
     { id: 'veggie', site: 'any', tags: ['food'], src: 'iss', text: 'Astronauts first ate space-grown lettuce on the Space Station in 2015. The "Veggie" garden glows pink because plants love red and blue light.' },
     { id: 'plants', site: 'any', tags: ['food'], src: 'osdr', text: 'NASA\'s Open Science Data Repository shares data from hundreds of space biology experiments — including how plants grow without normal gravity.' },
     { id: 'bones', site: 'any', tags: ['any'], src: 'osdr', text: 'In low gravity, astronauts can lose 1% of their bone strength every month. They exercise about 2 hours every day to stay strong.' },
-    { id: 'apollo13', site: 'any', tags: ['repair', 'air'], src: 'apollo', text: 'On Apollo 13 the air filters started to fail. The crew built a new filter holder out of plastic bags, cardboard and duct tape — and it worked.' }
+    { id: 'apollo13', site: 'any', tags: ['repair', 'air', 'filter'], src: 'apollo', text: 'On Apollo 13 the air filters started to fail. The crew built a new filter holder out of plastic bags, cardboard and duct tape — and it worked.' },
+    { id: 'cdra', site: 'any', tags: ['filter'], src: 'iss', text: 'The Space Station cleans its air with beads that trap carbon dioxide. When the beads are full, a heater bakes the gas back out so they can be used again — just like your Air Scrubber.' },
+    { id: 'peppers', site: 'any', tags: ['crop', 'food'], src: 'iss', text: 'In 2021 astronauts grew chili peppers on the Space Station. It took 137 days, one of the longest plant experiments ever done in space. Slow crops need patience!' },
+    { id: 'lunarnight', site: 'moon', tags: ['dark', 'power'], src: 'apollo', text: 'Every Apollo crew landed in the lunar morning and left long before sunset. Nobody has ever spent a night on the Moon: away from the poles it lasts two weeks.' },
+    { id: 'urine', site: 'any', tags: ['water'], src: 'iss', text: 'Astronauts like to say that on the Space Station, yesterday\'s coffee becomes tomorrow\'s coffee. The recycled water is cleaner than most tap water on Earth.' }
   ];
+
+  // ---------- Why did that happen? ----------
+  // One short explanation for each thing that can go right or wrong, shown at the moment it happens
+  // (see sim.note). holo: the animated explainer the wrist tablet can project for it (js/holo.js).
+  // hint: what the Field Journal says about a page nobody has found yet. site: leave out for both places.
+  JA.MECHS = [
+    { id: 'electro', icon: '🧊', title: 'Ice just became air', holo: 'electrolysis', src: 'iss', hint: 'Make air in the Air Maker.',
+      text: 'Water is made of hydrogen and oxygen. The Air Maker used electricity to pull them apart, and kept the oxygen. That is why it needs both ice and a power cell.' },
+    { id: 'crop', icon: '🥔', title: 'Two kinds of seeds', holo: 'crops', src: 'iss', hint: 'Plant seeds in the Greenhouse.',
+      text: 'Lettuce is all leaves: ready in under a day, but a small meal. Potatoes store energy underground: almost two days, but a big meal, and less water for every bite. You choose for each bed.' },
+    { id: 'dark', icon: '💡', title: 'Plants cannot grow in the dark', holo: 'plant', src: 'iss', hint: 'Let the grow lamps run out of power.',
+      text: 'Light is the energy a plant uses to turn air and water into leaves. The grow lamps are off, so the growing has stopped. They need a power cell.' },
+    { id: 'dry', icon: '💧', title: 'The plants stopped growing', holo: 'plant', src: 'iss', hint: 'Let the water run out while plants are growing.',
+      text: 'A plant is mostly water, and it needs more to build new leaves. With the tank empty it closes its pores and waits. Bring ice to the water tank.' },
+    { id: 'waterlow', icon: '🚰', title: 'The water tank is nearly empty', holo: 'water', src: 'iss', hint: 'Let the water tank run low.',
+      text: 'The recycler gives back most of what the crew drinks. But growing plants keep water inside their leaves, and ice is the only new water here. Plants go thirsty first.' },
+    { id: 'thirst', icon: '🥫', title: 'Dinner without water', holo: 'water', src: 'iss', hint: 'End a day with an empty water tank.',
+      text: 'Most space food is dried to save weight, and needs water to become a meal. With the tank empty, the crew had to open extra ready-made packs instead.' },
+    { id: 'filterlow', icon: '🫧', title: 'The air filter is filling up', holo: 'scrubber', src: 'apollo', hint: 'Let the CO₂ filter get nearly full.',
+      text: 'Every breath out adds carbon dioxide to the air indoors. The filter soaks it up like a sponge, and a sponge can only hold so much. A power cell at the Air Scrubber bakes it clean.' },
+    { id: 'stale', icon: '😮‍💨', title: 'The air has gone stale', holo: 'scrubber', src: 'apollo', hint: 'Let the CO₂ filter fill up completely.',
+      text: 'The filter is full, so carbon dioxide is building up indoors. To keep the crew safe, the tanks are pushing out extra fresh air. That is why the air meter is falling so fast.' },
+    { id: 'sprint', icon: '🏃', title: 'Running uses up air', src: 'iss', hint: 'Run for a while (hold Shift on a keyboard).',
+      text: 'Hard-working muscles burn oxygen faster. In this game, running uses air one and a half times as fast, and fills the CO₂ filter sooner too. Real spacewalkers pace themselves for the same reason.' },
+    { id: 'panel', icon: '☀️', title: 'The panels are making less power', holo: 'solar', src: { mars: 'insight', moon: 'artemis' }, hint: 'Leave the solar panels alone for a while.',
+      text: { mars: 'Dust has settled on the glass and is blocking the sunlight, so the power cells charge more slowly. Brush the panels off to get full power back.',
+        moon: 'The Sun has slid along the horizon and the panels no longer face it, so the power cells charge more slowly. Turn them back toward the Sun.' } },
+    { id: 'rackfull', icon: '🔋', title: 'Sunshine is going to waste', src: 'iss', hint: 'Let the Solar Rack fill right up.',
+      text: 'The rack holds only 4 power cells. While it is full, the electricity from the panels has nowhere to go. Take a cell and the charging starts again.' },
+    { id: 'shield', icon: '🛡️', title: 'Your first soil bag', holo: 'shield', src: 'artemis', hint: 'Put a soil bag on the dome.',
+      text: 'Radiation is made of tiny, fast particles. One that hits a grain of soil stops there instead of reaching the crew. So every bag on the dome blocks a little more.' },
+    { id: 'shade', icon: '🧱', title: 'The bags are covering the skylights', holo: 'shade', src: 'artemis', hint: 'Pile more than 8 bags on the dome.',
+      text: 'Soil stops sunlight just as well as radiation. With the skylights covered, the lamps indoors must stay on, and that takes a little of your solar power. Nothing in space is free.' },
+    { id: 'dose25', icon: '☢️', title: 'Your badge is a quarter full', holo: 'dose', src: 'rad', hint: 'Fill a quarter of the radiation badge.',
+      text: 'Radiation damage adds up over a whole mission, so the badge never goes down. All you can do is fill it more slowly: more soil on the dome, and indoors whenever a storm hits.' },
+    { id: 'stormout', icon: '🌩️', title: 'Caught outside in the storm', holo: 'shield', src: 'donki', hint: 'Be outdoors when a solar storm hits.',
+      text: 'A solar storm is a burst of fast particles from the Sun. Outdoors, only your thin suit is in their way, so the badge jumps. Indoors, the walls and soil bags stop most of them.' },
+    { id: 'stormin', icon: '🏠', title: 'The storm you did not feel', holo: 'shield', src: 'donki', hint: 'Sit out a solar storm indoors.',
+      text: 'You stayed indoors, so the walls and the soil on the dome took the hit for you. Mass between you and the Sun is the best protection there is.' },
+    { id: 'warn', icon: '📡', title: 'Where the warning came from', holo: 'storm', src: 'donki', hint: 'Live through a solar storm.',
+      text: 'The light of a flare crosses space in minutes. The dangerous particles are slower. Telescopes see the flash first, and that gap is your time to run home. With the Radio Dish on, Earth tells you sooner.' },
+    { id: 'scar', icon: '⚡', title: 'The storm scarred the solar panels', holo: 'storm', src: 'donki', hint: 'Live through a medium or big solar storm.',
+      text: 'Storm particles knock tiny flaws into solar cells, and the flaws never heal. After big storms, real satellites make a little less power for the rest of their lives. So will your panels.' },
+    { id: 'jam', icon: '🔩', title: 'The drill overheated', holo: 'drill', src: { moon: 'apollo', mars: 'msl' }, hint: 'Overheat the drill.',
+      text: 'Rubbing rock makes heat, and here there is almost no air to carry it away. Overheating wears the drill bit, and a worn bit heats faster from now on. Short bursts keep it sharp.' },
+    { id: 'flat', icon: '🪫', title: 'The rover battery ran flat', holo: 'battery', src: 'mer', hint: 'Drive the rover until its battery is empty.',
+      text: 'Running a battery all the way down damages it a little, so from now on it holds less. Real rover teams always keep some charge in reserve.' },
+    { id: 'delay', icon: '⏳', title: 'Waiting for Earth', holo: 'radio', src: { moon: 'moon', mars: 'mars' }, hint: 'Ask Mission Control to help with a repair.',
+      text: { moon: 'Radio waves travel as fast as light, and the Moon is close: 1.3 seconds each way. Out here, help from Earth is almost instant.',
+        mars: 'Radio waves travel as fast as light, but Mars is so far away that a question and its answer take many minutes. The machine stays broken while you wait.' } },
+    { id: 'throw', icon: '🎯', title: 'Why that throw flew so far', holo: 'gravity', src: { moon: 'moon', mars: 'mars' }, hint: 'Land a long throw.',
+      text: { moon: 'The Moon pulls with one-sixth of Earth\'s gravity. The same throw stays in the air much longer, so it lands about six times farther away.',
+        mars: 'Mars pulls with about 38% of Earth\'s gravity. The same throw stays in the air longer, so it lands more than twice as far away.' } },
+    { id: 'longdark', site: 'moon', icon: '🌚', title: 'The long dark is coming', holo: 'longdark', src: 'lro', hint: 'Stay on the Moon long enough to meet a day with no Sun.',
+      text: 'On most of the Moon, night lasts two weeks. Your crater rim almost always sees the Sun: that is why the outpost is here. But soon a mountain will hide it for a whole day. Save power cells on the rack before then.' }
+  ];
+  JA.mech = function (id) { for (var i = 0; i < JA.MECHS.length; i++) if (JA.MECHS[i].id === id) return JA.MECHS[i]; return null; };
+  // The words and source of an explanation for one place (some differ between the Moon and Mars).
+  JA.mechFor = function (id, site) {
+    var m = JA.mech(id); if (!m) return null;
+    return { id: m.id, icon: m.icon, title: m.title, holo: m.holo || null, hint: m.hint,
+      text: typeof m.text === 'string' ? m.text : m.text[site], src: typeof m.src === 'string' ? m.src : m.src[site] };
+  };
 
   // the title on the mission-complete screen and the certificate: one per mission length
   JA.RANKS = {

@@ -108,6 +108,21 @@
       });
     });
     P.hab = { bags: bags, doorLight: doorLight, beacon: beacon, flag: flag, group: g, windows: habWins };
+    // the Air Scrubber on the airlock wall: three filter canisters that fill with the crew's CO2, and a socket to bake them clean
+    var sg = new T.Group(); sg.position.set(2.15, 0, 7.5); g.add(sg);
+    add(sg, box(1.1, 1.9, 1.5), soft(0xc3c7d2), 0, 0.95, 0);
+    add(sg, box(1.16, 0.16, 1.56), soft(0x3db8a0), 0, 1.95, 0);
+    var cans = [], canM;
+    for (i = 0; i < 3; i++) {
+      canM = new T.MeshStandardMaterial({ color: 0x8fe8d0, emissive: 0x3db8a0, emissiveIntensity: 0.8, roughness: 0.5 });
+      add(sg, cyl(0.2, 0.2, 1.2, 12), canM, 0.6, 1.0, -0.48 + i * 0.48, true);
+      cans.push(canM);
+    }
+    var vent = add(sg, cyl(0.16, 0.16, 0.9, 10), soft(0x8a8fa0), 0.1, 2.4, -0.3);
+    P.scrub = { cans: cans, vent: vent };
+    socket(g, 'scrub', 3.5, 9.0);
+    B.pos.scrub = wp(g, 2.6, 4.2, 8.2);
+    collide(g, 2.25, 7.5, 0.85);
     B.spots.door = wp(g, 0, 0, 10.2);
     B.spots.hoppers.dome = wp(g, 0, 2.4, 0);
     B.pos.hab = wp(g, 0, 9.8, 0);
@@ -224,6 +239,7 @@
     var lampM = add(g, box(10.2, 0.14, 0.3), glow(0xff5fd0, 0.2), 0, 3.3, -0.3, true).material;
     var light = new T.PointLight(0xff5fd0, 0, 13, 2); light.position.set(0, 2.6, 0.2); g.add(light);
     var beds = [], leafA = mat(0x4fd15a), leafB = mat(0x2fa64a), fruitM = glow(0xff4a3a, 0.5), soil = mat(0x4a3324);
+    var bushA = mat(0x2f8a4a), bushB = mat(0x246e3c), flowerM = glow(0xe9d9ff, 0.6), spudM = mat(0xb98a4f);
     for (i = 0; i < R.beds; i++) {
       var bx = -3.6 + i * 2.4;
       if (!mdl) { add(g, box(2.0, 0.7, 1.7), soft(0xdfe2ea), bx, 0.65, 0.2); add(g, box(1.8, 0.12, 1.5), soil, bx, 1.02, 0.2); }
@@ -236,8 +252,16 @@
         var f = add(pg, ball(0.13, 8, 8), fruitM, px - 0.14, 0.62, pz + 0.16, true); f.visible = false; fruits.push(f);
       }
       pg.scale.setScalar(0.001); pg.visible = false;
+      var pg2 = new T.Group(), spuds = []; pg2.position.set(bx, 1.08, 0.2); g.add(pg2);
+      for (k = 0; k < 5; k++) {
+        var qx = (k % 3 - 1) * 0.55, qz = (k < 3 ? -0.35 : 0.35);
+        add(pg2, ball(0.34, 7, 6), k % 2 ? bushA : bushB, qx, 0.26, qz).scale.y = 0.8;
+        add(pg2, ball(0.07, 6, 5), flowerM, qx + 0.1, 0.58, qz + 0.05, true);
+        var sp = add(pg2, ball(0.15, 7, 6), spudM, qx - 0.2, 0.06, qz + 0.22, true); sp.scale.set(1.25, 0.8, 0.9); sp.visible = false; spuds.push(sp);
+      }
+      pg2.scale.setScalar(0.001); pg2.visible = false;
       var mark = add(g, new T.TorusGeometry(0.5, 0.06, 6, 18), glow(0x7be36a, 1.5), bx, 2.5, 0.2, true); mark.visible = false;
-      beds.push({ plants: pg, fruits: fruits, mark: mark, s: 0 });
+      beds.push({ plants: pg, fruits: fruits, potato: pg2, spuds: spuds, mark: mark, s: 0 });
       B.spots.beds.push(wp(g, bx, 1.1, 1.9));
       collide(g, bx, 0.1, 1.15);
     }
@@ -488,13 +512,13 @@
     hab(); solar(); airMaker(); greenhouse(); bagger(); lab(); comms(); rocket(); scienceSites();
     B.repair.rack = B.spots.rack.clone();
     var rackP = new T.Vector3(L.rack[0], 0, L.rack[1]);
-    ['air', 'food', 'bag', 'lab', 'comms'].forEach(function (id) { cable(rackP, B.spots.sockets[id], id); });
+    ['air', 'food', 'bag', 'lab', 'comms', 'scrub'].forEach(function (id) { cable(rackP, B.spots.sockets[id], id); });
     B.launch = null;
   };
 
   // ---------- show what the mission rules say ----------
-  var demo = { air: 60, bags: 5, rack: { charge: 0.5, eff: [1, 1, 1], broken: false },
-    m: { air: { power: 2, queue: 2, prog: 0.1, broken: false }, food: { lamp: 1, water: 1, broken: false, beds: [{ state: 'ripe', g: 1 }, { state: 'growing', g: 0.7 }, { state: 'growing', g: 0.4 }, { state: 'ripe', g: 1 }] },
+  var demo = { air: 60, bags: 5, filter: 80, water: 60, rack: { charge: 0.5, eff: [1, 1, 1], broken: false },
+    m: { air: { power: 2, queue: 2, prog: 0.1, broken: false }, food: { lamp: 1, water: 1, broken: false, beds: [{ state: 'ripe', g: 1 }, { state: 'growing', g: 0.7, crop: 'potato' }, { state: 'growing', g: 0.4 }, { state: 'ripe', g: 1, crop: 'potato' }] },
       bag: { pending: 1, broken: false }, lab: { power: 2, queue: [1], prog: 0.2, broken: false }, comms: { on: true } },
     cores: [0, 0, 0, 0], inst: {}, photos: {}, storm: null };
 
@@ -547,16 +571,28 @@
     setSocket('food', lit ? Math.ceil(f.lamp * 3) : 0, f.lamp > 0);
     P.food.lampM.emissiveIntensity = lit ? 2.4 : 0.12;
     P.food.light.intensity = lit ? 1.6 : 0;
-    P.food.water.scale.y += (Math.max(0.02, Math.min(1, f.water / 2)) - P.food.water.scale.y) * Math.min(1, dt * 3);
+    P.food.water.scale.y += (Math.max(0.02, Math.min(1, (s.water || 0) / 100)) - P.food.water.scale.y) * Math.min(1, dt * 3);
     for (i = 0; i < P.food.beds.length; i++) {
-      var bed = f.beds[i], pb = P.food.beds[i];
+      var bed = f.beds[i], pb = P.food.beds[i], spud = bed.crop === 'potato';
       var ws = bed.state === 'empty' ? 0 : 0.16 + 0.84 * bed.g;
       pb.s += (ws - pb.s) * Math.min(1, dt * 4);
-      pb.plants.visible = pb.s > 0.02; pb.plants.scale.setScalar(Math.max(0.001, pb.s));
-      pb.plants.rotation.z = Math.sin(t * 1.4 + i) * 0.03;
-      for (var k = 0; k < pb.fruits.length; k++) pb.fruits[k].visible = bed.state === 'ripe';
+      var grown = spud ? pb.potato : pb.plants, other = spud ? pb.plants : pb.potato;
+      other.visible = false;
+      grown.visible = pb.s > 0.02; grown.scale.setScalar(Math.max(0.001, pb.s));
+      grown.rotation.z = Math.sin(t * 1.4 + i) * 0.03;
+      for (var k = 0; k < pb.fruits.length; k++) { pb.fruits[k].visible = bed.state === 'ripe'; pb.spuds[k].visible = bed.state === 'ripe'; }
       pb.mark.visible = bed.state === 'ripe'; pb.mark.position.y = 2.6 + Math.sin(t * 3 + i) * 0.15; pb.mark.rotation.y = t * 2;
     }
+
+    // air scrubber
+    var fl = s.filter == null ? 100 : s.filter, low = fl < R.filterWarn;
+    setSocket('scrub', Math.ceil(fl / 34), !low);
+    for (i = 0; i < 3; i++) {
+      var cm = P.scrub.cans[i], full = fl <= i * 33.4;                 // the canisters fill up one after another
+      cm.color.set(full ? 0x6b7078 : 0x8fe8d0); cm.emissive.set(full ? 0x30343c : low ? 0xffb347 : 0x3db8a0);
+      cm.emissiveIntensity = full ? 0.1 : low ? 0.9 + Math.sin(t * 6) * 0.5 : 0.8;
+    }
+    P.cables.scrub.emissiveIntensity = low ? 0 : 0.6;
 
     // soil bagger
     on = m.bag.pending > 0 && !m.bag.broken;

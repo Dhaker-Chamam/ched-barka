@@ -8,11 +8,11 @@
     '💨': 'air', '🥬': 'food', '☢': 'radiation', '☀': 'sun',
     '🛡': 'shield', '🔬': 'lab', '📡': 'dish', '🚙': 'rover',
     '🔋': 'cell', '🧊': 'ice', '🧱': 'bag', '🧪': 'core', '📦': 'inst', '🧳': 'case',
-    '🚀': 'rocket', '🏠': 'home'
+    '🚀': 'rocket', '🏠': 'home', '💧': 'water', '🫧': 'filter'
   };
   var NAMES = { air: 'air', food: 'food', radiation: 'radiation', sun: 'sun', shield: 'shield', lab: 'science lab',
     dish: 'radio dish', rover: 'rover', cell: 'power cell', ice: 'ice', bag: 'soil bag', core: 'rock core', inst: 'instrument',
-    'case': 'sample case', rocket: 'rocket', home: 'habitat' };
+    'case': 'sample case', rocket: 'rocket', home: 'habitat', water: 'water', filter: 'air filter' };
   var keys = Object.keys(MAP).sort(function (a, b) { return b.length - a.length; });
   // each emoji, optionally followed by the "show as emoji" selector U+FE0F
   var RE = new RegExp('(' + keys.map(function (k) { return k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }).join('|') + ')️?', 'g');

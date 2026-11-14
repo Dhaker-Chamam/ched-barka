@@ -12,6 +12,8 @@
 <link rel="stylesheet" href="css/hud.css">
 <link rel="stylesheet" href="css/colony.css">
 <link rel="stylesheet" href="css/panels.css">
+<link rel="stylesheet" href="css/learn.css">
+<link rel="stylesheet" href="css/holo.css">
 </head>
 <body>
 <canvas id="scene" aria-label="3D view of your outpost"></canvas>
@@ -38,21 +40,33 @@
     </div>
   </div>
   <div class="meters">
-    <div class="meter" data-res="air" title="Air: what the crew breathes">
+    <div class="meter" data-res="air" role="button" tabindex="0" title="Air: what the crew breathes. Made from ice and electricity. Tap to see how.">
       <span class="m-icon" aria-hidden="true">💨</span>
       <div class="m-top"><b class="m-name">Air</b><span class="m-val">60</span></div>
       <div class="m-bar"><i></i></div>
       <small class="m-note"></small>
     </div>
-    <div class="meter" data-res="food" title="Food: meals for the crew">
+    <div class="meter" data-res="food" role="button" tabindex="0" title="Food: meals for the crew. Every night, dinner comes out of it. Tap to see what a plant needs.">
       <span class="m-icon" aria-hidden="true">🥬</span>
       <div class="m-top"><b class="m-name">Food</b><span class="m-val">45</span></div>
       <div class="m-bar"><i></i></div>
       <small class="m-note"></small>
     </div>
-    <div class="meter" data-res="dose" title="Radiation badge: when it is full, the mission is over">
+    <div class="meter" data-res="dose" role="button" tabindex="0" title="Radiation badge: it adds up and never goes down. When it is full, the mission is over. Tap to see why.">
       <span class="m-icon" aria-hidden="true">☢️</span>
       <div class="m-top"><b class="m-name">Radiation</b><span class="m-val">0</span></div>
+      <div class="m-bar"><i></i></div>
+      <small class="m-note"></small>
+    </div>
+    <div class="meter mini" data-res="filter" role="button" tabindex="0" title="Air filter: it soaks up the carbon dioxide the crew breathes out. When it is full, the air drains faster. Tap to see how it works.">
+      <span class="m-icon" aria-hidden="true">🫧</span>
+      <div class="m-top"><b class="m-name">Filter</b><span class="m-val">100</span></div>
+      <div class="m-bar"><i></i></div>
+      <small class="m-note"></small>
+    </div>
+    <div class="meter mini" data-res="water" role="button" tabindex="0" title="Water: one tank for the crew and the plants. The recycler gives most of it back; only ice adds more. Tap to see the water loop.">
+      <span class="m-icon" aria-hidden="true">💧</span>
+      <div class="m-top"><b class="m-name">Water</b><span class="m-val">25</span></div>
       <div class="m-bar"><i></i></div>
       <small class="m-note"></small>
     </div>
@@ -65,6 +79,8 @@
       <button id="btn-pause" class="set-item" role="menuitem" aria-label="Pause and change the day length"><span class="set-ic" aria-hidden="true">⏸</span><span class="set-name">Pause · day length</span><kbd>P</kbd></button>
       <button id="btn-sound" class="set-item" role="menuitemcheckbox" aria-label="Sound on or off"><span class="set-ic" aria-hidden="true">🔊</span><span class="set-name">Sound</span><span class="sw" aria-hidden="true"></span></button>
       <button id="btn-read" class="set-item" role="menuitemcheckbox" aria-label="Read text aloud"><span class="set-ic" aria-hidden="true">🗣️</span><span class="set-name">Read aloud</span><span class="sw" aria-hidden="true"></span></button>
+      <button id="btn-journal" class="set-item" role="menuitem" aria-label="Field Journal: the science you have found"><span class="set-ic" aria-hidden="true">📓</span><span class="set-name">Field Journal</span><kbd>J</kbd></button>
+      <button id="btn-holo" class="set-item" role="menuitem" aria-label="Holo-tablet: holograms that show how things work"><span class="set-ic" aria-hidden="true">💡</span><span class="set-name">Holo-tablet</span><kbd>T</kbd></button>
       <button id="btn-info" class="set-item" role="menuitem" aria-label="Help and the real science"><span class="set-ic" aria-hidden="true">❔</span><span class="set-name">Help</span><kbd>H</kbd></button>
     </div>
   </div>
@@ -77,10 +93,11 @@
 </aside>
 <div id="banner" class="hidden"></div>
 
-<!-- Mission Control on Earth, over the radio -->
+<!-- Mission Control on Earth, over the radio. The badge and the "Why?" chip open the wrist tablet's hologram. -->
 <div id="radio" class="hidden">
-  <div class="radio-badge" aria-hidden="true">📡<i></i><i></i></div>
+  <button id="radio-ask" class="radio-badge" aria-label="Wrist tablet: show a hologram that explains" title="Wrist tablet: show me why (T)">📡<i></i><i></i></button>
   <p><small>Mission Control · Earth</small><span id="radio-text"></span></p>
+  <button id="radio-why" aria-label="Show me why: play the hologram on your wrist tablet">▶ Why? <kbd>T</kbd></button>
 </div>
 
 <!-- what the E key will do right now -->
@@ -133,6 +150,7 @@
     <div class="title-links">
       <button id="btn-how" class="link">How to play</button>
       <button id="btn-science" class="link">The real science</button>
+      <button id="btn-journal-title" class="link">📓 Field Journal</button>
     </div>
     <p class="turn-tip">📱 Tip: turn your phone sideways for a bigger view.</p>
   </div>
@@ -181,6 +199,8 @@
 <script src="js/keepsake.js"></script>
 <script src="js/interior.js"></script>
 <script src="js/colony.js"></script>
+<script src="js/journal.js"></script>
+<script src="js/holo.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/game.js"></script>
 </body>

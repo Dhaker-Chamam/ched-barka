@@ -150,4 +150,18 @@ svg('core', ['<clipPath id="c"><rect x="18" y="10" width="28" height="46" rx="0"
     '<path d="M32 26V14" stroke="#9aa8bf" stroke-width="2.5" stroke-linecap="round"/><circle cx="32" cy="12" r="3" fill="#ff8fb8"/>');
 })();
 
+// ---- life support: the water tank and the CO2 filter ----
+(function () {
+  var g = grad('#cfeaff', '#2f7fe6');
+  svg('water', [g.def],
+    '<path d="M32 5C22 19 11 30 11 42a21 21 0 0 0 42 0C53 30 42 19 32 5z" fill="' + g.url + '"/>' +
+    '<path d="M21 41a11 11 0 0 0 9 11" fill="none" stroke="#fff" stroke-opacity="0.75" stroke-width="3.5" stroke-linecap="round"/>');
+})();
+(function () {
+  var g = grad('#e2fff8', '#3db8a0');
+  svg('filter', [g.def],
+    '<circle cx="23" cy="40" r="16" fill="' + g.url + '"/><circle cx="46" cy="21" r="11" fill="' + g.url + '"/><circle cx="49" cy="48" r="7" fill="' + g.url + '"/>' +
+    '<path d="M13 38a10 10 0 0 1 8-9M39 19a7 7 0 0 1 5-5" fill="none" stroke="#fff" stroke-opacity="0.8" stroke-width="3" stroke-linecap="round"/>');
+})();
+
 console.log('icons written to ' + OUT + ': ' + fs.readdirSync(OUT).join(', '));

@@ -6,7 +6,7 @@
    Numbers here are GAME scales, tuned so that every option costs something different. */
 (function (JA) {
   'use strict';
-  var C = JA.CRISES = {};
+  var C = JA.CRISES = {}, R = JA.RULES;
 
   // ---------- helpers ----------
   function later(s, d, sol, t, fn) { s.after.push({ sol: sol, t: t, fn: fn, d: d, done: false }); }
@@ -60,17 +60,25 @@
     text: function () { return 'The filter that cleans your breath out of the air has clogged. Carbon dioxide is building up inside, so the tanks must pump out twice as much fresh air to keep everyone safe.'; },
     science: 'On Apollo 13 the air filters began to fail far from Earth. Engineers on the ground worked out how to build a new filter holder from plastic bags, cardboard, a sock and sticky tape, then read the steps to the crew over the radio. It worked, and it helped bring them home.',
     ok: function () { return true; },
-    start: function (s) { s.stale = 2; },
+    start: function (s) {
+      var lost = s.filter - Math.min(s.filter, 5);
+      s.stale = 2; s.filter -= lost;
+      if (lost >= 0.5) extra(s, 'filter', 'The filter clogged', -Math.round(lost));
+    },
     options: [
       { id: 'build', icon: '🧦', label: 'Build a new filter from spare parts', text: 'Sticky tape, a plastic bag, a sock and a spare canister. It will take a while, and it might not fit.',
         run: function (s, d) {
-          s.stale = 1;
+          var made = Math.max(s.filter, 60) - s.filter;
+          s.stale = 1; s.filter += made;
+          if (made >= 0.5) extra(s, 'filter', 'Home-made filter fitted', Math.round(made));
           tomorrow(s, d, function () { return { tone: 'good', text: 'Your home-made filter is still cleaning the air this morning. It is ugly, but it works!' }; });
           return { skip: 0.08, home: true, now: 'It looks ridiculous. But the carbon dioxide reading is dropping back to normal.' };
         } },
       { id: 'cell', icon: '🔋', label: 'Run the backup scrubber on a power cell', text: 'The backup machine cleans the air with electricity. It swallows a whole power cell.',
         run: function (s, d) {
-          s.stale = 1;
+          var cleaned = 100 - s.filter;
+          s.stale = 1; s.filter = 100;
+          if (cleaned >= 0.5) extra(s, 'filter', 'Backup scrubber cleaned the air', Math.round(cleaned));
           if (s.rack.cells > 0) s.rack.cells--; else s.rack.charge = Math.max(0, s.rack.charge - 1);
           inSecs(s, d, 25, function () { return { tone: 'mixed', text: 'The backup scrubber used up a whole power cell. That is one machine that will stay dark today.' }; });
           return { sync: true, now: 'The backup scrubber whirrs and the air clears. The Solar Rack is one power cell poorer.' };
@@ -79,7 +87,11 @@
         run: function (s, d) {
           s.stale = 1; s.air = Math.max(0, s.air - 12); extra(s, 'air', 'Oxygen used to flush the cabin', -12);
           tomorrow(s, d, function (s2) {
+            // a player who baked the filter clean after the flush has really solved it
+            if (s2.filter >= R.filterWarn) return { tone: 'good', text: 'You baked the filter clean after the flush, so the stale air never came back.' };
+            var fitted = Math.max(s2.filter, 60) - s2.filter;
             s2.air = Math.max(0, s2.air - 8); extra(s2, 'air', 'Second flush: the filter was still clogged', -8);
+            s2.filter += fitted; if (fitted >= 0.5) extra(s2, 'filter', 'The crew fitted a new filter', Math.round(fitted));
             return { tone: 'bad', text: 'The filter was still clogged, so the stale air came back overnight. The cabin had to be flushed again: 8 more air gone before the crew could mend it.' };
           });
           return { now: 'Whoosh! Everyone can breathe easily again. The air meter took a hit, and the clogged filter is still clogged.' };
@@ -135,8 +147,9 @@
           if (id !== 'air') out.push('The Air Maker froze solid: a valve has jammed and must be repaired before it can make any air.');
           if (id !== 'food') {
             m.food.beds.forEach(function (b) { if (live(b)) { b.state = 'growing'; b.g *= 0.5; } });
-            m.food.water = 0;
-            out.push('Frost got into the Greenhouse: the plants lost half their growth and the water tank froze dry.');
+            var froze = s2.water - Math.min(s2.water, 8);
+            s2.water -= froze; if (froze >= 0.5) extra(s2, 'water', 'Froze solid in the night', -Math.round(froze));
+            out.push('Frost got into the Greenhouse: the plants lost half their growth and most of the water tank froze solid.');
           }
           if (id !== 'lab') {
             var n = m.lab.queue.length;

@@ -27,11 +27,13 @@
     var bads = [3 + Math.floor(rng() * 2)];
     if (n >= 8) bads.push(6 + Math.floor(rng() * 2));
     if (n >= 10) bads.push(9);
+    if (!mars && n >= 8) bads[1] = 7;       // on the Moon the second spell is the long dark, the day after the "Sun chaser" lesson
     bads.forEach(function (b) {
       if (kinds[b - 2] === calm) kinds[b - 2] = mid;
       kinds[b - 1] = bad;
       if (b < n && kinds[b] === calm) kinds[b] = mid;
     });
+    if (!mars && n >= 8) kinds[bads[1] - 1] = 'dark';       // the long dark: a mountain hides the Sun all day
     return kinds.map(function (k) { return { kind: k, cells: site.env[k].cells + level.cellBonus }; });
   }
 
@@ -46,15 +48,19 @@
       cells: -Math.min(1.5, 0.13 * d * k),
       dust: 1 + 0.1 * d * k,
       heat: 1 + 0.04 * d * k,
-      dial: 1 + 0.05 * d * k
+      dial: 1 + 0.05 * d * k,
+      recycle: Math.max(R.recycleMin, R.recycle - 0.012 * d * k)      // share of the crew's water the recycler gives back
     };
   }
   function airDrain(s) { return s.level.airDrain * s.mods.breath; }
-  function dinner(s) { return s.level.dinner + s.mods.dinner; }
+  // What dinner will cost tonight. Dried space food needs water, so with an empty tank the crew opens extra ready-made packs.
+  function dryDinner(s) { return s.water < 1 ? R.dryDinner : 0; }
+  function dinner(s) { return s.level.dinner + s.mods.dinner + dryDinner(s); }
   function dayInfo(s, sol) {
     sol = sol || s.sol;
     var d = sol >= s.totalSols ? JA.LAUNCH_DAY : JA.DAYS[Math.min(sol, JA.DAYS.length) - 1], id = s.site.id;
-    return { icon: d.icon, title: d.title, topic: d.topic, goal: d.goal || null,
+    return { key: sol >= s.totalSols ? 'launch' : String(Math.min(sol, JA.DAYS.length) - 1),      // its page in the Field Journal
+      icon: d.icon, title: d.title, topic: d.topic, goal: d.goal || null,
       learn: typeof d.learn === 'string' ? d.learn : d.learn[id], src: typeof d.src === 'string' ? d.src : d.src[id] };
   }
   // What got harder since yesterday, in words a player can check against the meters.
@@ -67,6 +73,8 @@
     if (b.dinner > a.dinner && sol < s.totalSols) out.push({ icon: '🥬', text: 'Bigger appetites: dinner now takes ' + (L.dinner + b.dinner) + ' food.' });
     if (b.cells < a.cells) out.push({ icon: '🔋', text: 'The solar panels are wearing out: a little less power than the same weather gave before.' });
     out.push({ icon: '🔧', text: 'Tools are wearing too: the drill heats up faster and repairs need a steadier hand.' });
+    var r0 = Math.round(a.recycle * 100), r1b = Math.round(b.recycle * 100);
+    if (r1b < r0) out.push({ icon: '💧', text: 'The water recycler\'s filters are wearing: it gives back ' + r1b + '% of the crew\'s water now (yesterday ' + r0 + '%).' });
     if (L.glitchSols.indexOf(sol) >= 0 && L.glitchSols.indexOf(sol - 1) < 0) out.push({ icon: '⚙️', text: 'The machines are tired. Something may break today.' });
     return out;
   }
@@ -81,6 +89,11 @@
       env: makeEnv(site, level, rng),
       sol: 0, totalSols: level.sols, t: 0,
       air: level.id === 'cadet' ? 50 : 60, food: level.id === 'cadet' ? 28 : 45, dose: 0, bags: 0,
+      filter: 100,                                  // how clean the CO2 filter is (100 = fresh, 0 = full)
+      water: level.id === 'cadet' ? 35 : 25,        // the water tank, shared by the crew and the plants
+      seed: 'lettuce',                              // the kind of seed in your pocket (see JA.CROPS)
+      wear: { drill: 0, rover: 0, scar: 0 },        // damage from rough handling and from solar storms
+      seen: {}, whyQ: [], whyAt: 0,                 // "why did that happen?" notes: which ones came up, and which wait to be shown
       rack: { charge: 0, cells: 0, eff: [1, 1, 1], broken: false },
       m: {
         air: { power: 0, queue: 0, prog: 0, broken: false },
@@ -91,11 +104,13 @@
         rover: { charge: 60, stuck: false }
       },
       cores: [0, 0, 0, 0], finds: [], inst: {}, photos: {}, caseLoaded: false,
-      stats: { storms: 0, stormOut: 0, cells: 0, ice: 0, crates: 0, cores: 0, repairs: 0, tricks: 0, bestThrow: 0, drive: 0, dayGoals: 0 },
+      stats: { storms: 0, stormOut: 0, cells: 0, ice: 0, crates: 0, cores: 0, repairs: 0, tricks: 0, bestThrow: 0, drive: 0, dayGoals: 0, sprint: 0, baked: 0 },
       glitchPlan: {}, crisisPlan: {}, crisis: null, decisions: [], after: [], flags: {}, leak: 0, stale: 1,
       forecast: true, night: false, over: null, log: [], seenFacts: {}
     };
-    for (var i = 0; i < R.beds; i++) s.m.food.beds.push({ state: 'empty', g: 0 });
+    for (var i = 0; i < R.beds; i++) s.m.food.beds.push({ state: 'empty', g: 0, crop: 'lettuce' });
+    s.darkSol = 0;
+    s.env.forEach(function (e, k) { if (e.kind === 'dark') s.darkSol = k + 1; });
     var pool = [];
     level.glitchSols.forEach(function (sol) {
       if (!pool.length) pool = ['air', 'food', 'lab', 'rack'];
@@ -110,9 +125,9 @@
     s.sol++; s.t = 0; s.night = false; s.dayDone = false;
     var env = s.env[s.sol - 1];
     s.mods = dayMods(s);
-    s.cellsToday = Math.max(2.5, env.cells + s.mods.cells);
-    s.effDecay = { clear: 0.25, dusty: 0.5, storm: 0.9, sun: 0.4, lowsun: 0.4, shadow: 0.4 }[env.kind] * s.mods.dust;
-    s.rack.charge += R.morningCells; s.rack.broken = false;
+    s.cellsToday = Math.max(env.kind === 'dark' ? 1 : 2.5, env.cells + s.mods.cells);
+    s.effDecay = { clear: 0.25, dusty: 0.5, storm: 0.9, sun: 0.4, lowsun: 0.4, shadow: 0.4, dark: 0.4 }[env.kind] * s.mods.dust;
+    s.rack.charge += Math.min(R.morningCells, s.cellsToday); s.rack.broken = false;
     s.m.comms.on = false; s.m.comms.broken = false; s.m.air.broken = s.m.food.broken = s.m.lab.broken = false;
     s.m.rover.stuck = false; s.leak = 0; s.stale = 1;
     var w = s.weather[s.sol - 1];
@@ -127,9 +142,13 @@
     s.glitch = gp ? { machine: gp.machine, at: gp.at * s.dayLength, state: 'pending', replyAt: 0, misses: 0, asked: false } : null;
     s.today = { breath: 0, airMade: 0, ice: 0, crates: 0, doseBase: 0, doseStorm: 0, science: 0, cells: {}, bags: 0, late: false, repair: null,
       panels: {}, dishEarly: false, leaked: 0, goalDone: false, extra: [],
+      cratesFood: 0, staleAir: 0, filterUsed: 0, baked: 0, water: { ice: 0, crew: 0, back: 0, plants: 0 }, noWater: 0,
+      stormOut: 0, dryBeds: 0, darkBeds: 0, fullT: 0, scar: 0, whys: [],
       bagRoom: R.shieldSlots - s.bags, coreRoom: s.cores.length * 2 - s.finds.filter(function (f) { return f.kind === 'core'; }).length };
     s.day = dayInfo(s);
-    s.morning = { air: s.air, food: s.food, dose: s.dose };
+    s.morning = { air: s.air, food: s.food, dose: s.dose, water: s.water, filter: s.filter };
+    s.whyQ = []; s.whyAt = 14;                    // yesterday's unshown notes are in the night report already
+    if (s.darkSol > s.sol && s.darkSol - s.sol <= 2) note(s, 'longdark');
     if (JA.crisis) JA.crisis.startSol(s);
   }
 
@@ -174,6 +193,7 @@
     if (g) { if (g.state === 'pending') g.at = g.at / D * D2; g.replyAt += shift; }
     if (c && c.state === 'pending') { c.at = c.at / D * D2; c.until = c.until / D * D2; }
     s.after.forEach(function (a) { if (a.sol === s.sol && !a.done) a.t = Math.min(a.t + shift, D2 - 0.5); });
+    s.whyAt += shift;
     s.t = t2; s.dayLength = D2;
   }
 
@@ -187,6 +207,23 @@
     return 'none';
   }
   function machine(s, id) { return id === 'rack' ? s.rack : s.m[id]; }
+  // How much faster the tanks empty because the air indoors is stale: a clogged filter (a crisis) or a full one.
+  function stale(s) { return Math.max(s.stale, s.filter <= 0 ? R.staleRate : 1); }
+  // Soil bags past the free ones cover the skylights, so the lamps indoors stay on: a share of solar power.
+  function shade(s) { return Math.max(0, s.bags - R.bagsFreeShade) * R.bagShade; }
+  // The share of the panels' power that reaches the rack, after the indoor lamps and the storm scars.
+  function sunPower(s) { return (1 - shade(s)) * (1 - s.wear.scar); }
+  function roverCap(s) { return R.roverMax * (1 - s.wear.rover); }
+  function crop(id) { return JA.CROPS[id] || JA.CROPS.lettuce; }
+  // A "why did that happen?" moment. Each one comes up once per mission; the card is shown when there is room.
+  function note(s, id) {
+    var m = JA.mech(id);
+    if (!m || s.seen[id] || (m.site && m.site !== s.site.id)) return false;
+    s.seen[id] = s.sol;
+    if (s.today) s.today.whys.push(id);
+    if (!s.sleeping) s.whyQ.push(id);
+    return true;
+  }
   // some science was done today (tonight's space fact can be about science)
   function didScience(s) { s.today.science++; }
 
@@ -195,11 +232,22 @@
   function tick(s, dt, ctx) {
     var ev = [];
     if (s.over || s.night || s.dayDone) return ev;
-    var D = s.dayLength, m = s.m, t0 = s.t;
+    var D = s.dayLength, m = s.m, t0 = s.t, td = s.today;
     s.t = Math.min(D, s.t + dt); dt = s.t - t0;
 
-    var breath = airDrain(s) * s.stale / D * dt * (ctx.outside && ctx.sprint ? R.sprintAir : 1);
-    s.air = Math.max(0, s.air - breath); s.today.breath += breath;
+    // breathing empties the tanks and fills the CO2 filter; with stale air the tanks must give even more
+    var puff = airDrain(s) / D * dt * (ctx.outside && ctx.sprint ? R.sprintAir : 1), breath = puff * stale(s);
+    s.air = Math.max(0, s.air - breath); td.breath += breath; td.staleAir += breath - puff;
+    var soaked = Math.min(s.filter, puff * R.filterPerAir);
+    s.filter -= soaked; td.filterUsed += soaked;
+    if (s.filter <= 0) td.wasStale = true;
+    if (ctx.outside && ctx.sprint) s.stats.sprint += dt;
+    // the crew drinks and washes; the recycler gives most of it back
+    if (s.water > 0) {
+      var sip = R.crewWater / D * dt, back = sip * s.mods.recycle;
+      td.water.crew += sip; td.water.back += back;
+      s.water = Math.max(0, s.water - (sip - back));
+    } else td.noWater += dt;
     if (s.leak > 0) { var lost = s.leak / D * dt; s.air = Math.max(0, s.air - lost); s.today.leaked += lost; }
 
     var sf = shield(s);
@@ -214,15 +262,22 @@
         if (!st.active) { st.active = true; ev.push({ type: 'storm', phase: 'active' }); }
         var got = st.strength / R.stormDuration * o * (ctx.outside ? 1 : 1 - sf);
         s.dose += got; s.today.doseStorm += got;
-        if (ctx.outside) s.stats.stormOut += o;
+        if (ctx.outside) { s.stats.stormOut += o; td.stormOut += o; if (td.stormOut > 2) note(s, 'stormout'); }
       }
-      if (!st.over && s.t >= st.end) { st.over = true; st.active = false; ev.push({ type: 'storm', phase: 'over' }); }
+      if (!st.over && s.t >= st.end) {
+        st.over = true; st.active = false; ev.push({ type: 'storm', phase: 'over' });
+        if (td.stormOut < 1) note(s, 'stormin');
+        note(s, 'warn');
+        // a medium or big storm leaves the solar cells a little weaker for good
+        var scar = st.level >= 2 ? Math.min(R.scarMax - s.wear.scar, R.scarPerLevel * st.level * s.site.stormMult) : 0;
+        if (scar > 0.0005) { s.wear.scar += scar; td.scar = scar; note(s, 'scar'); }
+      }
     }
 
     // solar rack: the panels fill one power cell after another
     var rk = s.rack, i;
     if (!rk.broken && s.t <= D * R.chargeSpan) {
-      rk.charge += Math.max(0, s.cellsToday - R.morningCells) / (D * R.chargeSpan) * ((rk.eff[0] + rk.eff[1] + rk.eff[2]) / 3) * dt;
+      rk.charge += Math.max(0, s.cellsToday - R.morningCells) / (D * R.chargeSpan) * ((rk.eff[0] + rk.eff[1] + rk.eff[2]) / 3) * sunPower(s) * dt;
     }
     while (rk.charge >= 1 && rk.cells < R.rackMax) { rk.charge -= 1; rk.cells++; ev.push({ type: 'cell' }); }
     if (rk.cells >= R.rackMax) rk.charge = Math.min(rk.charge, 0.98);
@@ -236,24 +291,25 @@
         a.prog = 0; a.queue--; a.power--;
         s.air = Math.min(100, s.air + R.airPerIce); s.today.airMade += R.airPerIce;
         ev.push({ type: 'air', amount: R.airPerIce });
+        note(s, 'electro');
         if (a.power === 0) ev.push({ type: 'empty', machine: 'air' });
       }
     }
 
     // greenhouse: plants need light AND water
-    var f = m.food, growing = false;
+    var f = m.food, growing = 0, drink = 0;
     var lit = f.lamp > 0;
     f.lamp = Math.max(0, f.lamp - dt / D);
     if (lit && f.lamp === 0) ev.push({ type: 'empty', machine: 'food' });
-    if (!f.broken && lit && f.water > 0) {
+    for (i = 0; i < f.beds.length; i++) if (f.beds[i].state === 'growing') growing++;
+    if (!f.broken && lit && s.water > 0) {
       for (i = 0; i < f.beds.length; i++) {
-        var b = f.beds[i];
+        var b = f.beds[i], cr = crop(b.crop);
         if (b.state !== 'growing') continue;
-        growing = true;
-        b.g += dt / (R.growSols * D);
+        b.g += dt / (cr.growSols * D); drink += cr.drink / D * dt;
         if (b.g >= 1) { b.g = 1; b.state = 'ripe'; ev.push({ type: 'ripe', bed: i }); }
       }
-      if (growing) f.water = Math.max(0, f.water - dt / (D * R.waterSols));
+      s.water = Math.max(0, s.water - drink); td.water.plants += drink;
     }
 
     var bg = m.bag;
@@ -272,13 +328,38 @@
       }
     }
 
-    if (ctx.driving) { m.rover.charge = Math.max(0, m.rover.charge - dt); s.stats.drive += dt; }
+    if (ctx.driving) {
+      var c0 = m.rover.charge;
+      m.rover.charge = Math.max(0, c0 - dt); s.stats.drive += dt;
+      // running the battery right down hurts it: from now on it holds a little less
+      if (c0 > 0 && m.rover.charge <= 0) { s.wear.rover = Math.min(R.flatWearMax, s.wear.rover + R.flatWear); note(s, 'flat'); }
+    }
 
     var g = s.glitch;
     if (g && g.state === 'pending' && s.t >= g.at) { g.state = 'broken'; machine(s, g.machine).broken = true; ev.push({ type: 'break', machine: g.machine }); }
     if (g && g.state === 'asked' && s.t >= g.replyAt) { g.state = 'advised'; ev.push({ type: 'advice', machine: g.machine }); }
 
     if (JA.crisis) JA.crisis.tick(s, ctx, ev);
+
+    // why did that happen? Each of these is noticed once, at the moment it starts to matter.
+    if (!s.sleeping) {
+      if (growing && !f.broken) {
+        if (lit && s.water <= 0) { if ((td.dryBeds += dt) > 6) note(s, 'dry'); }
+        else if (!lit && s.water > 0) { if ((td.darkBeds += dt) > 12) note(s, 'dark'); }
+      }
+      if (s.filter <= 0) note(s, 'stale'); else if (s.filter < R.filterWarn) note(s, 'filterlow');
+      // on the first day the lesson comes first: only the two cards that belong to it are shown, the rest wait
+      if (s.whyQ.length && s.t >= s.whyAt) {
+        var qi = 0;
+        if (ctx.calm) { qi = -1; for (i = 0; i < s.whyQ.length; i++) if (s.whyQ[i] === 'electro' || s.whyQ[i] === 'crop') { qi = i; break; } }
+        if (qi >= 0) { ev.push({ type: 'why', id: s.whyQ.splice(qi, 1)[0] }); s.whyAt = s.t + R.whyGap * (ctx.fast || 1); }
+      }
+      if (s.water < R.waterWarn && growing) note(s, 'waterlow');
+      if (s.dose >= 25) note(s, 'dose25');
+      if (s.stats.sprint > 8) note(s, 'sprint');
+      if ((rk.eff[0] + rk.eff[1] + rk.eff[2]) / 3 < 0.8 && env(s).kind !== 'dark') note(s, 'panel');
+      if (rk.cells >= R.rackMax && !rk.broken && s.t <= D * R.chargeSpan && s.cellsToday > R.morningCells) { if ((td.fullT += dt) > 15) note(s, 'rackfull'); }
+    }
     if (!s.today.goalDone && dayGoalDone(s)) {
       s.today.goalDone = true; s.stats.dayGoals++;
       ev.push({ type: 'daygoal' });
@@ -308,7 +389,11 @@
     }
     else if (id === 'rover') {
       if (m.rover.stuck) return no('The rover is buried up to its axles. The crew will dig it out tonight.');
-      if (m.rover.charge > R.roverMax - 30) return no('The rover battery is full.'); m.rover.charge = Math.min(R.roverMax, m.rover.charge + R.roverPerCell);
+      if (m.rover.charge > roverCap(s) - 30) return no('The rover battery is full.'); m.rover.charge = Math.min(roverCap(s), m.rover.charge + R.roverPerCell);
+    }
+    else if (id === 'scrub') {
+      if (s.filter > R.filterFull) return no('The CO₂ filter is still clean. It does not need baking yet.');
+      s.today.baked += 100 - s.filter; s.stats.baked++; s.filter = 100;
     }
     else return no('That does not fit there.');
     s.today.cells[id] = (s.today.cells[id] || 0) + 1; s.stats.cells++;
@@ -316,27 +401,47 @@
   }
   function feedIce(s, id) {
     if (id === 'air') { if (s.m.air.queue >= R.hopperMax) return no('The Air Maker hopper is full. Give it a power cell so it can work!'); s.m.air.queue++; }
-    else { if (s.m.food.water > 1.6) return no('The water tank is full.'); s.m.food.water += 1; }
+    else {
+      if (s.water > 100 - R.waterPerIce / 2) return no('The water tank is full.');
+      var add = Math.min(R.waterPerIce, 100 - s.water);
+      s.water += add; s.today.water.ice += add;
+      s.today.ice++; s.stats.ice++;
+      return { ok: true, add: add };
+    }
     s.today.ice++; s.stats.ice++;
     return OK;
   }
   function addBag(s) {
     if (s.bags >= R.shieldSlots) return no('The dome is fully covered!');
     s.bags++; s.today.bags++;
+    note(s, 'shield');
+    if (s.bags > R.bagsFreeShade) note(s, 'shade');
     return OK;
   }
-  function plant(s, i) { var b = s.m.food.beds[i]; if (b.state !== 'empty') return false; b.state = 'growing'; b.g = 0; return true; }
-  function harvest(s, i) { var b = s.m.food.beds[i]; if (b.state !== 'ripe') return false; b.state = 'empty'; b.g = 0; return true; }
-  function storeCrate(s) {
+  // Plant a bed with the seeds in your pocket (or the kind named). Returns the kind that was planted.
+  function plant(s, i, kind) {
+    var b = s.m.food.beds[i]; if (b.state !== 'empty') return false;
+    if (JA.CROPS[kind]) s.seed = kind;
+    b.state = 'growing'; b.g = 0; b.crop = s.seed;
+    note(s, 'crop');
+    return b.crop;
+  }
+  function setSeed(s, kind) { if (JA.CROPS[kind]) s.seed = kind; return s.seed; }
+  // Pick a ripe bed. Returns the kind of crop, so the crate knows what is in it.
+  function harvest(s, i) { var b = s.m.food.beds[i]; if (b.state !== 'ripe') return false; b.state = 'empty'; b.g = 0; return b.crop || 'lettuce'; }
+  function storeCrate(s, kind) {
     if (s.flags.pantryShut === s.sol) return no('The food store is sealed off because of the leak. The crew will open it again tonight.');
-    s.food = Math.min(100, s.food + R.foodPerCrate); s.today.crates++; s.stats.crates++; return OK;
+    var food = crop(kind).food;
+    s.food = Math.min(100, s.food + food); s.today.crates++; s.today.cratesFood += food; s.stats.crates++;
+    return { ok: true, food: food };
   }
   function coresLeft(s, i) { return 2 - s.cores[i]; }
   function drillCore(s, i, quality) { var core = { site: i, n: s.cores[i], quality: quality }; s.cores[i]++; s.stats.cores++; return core; }
   function submitCore(s, core) { if (s.m.lab.queue.length >= R.labQueue) return no('The Lab tray is full. It needs a power cell to study the cores.'); s.m.lab.queue.push(core); return OK; }
   function discover(s, core) {
     var site = JA.GEO[s.site.id][core.site], f = site.finds[core.n] || site.finds[0];
-    var find = { title: f.title, text: f.text, src: f.src, quality: core.quality, place: site.name, icon: site.icon, sol: s.sol, kind: 'core' };
+    var find = { title: f.title, text: f.text, src: f.src, quality: core.quality, place: site.name, icon: site.icon, sol: s.sol, kind: 'core',
+      key: core.site + '-' + (site.finds[core.n] ? core.n : 0) };
     s.finds.push(find);
     didScience(s);
     return find;
@@ -346,7 +451,7 @@
     var def = JA.INSTRUMENTS[s.site.id].filter(function (x) { return x.id === id; })[0];
     s.inst[id] = true;
     didScience(s);
-    var find = { title: def.name + ' is working!', text: def.text, src: def.src, perk: def.perk, icon: def.icon, sol: s.sol, kind: 'inst' };
+    var find = { title: def.name + ' is working!', text: def.text, src: def.src, perk: def.perk, icon: def.icon, sol: s.sol, kind: 'inst', key: id };
     s.finds.push(find);
     return find;
   }
@@ -355,11 +460,13 @@
     var def = JA.PHOTOS[s.site.id][i];
     s.photos[i] = true;
     didScience(s);
-    var find = { title: 'Postcard: ' + def.name, text: def.text, src: def.src, icon: '📸', sol: s.sol, kind: 'photo' };
+    var find = { title: 'Postcard: ' + def.name, text: def.text, src: def.src, icon: '📸', sol: s.sol, kind: 'photo', key: String(i) };
     s.finds.push(find);
     return find;
   }
-  function trick(s, dist) { s.stats.tricks++; s.stats.bestThrow = Math.max(s.stats.bestThrow, dist); }
+  function trick(s, dist) { s.stats.tricks++; s.stats.bestThrow = Math.max(s.stats.bestThrow, dist); note(s, 'throw'); }
+  // The drill overheated: the bit is a little more worn, and heats faster from now on.
+  function jam(s) { s.wear.drill = Math.min(R.jamWearMax, s.wear.drill + R.jamWear); note(s, 'jam'); return s.wear.drill; }
   function servicePanel(s, i) { s.rack.eff[i] = 1; s.today.panels[i] = 1; }
   function cleanAllPanels(s) { s.rack.eff = [1, 1, 1]; }
 
@@ -376,6 +483,7 @@
     if (!s.m.comms.on) return no('The Radio Dish has no power today, so you cannot call Earth.');
     var info = commInfo(s);
     g.state = 'asked'; g.asked = true; g.replyAt = s.t + info.wait;
+    note(s, 'delay');
     return { ok: true, info: info };
   }
   function repairMiss(s) { s.glitch.misses++; s.rack.charge = Math.max(0, s.rack.charge - 0.5); }
@@ -398,25 +506,42 @@
     while (s.t < s.dayLength && !s.dayDone && guard++ < 4000) ev = ev.concat(tick(s, 0.5, { outside: false }));
     s.sleeping = false;
     s.dayDone = true;
-    var sf = shield(s), dinnerV = 0, night = 0;
+    var sf = shield(s), dinnerV = 0, night = 0, dry = 0;
     if (!last) {
-      dinnerV = dinner(s); s.food -= dinnerV;
+      // dried space food needs water: with an empty tank the crew opens extra ready-made packs (see dinner)
+      dry = dryDinner(s); dinnerV = dinner(s) - dry;
+      if (dry && !s.seen.thirst) { s.seen.thirst = s.sol; t.whys.push('thirst'); }
+      s.food -= dinnerV + dry;
       night = s.site.doseNight * L.doseScale * (1 - sf); s.dose += night;
       if (s.glitch && s.glitch.state !== 'fixed' && s.glitch.state !== 'pending') { machine(s, s.glitch.machine).broken = false; s.glitch.state = 'fixed'; t.repair = { machine: s.glitch.machine, overnight: true }; }
       if (JA.crisis) JA.crisis.night(s);
     }
+    // life support was looked after today: the filter never filled up and the tank never ran dry
+    t.care = !t.wasStale && t.noWater < 1 && s.water >= 1;
     function extra(res) { return t.extra.filter(function (x) { return x.res === res; }).map(function (x) { return { text: x.text, v: x.v }; }); }
     var lines = [];
     lines.push({ res: 'air', icon: '💨', parts: [
       t.airMade ? { text: 'Air Maker turned ice into oxygen', v: t.airMade } : { text: 'Air Maker made nothing', v: 0 },
-      { text: 'Crew breathing', v: -Math.round(t.breath) },
+      { text: 'Crew breathing', v: -Math.round(t.breath - t.staleAir) },
+      t.staleAir >= 0.5 ? { text: 'Extra air to push out the stale air', v: -Math.round(t.staleAir) } : null,
       t.leaked >= 0.5 ? { text: 'Leaked out through the hole', v: -Math.round(t.leaked) } : null,
       t.late ? { text: 'Late rush home', v: -R.lateAir } : null
     ].filter(Boolean).concat(extra('air')) });
     lines.push({ res: 'food', icon: '🥬', parts: [
-      t.crates ? { text: t.crates + ' veggie crate' + (t.crates > 1 ? 's' : '') + ' stored', v: t.crates * R.foodPerCrate } : { text: 'No harvest today', v: 0 },
-      dinnerV ? { text: 'Crew dinner', v: -dinnerV } : null
+      t.crates ? { text: t.crates + ' veggie crate' + (t.crates > 1 ? 's' : '') + ' stored', v: t.cratesFood } : { text: 'No harvest today', v: 0 },
+      dinnerV ? { text: 'Crew dinner', v: -dinnerV } : null,
+      dry ? { text: 'Extra packs: no water to cook dried food', v: -dry } : null
     ].filter(Boolean).concat(extra('food')) });
+    lines.push({ res: 'water', icon: '💧', parts: [
+      t.water.ice ? { text: 'Ice melted into the tank', v: Math.round(t.water.ice) } : null,
+      t.water.crew >= 0.5 ? { text: 'The crew drank and washed', v: -Math.round(t.water.crew) } : { text: 'The tank was empty', v: 0 },
+      t.water.back >= 0.5 ? { text: 'The recycler gave back', v: Math.round(t.water.back) } : null,
+      t.water.plants >= 0.5 ? { text: 'Kept by the growing plants', v: -Math.round(t.water.plants) } : null
+    ].filter(Boolean).concat(extra('water')) });
+    lines.push({ res: 'filter', icon: '🫧', parts: [
+      { text: 'CO₂ soaked up from the crew\'s breath', v: -Math.round(t.filterUsed) },
+      t.baked ? { text: 'Baked clean with a power cell', v: Math.round(t.baked) } : null
+    ].filter(Boolean).concat(extra('filter')) });
     lines.push({ res: 'dose', icon: '☢️', parts: [
       { text: 'Everyday radiation', v: r1(t.doseBase) },
       t.doseStorm >= 0.05 ? { text: 'Solar storm', v: r1(t.doseStorm) } : null,
@@ -427,13 +552,17 @@
     if (s.air <= 0) fail = 'air'; else if (s.food < 0) fail = 'food'; else if (s.dose >= 100) fail = 'dose';
     s.food = clamp(s.food, 0, 100);
     var report = {
-      sol: s.sol, lines: lines, before: s.morning, after: { air: s.air, food: s.food, dose: s.dose },
-      fail: fail, last: last, events: ev, fact: pickFact(s), repair: t.repair,
+      sol: s.sol, lines: lines, before: s.morning, after: { air: s.air, food: s.food, dose: s.dose, water: s.water, filter: s.filter },
+      fail: fail, last: last, events: ev, repair: t.repair,
+      whys: t.whys.slice(), scar: t.scar, care: t.care,                                           // what today explained, for the night report
+      dark: s.darkSol > s.sol && s.darkSol - s.sol <= 2 ? s.darkSol - s.sol : 0,     // days until the long dark, when it is near
       finds: s.finds.filter(function (f) { return f.sol === s.sol; }), forecast: null, shield: sf,
       day: s.day, goalDone: t.goalDone,
       decision: s.decisions.filter(function (d) { return d.sol === s.sol; })[0] || null,
       harder: last ? [] : harderList(s, s.sol + 1), nextDay: last ? null : dayInfo(s, s.sol + 1)
     };
+    report.facts = pickFacts(s, t.whys.length > 1 ? 1 : 2);
+    report.fact = report.facts[0];
     if (!fail && !last) {
       var e2 = s.env[s.sol], w2 = s.weather[s.sol] || null;
       if (s.m.comms.on) report.forecast = { env: e2, weather: w2, full: true };
@@ -449,26 +578,33 @@
   // The crew lifts off.
   function finish(s) { s.over = { type: 'win' }; }
 
-  function pickFact(s) {
-    var tags = [], t = s.today, e = env(s).kind;
+  function pickFacts(s, n) {
+    var tags = [], t = s.today, e = env(s).kind, out = [], i;
+    if (t.baked || s.filter < R.filterWarn) tags.push('filter');
+    if (e === 'dark') tags.push('dark');
+    if (t.water.ice) tags.push('water');
     if (t.repair) tags.push('repair');
     if (weather(s).level > 0) tags.push('storm');
     if (e === 'storm' || e === 'dusty') tags.push('dust');
-    if (e === 'shadow' || e === 'lowsun') tags.push('power');
+    if (e === 'shadow' || e === 'lowsun' || e === 'dark') tags.push('power');
     if (t.ice) tags.push('ice');
     if (t.bags) tags.push('shield');
     if (t.cells.rover) tags.push('rover');
     if (t.science) tags.push('science');
     if (t.cells.comms) tags.push('comms');
+    if (t.crates) tags.push('crop');
     if (t.crates || t.cells.food) tags.push('food');
     if (t.airMade) tags.push('air');
     tags.push('dose', 'any');
-    for (var i = 0; i < tags.length; i++) {
+    for (i = 0; i < tags.length && out.length < n; i++) {
       var list = JA.FACTS.filter(function (f) { return !s.seenFacts[f.id] && (f.site === 'any' || f.site === s.site.id) && f.tags.indexOf(tags[i]) >= 0; });
-      if (list.length) { var f = list[Math.floor(s.rng() * list.length)]; s.seenFacts[f.id] = 1; return f; }
+      if (list.length) { var f = list[Math.floor(s.rng() * list.length)]; s.seenFacts[f.id] = 1; out.push(f); }
     }
-    var rest = JA.FACTS.filter(function (f) { return f.site === 'any' || f.site === s.site.id; });
-    return rest[Math.floor(s.rng() * rest.length)] || JA.FACTS[0];
+    if (!out.length) {
+      var rest = JA.FACTS.filter(function (f) { return f.site === 'any' || f.site === s.site.id; });
+      out.push(rest[Math.floor(s.rng() * rest.length)] || JA.FACTS[0]);
+    }
+    return out;
   }
 
   function rankFor(s) { return JA.RANKS[s.level.id] || JA.RANKS.cadet; }
@@ -483,37 +619,46 @@
     if (s.stats.drive >= 150) b.push({ icon: '🚙', name: 'Road Tripper', text: 'Drove the rover for ' + Math.round(s.stats.drive) + ' seconds' });
     if (s.sky && s.sky.found) b.push({ icon: '☄️', name: 'Space Rock Hunter', text: 'Picked up ' + s.sky.found + ' meteorite' + (s.sky.found > 1 ? 's' : '') + ' from a fresh crater' });
     if (s.colony && s.colony.stage) b.push({ icon: '🏘️', name: 'Town Founder', text: 'Your outpost looked after itself so well that ' + (s.colony.stage > 1 ? 'settlers came' : 'a supply ship came') + ' from Earth' });
+    if (s.stats.cores >= 3 && !s.wear.drill && !s.wear.rover) b.push({ icon: '🔧', name: 'Gentle Hands', text: 'Never overheated the drill or ran the rover battery flat' });
     if (s.dose < 40) b.push({ icon: '💚', name: 'Healthy Crew', text: 'Kept radiation under 40%' });
     if (s.stats.dayGoals >= s.totalSols - 2) b.push({ icon: '🎓', name: 'Star Student', text: 'Finished every daily challenge' });
     if (s.decisions.length) b.push({ icon: '🧭', name: 'Decision Maker', text: 'Made ' + s.decisions.length + ' big call' + (s.decisions.length > 1 ? 's' : '') + ' with no checklist' });
     return b;
   }
 
-  // Mission Control's advice: the most urgent thing right now.
-  function hint(s) {
-    var m = s.m, L = s.level, left = (s.dayLength - s.t) / s.dayLength;
-    var airNeed = airDrain(s) * s.stale * left + s.leak * left;
-    if (s.glitch && s.glitch.state === 'broken') return 'Something is broken! Look for the sparks and fix it.';
+  // Mission Control's advice: the most urgent thing right now, the reason behind it, and the hologram that explains it.
+  function hintInfo(s) {
+    var m = s.m, L = s.level, left = (s.dayLength - s.t) / s.dayLength, mars = s.site.id === 'mars';
+    function say(text, why, topic) { return { text: text, why: why || '', topic: topic || '' }; }
+    var airNeed = airDrain(s) * stale(s) * left + s.leak * left;
+    if (s.glitch && s.glitch.state === 'broken') return say('Something is broken! Look for the sparks and fix it.');
+    if (s.filter <= 0 && s.stale <= 1) return say('The CO₂ filter is full, so the air is draining fast. Plug a power cell into the Air Scrubber by the airlock!', 'The heat pushes the trapped gas out, and the filter can soak up more.', 'scrubber');
     if (s.air < airNeed + 8) {
-      if (m.air.queue > 0 && m.air.power === 0) return 'The Air Maker has ice but no power. Bring it a power cell!';
-      if (m.air.power > 0 && m.air.queue === 0) return 'The Air Maker is powered but hungry. Bring ice from the ' + s.site.iceName + '!';
-      if (m.air.power === 0) return 'Air is running low. The Air Maker needs a power cell and ice.';
+      if (m.air.queue > 0 && m.air.power === 0) return say('The Air Maker has ice but no power. Bring it a power cell!', 'It takes electricity to pull the oxygen out of water.', 'electrolysis');
+      if (m.air.power > 0 && m.air.queue === 0) return say('The Air Maker is powered but hungry. Bring ice from the ' + s.site.iceName + '!', 'Ice is frozen water, and water is where the oxygen comes from.', 'electrolysis');
+      if (m.air.power === 0) return say('Air is running low. The Air Maker needs a power cell and ice.', 'Ice holds the oxygen. Electricity sets it free.', 'electrolysis');
     }
     var beds = m.food.beds, planted = beds.filter(function (b) { return b.state !== 'empty'; }).length;
     var ripe = beds.filter(function (b) { return b.state === 'ripe'; }).length;
-    if (ripe) return 'Veggies are ripe! Pick them and carry the crate to the food hatch on the dome.';
+    if (ripe) return say('Veggies are ripe! Pick them and carry the crate to the food hatch on the dome.');
     if (s.food < dinner(s) * 2 && s.sol < s.totalSols) {
-      if (!planted) return 'Food is getting low. Plant seeds in the Greenhouse beds.';
-      if (m.food.lamp <= 0) return 'The plants are in the dark. The Greenhouse needs a power cell for its lamps.';
-      if (m.food.water <= 0) return 'The plants are thirsty. Drop an ice chunk in the Greenhouse water tank.';
+      if (!planted) return say('Food is getting low. Plant seeds in the Greenhouse beds.', 'Lettuce is ready fastest. Potatoes fill the pantry more.', 'crops');
+      if (m.food.lamp <= 0) return say('The plants are in the dark. The Greenhouse needs a power cell for its lamps.', 'Light is the energy a plant uses to grow.', 'plant');
+      if (s.water <= 0) return say('The plants are thirsty. Drop an ice chunk in the Greenhouse water tank.', 'A dry plant closes its pores and stops growing.', 'plant');
     }
-    if (s.storm && !s.storm.warned && s.forecast && s.bags < 8 && s.storm.level >= 2) return 'A solar storm is forecast today. Soil bags on the dome will protect the crew!';
-    if (s.dose > 55 && s.bags < R.shieldSlots) return 'The radiation badge is filling up. More soil bags on the dome would slow it down.';
-    if (s.rack.cells >= R.rackMax) return 'The Solar Rack is full, so the panels are wasting sunshine. Use those power cells!';
-    if (Math.min(s.rack.eff[0], s.rack.eff[1], s.rack.eff[2]) < 0.7) return s.site.id === 'mars' ? 'Dust is covering the solar panels. Brush them off to charge faster.' : 'The Sun has moved. Turn the solar panels to face it again.';
-    if (left < 0.14) return 'The shift is almost over. Head back to the airlock!';
-    return '';
+    if (s.water < R.waterWarn && planted) return say('The water tank is nearly empty. Bring it an ice chunk before the plants go thirsty.', 'The recycler gives back what the crew drinks, but plants keep their water.', 'water');
+    if (s.filter < R.filterWarn && s.filter > 0) return say('The CO₂ filter is nearly full. A power cell at the Air Scrubber will bake it clean.', 'It soaks up the gas the crew breathes out, like a sponge.', 'scrubber');
+    if (s.storm && !s.storm.warned && s.forecast && s.bags < 8 && s.storm.level >= 2) return say('A solar storm is forecast today. Soil bags on the dome will protect the crew!', 'Soil stops the storm\'s particles before they reach anyone.', 'shield');
+    if (s.dose > 55 && s.bags < R.shieldSlots) return say('The radiation badge is filling up. More soil bags on the dome would slow it down.', 'Radiation adds up, and the badge never goes back down.', 'dose');
+    if (s.darkSol === s.sol + 1 && left < 0.5 && s.rack.cells < 3) return say('Tomorrow is the long dark, with almost no Sun. Leave power cells on the rack tonight!', 'Saved cells are the only power you will have.', 'longdark');
+    var charging = !s.rack.broken && s.t <= s.dayLength * R.chargeSpan && s.cellsToday > R.morningCells;      // only then is sunshine being wasted
+    if (s.rack.cells >= R.rackMax && charging) return say('The Solar Rack is full, so the panels are wasting sunshine. Use those power cells!', 'A full rack cannot store any more electricity.');
+    if (Math.min(s.rack.eff[0], s.rack.eff[1], s.rack.eff[2]) < 0.7 && env(s).kind !== 'dark') return mars ? say('Dust is covering the solar panels. Brush them off to charge faster.', 'Dust blocks the sunlight before it reaches the cells.', 'solar')
+      : say('The Sun has moved. Turn the solar panels to face it again.', 'A panel that faces away catches less light.', 'solar');
+    if (left < 0.14) return say('The shift is almost over. Head back to the airlock!');
+    return null;
   }
+  function hint(s) { var h = hintInfo(s); return h ? h.text : ''; }
 
   JA.sim = {
     rng32: rng32, newGame: newGame, startSol: startSol, env: env, weather: weather, shield: shield, warnLead: warnLead, stormPhase: stormPhase,
@@ -522,6 +667,7 @@
     servicePanel: servicePanel, cleanAllPanels: cleanAllPanels, commInfo: commInfo, askEarth: askEarth, repairMiss: repairMiss, repairDone: repairDone,
     endSol: endSol, finish: finish, rankFor: rankFor, badges: badges, hint: hint, didScience: didScience,
     dayMods: dayMods, airDrain: airDrain, dinner: dinner, dayInfo: dayInfo, harderList: harderList,
-    dayGoalDone: dayGoalDone, dayGoalProgress: dayGoalProgress, setDayLength: setDayLength, machine: machine
+    dayGoalDone: dayGoalDone, dayGoalProgress: dayGoalProgress, setDayLength: setDayLength, machine: machine,
+    stale: stale, shade: shade, sunPower: sunPower, roverCap: roverCap, note: note, jam: jam, setSeed: setSeed, hintInfo: hintInfo, pickFacts: pickFacts
   };
 })(window.JA);
