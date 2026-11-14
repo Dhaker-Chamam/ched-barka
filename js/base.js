@@ -1,0 +1,564 @@
+/* Astro Outpost — the outpost itself: every building, machine, the rocket, the science sites.
+   B.spots lists the exact places the astronaut can use (sockets, hoppers, beds, drill spots...).
+   B.update() makes each machine SHOW what the mission rules say is happening inside it. */
+(function (JA) {
+  'use strict';
+  var T = window.THREE, W = JA.world, Tn = JA.terrain, R = JA.RULES;
+  var B = JA.base = { colliders: [], spots: null, pos: {} };
+  if (!T) return;
+  var add, mat, soft, glow, root, site, L, P = {};
+  var UP = new T.Vector3(0, 1, 0), q = new T.Quaternion(), qy = new T.Quaternion();
+
+  function group(p) { var g = new T.Group(); g.position.set(p[0], Tn.height(p[0], p[1]), p[1]); root.add(g); return g; }
+  function wp(g, x, y, z) { return new T.Vector3(g.position.x + x, g.position.y + y, g.position.z + z); }
+  function collide(g, x, z, r) { B.colliders.push({ x: g.position.x + x, z: g.position.z + z, r: r }); }
+  function cyl(rt, rb, h, seg) { return new T.CylinderGeometry(rt, rb, h, seg || 14); }
+  function box(w, h, d) { return new T.BoxGeometry(w, h, d); }
+  function ball(r, a, b) { return new T.SphereGeometry(r, a || 12, b || 10); }
+
+  // A power socket: a cup on a post. A plugged-in cell glows inside it; green pips show charge left.
+  function socket(g, id, x, z) {
+    var s = new T.Group(); s.position.set(x, 0, z); g.add(s);
+    add(s, cyl(0.28, 0.4, 1.0, 10), soft(0x8a8fa0), 0, 0.5, 0);
+    add(s, cyl(0.62, 0.5, 0.5, 16), soft(0x2b3147), 0, 1.2, 0);
+    var ring = add(s, new T.TorusGeometry(0.62, 0.09, 8, 24), glow(0xffd23f, 1.4), 0, 1.46, 0, true); ring.rotation.x = Math.PI / 2;
+    var cell = add(s, cyl(0.33, 0.33, 0.9, 12), glow(0xffe36a, 1.8), 0, 1.65, 0, true); cell.visible = false;
+    var pips = [];
+    for (var i = 0; i < 3; i++) pips.push(add(s, ball(0.1, 8, 8), glow(0x46ff8a, 0.1), -0.26 + i * 0.26, 0.85, 0.36, true));
+    B.spots.sockets[id] = wp(g, x, 1.6, z);
+    P[id] = P[id] || {}; P[id].sock = { ring: ring, cell: cell, pips: pips };
+    collide(g, x, z, 0.45);
+  }
+  function setSocket(id, level, on) {
+    var k = P[id].sock;
+    k.cell.visible = on;
+    k.ring.material.color.set(on ? 0x46ff8a : 0xffd23f); k.ring.material.emissive.set(on ? 0x46ff8a : 0xffd23f);
+    k.ring.material.emissiveIntensity = on ? 1.6 : 0.8 + Math.sin(W.time * 4) * 0.6;
+    for (var i = 0; i < 3; i++) k.pips[i].material.emissiveIntensity = i < level ? 2.2 : 0.06;
+  }
+  // A hopper: an open funnel you drop or throw things into.
+  function hopper(g, id, x, y, z, r, color) {
+    var m = new T.MeshStandardMaterial({ color: 0xc9ccd6, roughness: 0.5, metalness: 0.4, side: T.DoubleSide });
+    add(g, new T.CylinderGeometry(r, r * 0.45, 1.0, 16, 1, true), m, x, y, z);
+    var rim = add(g, new T.TorusGeometry(r, 0.09, 8, 26), glow(color, 1.2), x, y + 0.5, z, true); rim.rotation.x = Math.PI / 2;
+    B.spots.hoppers[id] = wp(g, x, y + 0.5, z);
+    return rim;
+  }
+  function cable(a, b, id) {
+    var dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz);
+    var m = new T.MeshStandardMaterial({ color: 0x3f4458, emissive: 0xffd23f, emissiveIntensity: 0, roughness: 0.6 });
+    var c = add(root, box(len, 0.1, 0.16), m, a.x + dx / 2, 0.06, a.z + dz / 2, true);
+    c.rotation.y = -Math.atan2(dz, dx);
+    P.cables[id] = m;
+  }
+
+  // ---------- habitat ----------
+  function hab() {
+    var g = group(L.hab), white = soft(0xf2f3f7), blue = soft(0x3d7dff), i;
+    add(g, cyl(5.4, 5.8, 1.3, 30), soft(0xd7dae3), 0, 0.65, 0);
+    add(g, new T.SphereGeometry(5.3, 34, 16, 0, Math.PI * 2, 0, Math.PI / 2), white, 0, 1.3, 0);
+    add(g, new T.TorusGeometry(5.36, 0.18, 8, 40), blue, 0, 1.36, 0).rotation.x = Math.PI / 2;
+    var winM = glow(0xffe59a, 1.3);
+    [-1.25, -0.55, 0.55, 2.4, 3.6].forEach(function (a) {
+      var w = add(g, ball(0.62, 14, 12), winM, Math.sin(a) * 4.55, 3.9, Math.cos(a) * 4.55, true);
+      w.scale.set(1, 1, 0.4); w.lookAt(g.position.x + Math.sin(a) * 12, 7, g.position.z + Math.cos(a) * 12);
+    });
+    add(g, box(3.0, 2.9, 4.2), soft(0xc3c7d2), 0, 1.45, 6.7);
+    add(g, box(3.4, 0.28, 4.5), blue, 0, 3.0, 6.7);
+    add(g, box(1.6, 2.2, 0.14), soft(0x2b3147), 0, 1.15, 8.83);
+    var doorLight = add(g, box(2.0, 0.24, 0.16), glow(0x4dff9a, 2), 0, 2.55, 8.83, true);
+    add(g, cyl(0.06, 0.06, 2.6, 6), white, 0, 7.8, 0);
+    var beacon = add(g, ball(0.2, 10, 10), glow(0xff5a5a, 2), 0, 9.2, 0, true);
+    // food hatch on the east side
+    add(g, box(1.7, 1.5, 1.5), soft(0xc3c7d2), 5.7, 1.2, 1.2);
+    add(g, box(1.2, 0.5, 0.1), glow(0x7be36a, 0.9), 5.7, 1.3, 1.98, true);
+    hopper(g, 'pantry', 5.9, 2.4, 1.2, 1.0, 0x7be36a);
+    // flag
+    add(g, cyl(0.06, 0.06, 4.4, 6), white, 4.6, 2.2, 9.5);
+    var flag = add(g, box(1.6, 1.0, 0.05), new T.MeshStandardMaterial({ color: 0xff5f6d, roughness: 0.7 }), 5.45, 3.85, 9.5);
+    // sixteen soil bags that pile up around the dome
+    var bags = [], bm = mat(site === 'mars' ? 0xa9582f : 0x7b7c87), bm2 = mat(site === 'mars' ? 0x8e4524 : 0x666772);
+    var rows = [[0.8, 6.05, [135, 165, 195, 225, 255, 285, 315]], [1.95, 5.75, [120, 160, 200, 240, 280, 320]], [3.1, 5.2, [35, 150, 265]]];
+    rows.forEach(function (row) {
+      row[2].forEach(function (deg) {
+        var a = deg * Math.PI / 180;
+        var b = add(g, new T.SphereGeometry(1, 7, 5), bags.length % 2 ? bm : bm2, Math.sin(a) * row[1], row[0], Math.cos(a) * row[1]);
+        b.rotation.y = a + Math.PI / 2 + (bags.length % 3 - 1) * 0.12; b.userData.s = 0; b.visible = false;
+        bags.push(b);
+      });
+    });
+    P.hab = { bags: bags, doorLight: doorLight, beacon: beacon, flag: flag };
+    B.spots.door = wp(g, 0, 0, 10.2);
+    B.spots.hoppers.dome = wp(g, 0, 2.4, 0);
+    B.pos.hab = wp(g, 0, 9.8, 0);
+    collide(g, 0, 0, 6.5); collide(g, 0, 7.2, 1.9);
+    // path lights
+    var lm = glow(0xfff0b0, 1.6), pm = mat(0x8a8fa0);
+    [[-3.2, 11.5], [3.2, 11.5], [-3.2, 16], [3.2, 16], [-9, 6], [10, 5]].forEach(function (p) {
+      add(root, cyl(0.05, 0.05, 0.9, 5), pm, p[0], 0.45, p[1]);
+      add(root, ball(0.14, 8, 8), lm, p[0], 0.95, p[1], true);
+    });
+  }
+
+  // ---------- solar field + charging rack ----------
+  function solar() {
+    var g = group(L.solar), frame = soft(0xdfe2ea);
+    var tex = W.canvasTex(128, function (ctx, s) {
+      ctx.fillStyle = '#14306b'; ctx.fillRect(0, 0, s, s);
+      ctx.strokeStyle = '#6fa3ff'; ctx.lineWidth = 2;
+      for (var i = 0; i <= 4; i++) { ctx.beginPath(); ctx.moveTo(i * s / 4, 0); ctx.lineTo(i * s / 4, s); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, i * s / 4); ctx.lineTo(s, i * s / 4); ctx.stroke(); }
+    });
+    P.solar = { pivots: [], mats: [], yaw: [0, 0, 0] };
+    [[-8, 1.5], [0, -2.5], [8, 1.5]].forEach(function (p) {
+      add(g, cyl(0.2, 0.3, 3.6, 8), frame, p[0], 1.8, p[1]);
+      var pv = new T.Group(); pv.position.set(p[0], 3.8, p[1]); g.add(pv);
+      add(pv, box(5.8, 0.14, 3.6), frame, 0, 0, 0);
+      var m = new T.MeshStandardMaterial({ map: tex, roughness: 0.25, metalness: 0.5, emissive: 0x1b3f96, emissiveIntensity: 0.25 });
+      add(pv, box(5.6, 0.08, 3.4), m, 0, 0.1, 0);
+      P.solar.pivots.push(pv); P.solar.mats.push(m);
+      B.spots.panels.push(wp(g, p[0], 0, p[1] + 1.4));
+      collide(g, p[0], p[1], 0.6);
+    });
+    B.pos.solar = wp(g, 0, 6.4, 0);
+
+    var r = group(L.rack);
+    add(r, box(5.2, 0.5, 1.7), soft(0x2f3550), 0, 0.25, 0);
+    add(r, box(5.2, 2.3, 0.3), soft(0x3a4058), 0, 1.4, -0.7);
+    add(r, box(5.5, 0.16, 2.1), soft(0xffd23f), 0, 2.62, -0.1);
+    for (var i = 0; i < R.rackMax; i++) {
+      add(r, cyl(0.42, 0.42, 0.25, 12), soft(0x8a8fa0), -1.65 + i * 1.1, 0.6, 0.15);
+      B.spots.rackSlots.push(wp(r, -1.65 + i * 1.1, 1.18, 0.15));
+    }
+    // a glass tube that fills as the next cell charges
+    add(r, cyl(0.2, 0.2, 1.9, 10), new T.MeshStandardMaterial({ color: 0xbfe8ff, transparent: true, opacity: 0.3, roughness: 0.1, depthWrite: false }), 2.95, 1.45, 0.2, true);
+    var lg = cyl(0.15, 0.15, 1.8, 10); lg.translate(0, 0.9, 0);
+    P.rack = { level: add(r, lg, glow(0xffd23f, 1.6), 2.95, 0.55, 0.2, true), lamp: add(r, box(1.2, 0.2, 0.1), glow(0x46ff8a, 1.2), 0, 2.3, -0.5, true) };
+    B.pos.rack = wp(r, 0, 3.6, 0);
+    B.spots.rack = wp(r, 0, 1, 1.2);
+    collide(r, -1.4, -0.35, 1.45); collide(r, 1.4, -0.35, 1.45);
+    cable(wp(g, 0, 0, 0), wp(r, 0, 0, 0), 'trunk');
+  }
+
+  // ---------- air maker ----------
+  function airMaker() {
+    var g = group(L.air);
+    add(g, box(3.4, 0.3, 3.4), soft(0x3a4058), 0, 0.15, 0);
+    add(g, box(3.0, 2.6, 3.0), new T.MeshStandardMaterial({ color: 0xe9b93c, metalness: 0.75, roughness: 0.3 }), 0, 1.6, 0);
+    var rim = hopper(g, 'air', 0, 3.4, 0, 1.25, 0x4fd8ff);
+    var ice = [];
+    for (var i = 0; i < R.hopperMax; i++) {
+      var c = add(g, new T.OctahedronGeometry(0.34, 0), new T.MeshStandardMaterial({ color: 0xdff7ff, emissive: 0x8fe6ff, emissiveIntensity: 0.8, flatShading: true }), Math.cos(i * 1.7) * 0.45, 3.5 + (i % 2) * 0.2, Math.sin(i * 1.7) * 0.45, true);
+      c.visible = false; ice.push(c);
+    }
+    // the oxygen tank: the glowing column inside IS the crew's air supply
+    add(g, cyl(1.25, 1.25, 0.4, 20), soft(0x3a4058), 3.1, 0.2, 0);
+    add(g, cyl(1.15, 1.15, 5.0, 20), new T.MeshStandardMaterial({ color: 0xbfe8ff, transparent: true, opacity: 0.22, roughness: 0.08, depthWrite: false }), 3.1, 2.9, 0, true);
+    var lg = cyl(0.95, 0.95, 4.8, 20); lg.translate(0, 2.4, 0);
+    var level = add(g, lg, new T.MeshStandardMaterial({ color: 0x7fe6ff, emissive: 0x4fd8ff, emissiveIntensity: 0.9, transparent: true, opacity: 0.85 }), 3.1, 0.45, 0, true);
+    add(g, cyl(1.25, 1.25, 0.3, 20), soft(0xf2f3f7), 3.1, 5.5, 0);
+    add(g, cyl(0.16, 0.16, 1.6, 8), soft(0xdfe2ea), 1.75, 2.2, 0).rotation.z = Math.PI / 2;
+    var fan = new T.Group(); fan.position.set(-0.9, 2.2, 1.56); g.add(fan);
+    add(fan, box(1.3, 0.24, 0.06), mat(0xdfe2ea), 0, 0, 0); add(fan, box(0.24, 1.3, 0.06), mat(0xdfe2ea), 0, 0, 0);
+    var lamp = add(g, box(1.2, 0.3, 0.1), glow(0x4fd8ff, 0.2), 0.75, 2.2, 1.52, true);
+    socket(g, 'air', -1.1, 2.7);
+    P.air = Object.assign(P.air || {}, { ice: ice, level: level, fan: fan, lamp: lamp, rim: rim });
+    B.pos.air = wp(g, 0.8, 6.6, 0);
+    B.repair = B.repair || {}; B.repair.air = wp(g, 0, 1.4, 2.4);
+    collide(g, 0, 0, 2.3); collide(g, 3.1, 0, 1.45);
+  }
+
+  // ---------- greenhouse ----------
+  function greenhouse() {
+    var g = group(L.food), i;
+    add(g, box(10.5, 0.3, 4.6), soft(0xdfe2ea), 0, 0.15, -0.6);
+    var glass = new T.Mesh(new T.CylinderGeometry(3.3, 3.3, 10.2, 22, 1, true, Math.PI / 2 - 0.25, Math.PI / 2 + 0.25),
+      new T.MeshStandardMaterial({ color: 0xc8f0ff, transparent: true, opacity: 0.24, roughness: 0.08, side: T.DoubleSide, depthWrite: false }));
+    glass.rotation.z = Math.PI / 2; glass.position.set(0, 0.3, 0.9); g.add(glass);
+    var rib = soft(0xf2f3f7);
+    for (i = 0; i < 5; i++) {
+      var r = add(g, new T.TorusGeometry(3.3, 0.09, 6, 16, Math.PI / 2 + 0.25), rib, -5.1 + i * 2.55, 0.3, 0.9);
+      r.rotation.set(0, Math.PI / 2, 0);
+    }
+    add(g, box(10.2, 0.14, 0.3), glow(0xff5fd0, 0.2), 0, 3.3, -0.3, true);
+    var lampM = g.children[g.children.length - 1].material;
+    var light = new T.PointLight(0xff5fd0, 0, 13, 2); light.position.set(0, 2.6, 0.2); g.add(light);
+    var beds = [], leafA = mat(0x4fd15a), leafB = mat(0x2fa64a), fruitM = glow(0xff4a3a, 0.5), soil = mat(0x4a3324);
+    for (i = 0; i < R.beds; i++) {
+      var bx = -3.6 + i * 2.4;
+      add(g, box(2.0, 0.7, 1.7), soft(0xdfe2ea), bx, 0.65, 0.2);
+      add(g, box(1.8, 0.12, 1.5), soil, bx, 1.02, 0.2);
+      var pg = new T.Group(); pg.position.set(bx, 1.08, 0.2); g.add(pg);
+      var fruits = [];
+      for (var k = 0; k < 5; k++) {
+        var px = (k % 3 - 1) * 0.55, pz = (k < 3 ? -0.35 : 0.35);
+        add(pg, new T.ConeGeometry(0.3, 0.9, 6), k % 2 ? leafA : leafB, px, 0.45, pz);
+        add(pg, ball(0.24, 6, 5), k % 2 ? leafB : leafA, px + 0.12, 0.25, pz + 0.1);
+        var f = add(pg, ball(0.13, 8, 8), fruitM, px - 0.14, 0.62, pz + 0.16, true); f.visible = false; fruits.push(f);
+      }
+      pg.scale.setScalar(0.001); pg.visible = false;
+      var mark = add(g, new T.TorusGeometry(0.5, 0.06, 6, 18), glow(0x7be36a, 1.5), bx, 2.5, 0.2, true); mark.visible = false;
+      beds.push({ plants: pg, fruits: fruits, mark: mark, s: 0 });
+      B.spots.beds.push(wp(g, bx, 1.1, 1.9));
+      collide(g, bx, 0.1, 1.15);
+    }
+    // water tank
+    add(g, cyl(1.0, 1.0, 2.6, 16), new T.MeshStandardMaterial({ color: 0xbfe8ff, transparent: true, opacity: 0.25, roughness: 0.1, depthWrite: false }), -6.6, 1.5, 0.2, true);
+    var wg = cyl(0.85, 0.85, 2.4, 16); wg.translate(0, 1.2, 0);
+    var water = add(g, wg, new T.MeshStandardMaterial({ color: 0x3aa0ff, emissive: 0x1b6fd0, emissiveIntensity: 0.5, transparent: true, opacity: 0.85 }), -6.6, 0.3, 0.2, true);
+    hopper(g, 'water', -6.6, 3.3, 0.2, 1.0, 0x3aa0ff);
+    collide(g, -6.6, 0.2, 1.2);
+    socket(g, 'food', 6.3, 1.0);
+    P.food = Object.assign(P.food || {}, { beds: beds, lampM: lampM, light: light, water: water });
+    B.pos.food = wp(g, 0, 5.4, 0);
+    B.repair.food = wp(g, -4.9, 1.2, 1.9);
+  }
+
+  // ---------- soil bagger ----------
+  function bagger() {
+    var g = group(L.bag), dirt = mat(site === 'mars' ? 0xa9582f : 0x7b7c87);
+    add(g, new T.ConeGeometry(3.2, 2.6, 9), dirt, 0.4, 1.3, -3.6);
+    add(g, box(2.8, 2.2, 2.4), soft(0xffc533), 0, 1.4, -0.4);
+    add(g, box(3.2, 0.3, 2.8), soft(0x3a4058), 0, 0.15, -0.4);
+    var belt = add(g, box(1.2, 0.2, 3.6), soft(0x2b3147), 0.4, 2.3, -2.2); belt.rotation.x = -0.45;
+    var gear = add(g, cyl(0.5, 0.5, 0.3, 8), mat(0x8a8fa0), -1.5, 1.6, -0.4); gear.rotation.z = Math.PI / 2;
+    add(g, box(4.0, 0.2, 1.4), soft(0x8a8fa0), 0, 0.8, 1.5);
+    for (var i = 0; i < 4; i++) B.spots.bagTray.push(wp(g, -1.35 + i * 0.9, 1.25, 1.5));
+    socket(g, 'bag', 2.6, 0.2);
+    P.bag = Object.assign(P.bag || {}, { gear: gear, lamp: add(g, box(1.0, 0.26, 0.1), glow(0xc9a6ff, 0.2), 0, 1.9, 0.82, true) });
+    B.pos.bag = wp(g, 0, 4.4, -0.4);
+    collide(g, 0, -0.6, 1.9); collide(g, 0.4, -3.6, 2.6);
+  }
+
+  // ---------- science lab ----------
+  function lab() {
+    var g = group(L.lab), white = soft(0xf2f3f7);
+    var body = add(g, new T.CapsuleGeometry(2.2, 4.2, 8, 20), white, 0, 2.8, -0.6); body.rotation.z = Math.PI / 2;
+    [-1.7, 0, 1.7].forEach(function (x) { add(g, new T.TorusGeometry(2.23, 0.12, 6, 26), soft(0xffb84d), x, 2.8, -0.6).rotation.y = Math.PI / 2; });
+    [-2.2, 2.2].forEach(function (x) { [-1.6, 0.4].forEach(function (z) { add(g, cyl(0.14, 0.2, 1.2, 6), mat(0x8a8fa0), x, 0.5, z); }); });
+    var screen = add(g, box(1.9, 1.1, 0.1), glow(0x9fe8ff, 0.3), 1.2, 2.9, 1.62, true);
+    add(g, new T.SphereGeometry(1.0, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2), soft(0xdfe2ea), 1.4, 4.9, -0.6);
+    var scope = add(g, cyl(0.24, 0.3, 1.9, 10), soft(0x3a4058), 1.4, 5.8, -0.3); scope.rotation.x = 0.6;
+    add(g, box(2.2, 0.2, 1.4), soft(0x8a8fa0), -1.6, 1.0, 2.5);
+    add(g, cyl(0.12, 0.12, 1.0, 6), mat(0x8a8fa0), -1.6, 0.5, 2.5);
+    hopper(g, 'lab', -1.6, 1.7, 2.5, 0.95, 0xffb84d);
+    var tubes = [];
+    for (var i = 0; i < R.labQueue; i++) { var t = add(g, cyl(0.1, 0.1, 0.6, 8), glow(0xffb84d, 1.2), -2.1 + i * 0.33, 1.4, 1.75, true); t.visible = false; tubes.push(t); }
+    var arm = new T.Group(); arm.position.set(-0.4, 2.1, 1.5); g.add(arm);
+    add(arm, box(0.16, 0.16, 1.5), soft(0x3a4058), 0, 0, 0.7); add(arm, ball(0.18, 8, 8), soft(0xffb84d), 0, 0, 1.45);
+    socket(g, 'lab', 2.6, 2.6);
+    P.lab = Object.assign(P.lab || {}, { screen: screen, tubes: tubes, arm: arm });
+    B.pos.lab = wp(g, 0, 7, -0.6);
+    B.spots.caseSpawn = wp(g, 0.4, 0.6, 3.6);
+    B.repair.lab = wp(g, 0.4, 1.4, 2.4);
+    collide(g, -1.9, -0.7, 2.3); collide(g, 1.9, -0.7, 2.3); collide(g, -1.6, 2.5, 0.9);
+  }
+
+  // ---------- radio dish ----------
+  function comms() {
+    var g = group(L.comms), steel = mat(0xdfe2ea, { flatShading: false });
+    add(g, cyl(1.4, 1.8, 0.7, 10), soft(0x3a4058), 0, 0.35, 0);
+    [[-0.6, -0.6], [0.6, -0.6], [0.6, 0.6], [-0.6, 0.6]].forEach(function (p) { add(g, cyl(0.07, 0.09, 7, 5), steel, p[0], 4.0, p[1]); });
+    for (var y = 1.6; y < 7.4; y += 1.45) add(g, box(1.4, 0.08, 1.4), steel, 0, y, 0);
+    var head = new T.Group(); head.position.set(0, 8.0, 0); g.add(head);
+    var pts = [];
+    for (var i = 0; i <= 10; i++) { var r = (i / 10) * 3.1; pts.push(new T.Vector2(r, r * r * 0.16)); }
+    add(head, new T.LatheGeometry(pts, 28), new T.MeshStandardMaterial({ color: 0xf2f3f7, roughness: 0.5, side: T.DoubleSide }), 0, 0, 0);
+    add(head, cyl(0.04, 0.04, 2.2, 5), mat(0x8a8fa0), 0, 1.1, 0);
+    var tip = add(head, ball(0.2, 10, 10), glow(0xff8fb8, 0.3), 0, 2.2, 0, true);
+    var waves = [];
+    for (var k = 0; k < 3; k++) {
+      var w = add(head, new T.TorusGeometry(0.7, 0.07, 6, 26), new T.MeshBasicMaterial({ color: 0xff8fb8, transparent: true, opacity: 0, depthWrite: false }), 0, 2.4, 0, true);
+      w.rotation.x = Math.PI / 2; w.userData.o = k / 3; waves.push(w);
+    }
+    socket(g, 'comms', 0.4, 2.6);
+    P.comms = Object.assign(P.comms || {}, { head: head, tip: tip, waves: waves });
+    B.pos.comms = wp(g, 0, 11.6, 0);
+    collide(g, 0, 0, 1.9);
+  }
+
+  // ---------- rocket ----------
+  function rocket() {
+    var pad = group(L.rocket), white = soft(0xf4f5f9), red = soft(0xe8483f), dark = soft(0x2b3147), i;
+    var disc = add(pad, cyl(11.5, 12, 0.3, 40), soft(0x4a4f63), 0, 0.15, 0, true); disc.receiveShadow = true;
+    add(pad, new T.TorusGeometry(9.2, 0.2, 6, 40), glow(0xffd23f, 0.7), 0, 0.33, 0, true).rotation.x = Math.PI / 2;
+    var ang = Math.atan2(-L.rocket[0], -L.rocket[1]);                 // face the habitat
+    var dir = new T.Vector3(Math.sin(ang), 0, Math.cos(ang));
+    var rk = new T.Group(); rk.rotation.y = ang; pad.add(rk);
+    add(rk, cyl(2.5, 2.75, 13, 26), white, 0, 10, 0);
+    add(rk, new T.ConeGeometry(2.5, 5.6, 26), red, 0, 19.3, 0);
+    [5.2, 14.6].forEach(function (y) { add(rk, new T.TorusGeometry(y < 6 ? 2.72 : 2.56, 0.14, 6, 30), red, 0, y, 0).rotation.x = Math.PI / 2; });
+    add(rk, cyl(1.3, 2.1, 2.2, 18), dark, 0, 2.5, 0);
+    for (i = 0; i < 4; i++) {
+      var a = i * Math.PI / 2 + Math.PI / 4;
+      var leg = add(rk, box(0.36, 5.4, 0.36), soft(0x8a8fa0), Math.sin(a) * 3.3, 2.4, Math.cos(a) * 3.3); leg.rotation.set(Math.cos(a) * -0.42, 0, Math.sin(a) * 0.42);
+      add(rk, cyl(0.6, 0.7, 0.2, 10), dark, Math.sin(a) * 4.4, 0.42, Math.cos(a) * 4.4);
+      var fin = add(rk, box(0.2, 4.2, 2.3), red, Math.sin(a) * 2.9, 5.9, Math.cos(a) * 2.9); fin.rotation.y = a;
+    }
+    var winM = glow(0x9fe8ff, 1.2);
+    [11.4, 13.4].forEach(function (y) { var w = add(rk, ball(0.62, 14, 12), winM, 0, y, 2.36, true); w.scale.z = 0.4; });
+    add(rk, box(1.5, 2.0, 0.14), dark, 0, 8.0, 2.66);
+    add(rk, box(1.0, 7.4, 0.12), soft(0x8a8fa0), 0, 3.5, 3.05).rotation.x = -0.12;
+    // cargo basket at the foot of the ladder
+    add(rk, box(1.7, 1.0, 1.7), new T.MeshStandardMaterial({ color: 0xffb84d, roughness: 0.6, transparent: true, opacity: 0.85 }), 0, 0.8, 4.9);
+    var flame = add(rk, new T.ConeGeometry(1.7, 8, 16), new T.MeshBasicMaterial({ color: 0xffb040, transparent: true, opacity: 0.9, fog: false }), 0, -2.6, 0, true);
+    flame.rotation.x = Math.PI; flame.visible = false;
+    var fl = new T.PointLight(0xffa040, 0, 90, 1.6); fl.position.set(0, 0, 0); rk.add(fl);
+    // gantry tower
+    var tw = new T.Group(); tw.position.set(-dir.z * 5.6 - dir.x * 1.5, 0, dir.x * 5.6 - dir.z * 1.5); pad.add(tw);
+    [[-0.6, -0.6], [0.6, -0.6], [0.6, 0.6], [-0.6, 0.6]].forEach(function (p) { add(tw, cyl(0.08, 0.08, 17, 5), soft(0xff8a3d), p[0], 8.5, p[1]); });
+    for (var y = 1.5; y < 17; y += 2.2) add(tw, box(1.4, 0.1, 1.4), soft(0xff8a3d), 0, y, 0);
+    var tl = add(tw, ball(0.24, 10, 10), glow(0xff5a5a, 2), 0, 17.3, 0, true);
+    P.rocket = { group: rk, flame: flame, light: fl, towerLight: tl, y: 0, v: 0, base: wp(pad, 0, 0, 0) };
+    B.spots.hoppers.cargo = wp(pad, dir.x * 4.9, 1.6, dir.z * 4.9);
+    B.spots.rocketDoor = wp(pad, dir.x * 6.8 + dir.z * 2, 0, dir.z * 6.8 - dir.x * 2);
+    B.pos.rocket = wp(pad, 0, 23.5, 0);
+    collide(pad, 0, 0, 4.2); collide(pad, dir.x * 4.9, dir.z * 4.9, 1.1); collide(pad, tw.position.x, tw.position.z, 1.1);
+
+    var pal = group(L.pallet);
+    add(pal, box(5.0, 0.35, 2.6), soft(0x8a8fa0), 0, 0.18, 0);
+    add(pal, box(5.2, 0.1, 0.2), glow(0xffd23f, 0.5), 0, 0.38, 1.3, true);
+    for (i = 0; i < 3; i++) B.spots.pallet.push(wp(pal, -1.6 + i * 1.6, 0.8, 0));
+  }
+
+  // ---------- places to do science ----------
+  function scienceSites() {
+    var slabColors = site === 'moon' ? [0xe6e3da, 0xc98a4a, 0x6b6c78, 0xbfd6ea] : [0xdba878, 0xe6c49c, 0x4a332b, 0xdff1f8];
+    P.geo = [];
+    L.geo.forEach(function (p, i) {
+      var g = group(p);
+      var slab = add(g, new T.DodecahedronGeometry(1.7, 0), mat(slabColors[i]), 0, 0.15, 0); slab.scale.y = 0.32; slab.rotation.y = i;
+      var ring = add(g, new T.TorusGeometry(1.25, 0.09, 6, 28), glow(0xffb84d, 1.6), 0, 0.85, 0, true); ring.rotation.x = Math.PI / 2;
+      var beam = add(g, new T.CylinderGeometry(0.12, 0.5, 26, 8, 1, true), new T.MeshBasicMaterial({ color: 0xffb84d, transparent: true, opacity: 0.16, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide, fog: false }), 0, 13.5, 0, true);
+      var flag = new T.Group(); flag.position.set(1.4, 0, -0.8); g.add(flag); flag.visible = false;
+      add(flag, cyl(0.04, 0.04, 2.2, 5), soft(0xf2f3f7), 0, 1.1, 0); add(flag, box(0.8, 0.5, 0.04), soft(0x46d97b), 0.42, 1.9, 0);
+      var k;
+      if (site === 'mars' && i === 1) {            // "blueberries"
+        var bb = new T.InstancedMesh(ball(0.07, 6, 5), new T.MeshStandardMaterial({ color: 0x4a5a78, roughness: 0.5 }), 220), d = new T.Object3D();
+        for (k = 0; k < 220; k++) { var a = k * 2.4, r = 0.6 + Math.sqrt(k) * 0.55; d.position.set(Math.cos(a) * r, Tn.height(p[0] + Math.cos(a) * r, p[1] + Math.sin(a) * r) - g.position.y + 0.06, Math.sin(a) * r); d.updateMatrix(); bb.setMatrixAt(k, d.matrix); }
+        g.add(bb);
+      }
+      if (site === 'moon' && i === 1) {            // orange glass beads
+        var gb = new T.InstancedMesh(ball(0.06, 6, 5), glow(0xff9a3a, 0.7), 200), d2 = new T.Object3D();
+        for (k = 0; k < 200; k++) { var a2 = k * 2.4, r2 = 0.5 + Math.sqrt(k) * 0.5; d2.position.set(Math.cos(a2) * r2, Tn.height(p[0] + Math.cos(a2) * r2, p[1] + Math.sin(a2) * r2) - g.position.y + 0.05, Math.sin(a2) * r2); d2.updateMatrix(); gb.setMatrixAt(k, d2.matrix); }
+        g.add(gb);
+      }
+      if (site === 'mars' && i === 2) [[-0.5, 0.2], [0.3, -0.3], [0.1, 0.5]].forEach(function (s, n) { var st = add(g, box(2.2, 0.06, 0.14), glow(0xffffff, 0.35), s[0], 0.68, s[1], true); st.rotation.y = 0.5 + n * 0.5; });
+      if (i === 3) for (k = 0; k < 5; k++) { var ic = add(g, new T.OctahedronGeometry(0.5 + (k % 3) * 0.2, 0), new T.MeshStandardMaterial({ color: 0xdff7ff, emissive: 0x6fcff5, emissiveIntensity: 0.5, flatShading: true }), Math.cos(k * 1.3) * 2.6, 0.2, Math.sin(k * 1.3) * 2.6); ic.rotation.set(k, k * 2, 0); }
+      P.geo.push({ ring: ring, beam: beam, flag: flag });
+      B.spots.drill.push(wp(g, 0, 0.7, 0));
+      collide(g, 0, 0, 0.9);
+    });
+
+    // ice deposits
+    P.ice = [];
+    Tn.iceNodes.forEach(function (n, i) {
+      var g = group([n.x, n.z]), im = new T.MeshStandardMaterial({ color: 0xdff7ff, emissive: 0x58c8ff, emissiveIntensity: 0.85, roughness: 0.15, flatShading: true, transparent: true, opacity: 0.92 });
+      add(g, new T.IcosahedronGeometry(1.1, 0), im, 0, 0.6, 0).scale.set(1, 0.9, 1);
+      add(g, new T.IcosahedronGeometry(0.7, 0), im, 0.9, 0.4, 0.4).rotation.y = i;
+      add(g, new T.IcosahedronGeometry(0.6, 0), im, -0.7, 0.35, 0.6).rotation.y = i * 2;
+      P.ice.push({ group: g, mat: im });
+      B.spots.ice.push(wp(g, 0, 0.8, 0));
+      collide(g, 0, 0, 1.1);
+    });
+    var ib = group(L.ice);
+    add(ib, new T.CylinderGeometry(0.2, 1.2, 60, 8, 1, true), new T.MeshBasicMaterial({ color: 0x8fe6ff, transparent: true, opacity: 0.1, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide, fog: false }), 0, 30, 0, true);
+
+    // instrument targets (a glowing outline until the real thing is set up)
+    P.inst = {};
+    Object.keys(L.inst).forEach(function (id) {
+      var g = group(L.inst[id]), steel = soft(0xdfe2ea), dark = soft(0x3a4058);
+      var ring = add(g, new T.TorusGeometry(1.6, 0.08, 6, 30), glow(0x5cf0ff, 1.6), 0, 0.3, 0, true); ring.rotation.x = Math.PI / 2;
+      var ghost = add(g, new T.CylinderGeometry(0.1, 0.4, 20, 8, 1, true), new T.MeshBasicMaterial({ color: 0x5cf0ff, transparent: true, opacity: 0.16, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide, fog: false }), 0, 10.3, 0, true);
+      var m = new T.Group(); g.add(m); m.visible = false; m.scale.setScalar(0.001);
+      var spin = null;
+      if (id === 'seismo') {
+        add(m, new T.SphereGeometry(0.9, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), new T.MeshStandardMaterial({ color: 0xe8eaf0, metalness: 0.6, roughness: 0.25 }), 0, 0.25, 0);
+        add(m, cyl(1.0, 1.1, 0.25, 16), dark, 0, 0.13, 0);
+        add(m, box(1.3, 0.06, 0.9), new T.MeshStandardMaterial({ color: 0x14306b, metalness: 0.5, roughness: 0.3 }), 1.9, 0.5, 0).rotation.z = 0.3;
+        add(m, cyl(0.04, 0.04, 0.5, 5), steel, 1.9, 0.25, 0);
+      } else if (id === 'rad') {
+        add(m, cyl(0.07, 0.09, 1.8, 6), steel, 0, 0.9, 0);
+        add(m, box(0.8, 0.6, 0.6), soft(0xffc533), 0, 2.0, 0);
+        add(m, cyl(0.16, 0.16, 0.5, 8), dark, 0, 2.5, 0);
+        spin = add(m, ball(0.12, 8, 8), glow(0xff6fb1, 2), 0.3, 2.35, 0.32, true);
+      } else if (site === 'moon') {                 // laser mirror
+        var pnl = add(m, box(1.5, 1.5, 0.12), new T.MeshStandardMaterial({ color: 0xcfe6ff, metalness: 0.95, roughness: 0.08, emissive: 0x4a7ac0, emissiveIntensity: 0.3 }), 0, 0.95, 0); pnl.rotation.x = -0.75;
+        add(m, box(1.7, 0.1, 1.2), dark, 0, 0.1, 0); add(m, cyl(0.05, 0.05, 0.9, 5), steel, 0, 0.5, -0.3);
+      } else {                                      // weather mast
+        add(m, cyl(0.06, 0.09, 3.4, 6), steel, 0, 1.7, 0);
+        add(m, box(0.5, 0.4, 0.4), soft(0xf2f3f7), 0, 2.4, 0.2);
+        spin = new T.Group(); spin.position.set(0, 3.5, 0); m.add(spin);
+        for (var c = 0; c < 3; c++) { var cup = add(spin, ball(0.14, 8, 6), soft(0xff8a3d), Math.cos(c * 2.094) * 0.45, 0, Math.sin(c * 2.094) * 0.45); cup.scale.y = 0.8; }
+        add(spin, box(0.9, 0.04, 0.04), steel, 0, 0, 0);
+      }
+      P.inst[id] = { ring: ring, ghost: ghost, model: m, spin: spin, s: 0 };
+      B.spots.inst[id] = wp(g, 0, 0.6, 0);
+    });
+
+    P.photo = [];
+    L.photo.forEach(function (p) {
+      var g = group(p);
+      add(g, cyl(0.05, 0.05, 1.5, 5), soft(0xdfe2ea), 0, 0.75, 0);
+      add(g, box(0.5, 0.36, 0.3), soft(0x2b3147), 0, 1.6, 0);
+      var lens = add(g, cyl(0.12, 0.12, 0.16, 10), glow(0xffd23f, 1.6), 0, 1.6, 0.2, true); lens.rotation.x = Math.PI / 2;
+      var ring = add(g, new T.TorusGeometry(1.3, 0.07, 6, 26), glow(0xffd23f, 1.6), 0, 0.25, 0, true); ring.rotation.x = Math.PI / 2;
+      P.photo.push({ ring: ring, lens: lens });
+      B.spots.photo.push(wp(g, 0, 1, 0));
+      collide(g, 0, 0, 0.4);
+    });
+  }
+
+  B.build = function (rootGroup, siteId) {
+    root = rootGroup; site = siteId; L = Tn.L;
+    add = W.add; mat = W.mat; soft = W.soft; glow = W.glow;
+    P = { cables: {} }; B.P = P;
+    B.colliders = []; B.pos = {}; B.repair = {};
+    B.spots = { sockets: {}, hoppers: {}, rackSlots: [], bagTray: [], beds: [], panels: [], drill: [], ice: [], inst: {}, photo: [], pallet: [] };
+    Tn.boulders.forEach(function (b) { B.colliders.push({ x: b.x, z: b.z, r: b.r * 0.92 }); });
+    hab(); solar(); airMaker(); greenhouse(); bagger(); lab(); comms(); rocket(); scienceSites();
+    B.repair.rack = B.spots.rack.clone();
+    var rackP = new T.Vector3(L.rack[0], 0, L.rack[1]);
+    ['air', 'food', 'bag', 'lab', 'comms'].forEach(function (id) { cable(rackP, B.spots.sockets[id], id); });
+    B.launch = null;
+  };
+
+  // ---------- show what the mission rules say ----------
+  var demo = { air: 60, bags: 5, rack: { charge: 0.5, eff: [1, 1, 1], broken: false },
+    m: { air: { power: 2, queue: 2, prog: 0.1, broken: false }, food: { lamp: 1, water: 1, broken: false, beds: [{ state: 'ripe', g: 1 }, { state: 'growing', g: 0.7 }, { state: 'growing', g: 0.4 }, { state: 'ripe', g: 1 }] },
+      bag: { pending: 1, broken: false }, lab: { power: 2, queue: [1], prog: 0.2, broken: false }, comms: { on: true } },
+    cores: [0, 0, 0, 0], inst: {}, photos: {}, storm: null };
+
+  B.update = function (dt, s) {
+    if (!P.hab) return;
+    s = s || demo;
+    var t = W.time, m = s.m, i, on;
+    var alarm = s.storm && (s.storm.warned && !s.storm.over);
+
+    // habitat
+    for (i = 0; i < P.hab.bags.length; i++) {
+      var b = P.hab.bags[i], want = i < s.bags ? 1 : 0;
+      b.userData.s += (want - b.userData.s) * Math.min(1, dt * 7);
+      b.visible = b.userData.s > 0.02;
+      b.scale.set(1.45 * b.userData.s, 0.62 * b.userData.s, 0.85 * b.userData.s);
+    }
+    var dl = P.hab.doorLight.material;
+    dl.color.set(alarm ? 0xff4d6a : 0x4dff9a); dl.emissive.copy(dl.color);
+    dl.emissiveIntensity = alarm ? 2 + Math.sin(t * 12) * 1.5 : 1.6;
+    P.hab.beacon.material.emissiveIntensity = 1 + Math.sin(t * 3);
+    P.hab.flag.rotation.y = site === 'mars' ? Math.sin(t * 2) * 0.12 : 0;
+
+    // solar panels track the Sun; dust (Mars) or a moved Sun (Moon) makes them less useful
+    for (i = 0; i < 3; i++) {
+      var eff = s.rack.eff[i], off = (1 - eff) * 2;
+      q.setFromUnitVectors(UP, W.sunDir);
+      if (site === 'moon') { qy.setFromAxisAngle(UP, off * 1.1); q.premultiply(qy); }
+      P.solar.pivots[i].quaternion.slerp(q, Math.min(1, dt * 2.5));
+      var pm = P.solar.mats[i];
+      if (site === 'mars') pm.color.setRGB(1, 1 - off * 0.3, 1 - off * 0.62); else pm.color.setRGB(1, 1, 1);
+      pm.emissiveIntensity = 0.3 * eff;
+    }
+    P.rack.level.scale.y = Math.max(0.02, Math.min(1, s.rack.charge));
+    P.rack.lamp.material.color.set(s.rack.broken ? 0xff4d6a : 0x46ff8a); P.rack.lamp.material.emissive.copy(P.rack.lamp.material.color);
+    P.rack.lamp.material.emissiveIntensity = s.rack.broken ? 1.5 + Math.sin(t * 12) * 1.5 : 1.2;
+    P.cables.trunk.emissiveIntensity = s.rack.broken ? 0 : 0.6 + Math.sin(t * 5) * 0.3;
+
+    // air maker
+    var a = m.air, working = !a.broken && a.power > 0 && a.queue > 0;
+    setSocket('air', a.power, a.power > 0);
+    for (i = 0; i < P.air.ice.length; i++) { P.air.ice[i].visible = i < a.queue; P.air.ice[i].rotation.y += dt * (working ? 3 : 0.4); }
+    P.air.level.scale.y += (Math.max(0.02, s.air / 100) - P.air.level.scale.y) * Math.min(1, dt * 3);
+    P.air.level.material.color.set(s.air < 25 ? 0xff6f7f : 0x7fe6ff); P.air.level.material.emissive.set(s.air < 25 ? 0xff3050 : 0x4fd8ff);
+    P.air.fan.rotation.z += dt * (working ? 12 : 0.3);
+    P.air.lamp.material.emissiveIntensity = working ? 2 : 0.15;
+    if (working && Math.random() < dt * 10) W.emit(B.spots.hoppers.air.x + 3.1 + (Math.random() - 0.5), B.spots.hoppers.air.y - 3 + Math.random() * 3, B.spots.hoppers.air.z + (Math.random() - 0.5), { vy: 1.2, life: 1.4, size: 0.3, grow: 0.3, color: 0xbff4ff, alpha: 0.7 });
+
+    // greenhouse
+    var f = m.food, lit = f.lamp > 0 && !f.broken;
+    setSocket('food', lit ? Math.ceil(f.lamp * 3) : 0, f.lamp > 0);
+    P.food.lampM.emissiveIntensity = lit ? 2.4 : 0.12;
+    P.food.light.intensity = lit ? 1.6 : 0;
+    P.food.water.scale.y += (Math.max(0.02, Math.min(1, f.water / 2)) - P.food.water.scale.y) * Math.min(1, dt * 3);
+    for (i = 0; i < P.food.beds.length; i++) {
+      var bed = f.beds[i], pb = P.food.beds[i];
+      var ws = bed.state === 'empty' ? 0 : 0.16 + 0.84 * bed.g;
+      pb.s += (ws - pb.s) * Math.min(1, dt * 4);
+      pb.plants.visible = pb.s > 0.02; pb.plants.scale.setScalar(Math.max(0.001, pb.s));
+      pb.plants.rotation.z = Math.sin(t * 1.4 + i) * 0.03;
+      for (var k = 0; k < pb.fruits.length; k++) pb.fruits[k].visible = bed.state === 'ripe';
+      pb.mark.visible = bed.state === 'ripe'; pb.mark.position.y = 2.6 + Math.sin(t * 3 + i) * 0.15; pb.mark.rotation.y = t * 2;
+    }
+
+    // soil bagger
+    on = m.bag.pending > 0 && !m.bag.broken;
+    setSocket('bag', Math.min(3, m.bag.pending), m.bag.pending > 0);
+    if (on) P.bag.gear.rotation.x += dt * 6;
+    P.bag.lamp.material.emissiveIntensity = on ? 2 : 0.15;
+
+    // lab
+    var lb = m.lab, busy = !lb.broken && lb.power > 0 && lb.queue.length > 0;
+    setSocket('lab', lb.power, lb.power > 0);
+    for (i = 0; i < P.lab.tubes.length; i++) P.lab.tubes[i].visible = i < lb.queue.length;
+    P.lab.screen.material.emissiveIntensity = busy ? 1.4 + Math.sin(t * 9) * 0.8 : 0.25;
+    P.lab.arm.rotation.y = busy ? Math.sin(t * 3) * 0.7 : 0;
+
+    // radio dish
+    setSocket('comms', m.comms.on ? 3 : 0, m.comms.on);
+    P.comms.head.rotation.set(-0.7, Math.sin(t * 0.1) * 0.3 + 0.4, 0);
+    P.comms.tip.material.emissiveIntensity = m.comms.on ? 2 + Math.sin(t * 8) : 0.2;
+    for (i = 0; i < P.comms.waves.length; i++) {
+      var w = P.comms.waves[i], wt = (t * 0.7 + w.userData.o) % 1;
+      w.position.y = 2.4 + wt * 9; w.scale.setScalar(1 + wt * 4); w.material.opacity = m.comms.on ? 0.8 * (1 - wt) : 0;
+    }
+    P.cables.air.emissiveIntensity = a.power > 0 ? 1 : 0; P.cables.food.emissiveIntensity = lit ? 1 : 0;
+    P.cables.bag.emissiveIntensity = on ? 1 : 0; P.cables.lab.emissiveIntensity = lb.power > 0 ? 1 : 0; P.cables.comms.emissiveIntensity = m.comms.on ? 1 : 0;
+
+    // sparks and smoke on anything broken
+    ['air', 'food', 'lab', 'rack'].forEach(function (id) {
+      var mm = id === 'rack' ? s.rack : m[id];
+      if (!mm.broken || Math.random() > dt * 14) return;
+      var p = B.repair[id];
+      W.emit(p.x, p.y + 0.6, p.z, { vx: (Math.random() - 0.5) * 5, vy: 2 + Math.random() * 4, vz: (Math.random() - 0.5) * 5, life: 0.5, size: 0.22, grow: 0.3, color: 0xffe36a, alpha: 1, grav: W.gravity });
+      if (Math.random() < 0.4) W.emit(p.x, p.y + 1, p.z, { vy: 1.4, life: 2, size: 0.6, grow: 3, color: 0x555a66, alpha: 0.5 });
+    });
+
+    // science sites
+    for (i = 0; i < P.geo.length; i++) {
+      var left = 2 - s.cores[i], gp = P.geo[i];
+      gp.ring.visible = gp.beam.visible = left > 0; gp.flag.visible = left <= 0;
+      gp.ring.scale.setScalar(1 + Math.sin(t * 3 + i) * 0.06);
+    }
+    for (i = 0; i < P.ice.length; i++) P.ice[i].mat.emissiveIntensity = 0.75 + Math.sin(t * 2 + i) * 0.2;
+    Object.keys(P.inst).forEach(function (id) {
+      var pi = P.inst[id], done = !!s.inst[id];
+      pi.ring.visible = pi.ghost.visible = !done;
+      pi.ring.rotation.z = t; pi.model.visible = done || pi.s > 0.02;
+      pi.s += ((done ? 1 : 0) - pi.s) * Math.min(1, dt * 5);
+      pi.model.scale.setScalar(Math.max(0.001, pi.s));
+      if (pi.spin && done) { if (pi.spin.isGroup) pi.spin.rotation.y += dt * 5; else pi.spin.material.emissiveIntensity = 1.5 + Math.sin(t * 6) * 1.5; }
+    });
+    for (i = 0; i < P.photo.length; i++) {
+      var took = !!s.photos[i];
+      P.photo[i].ring.visible = !took; P.photo[i].lens.material.emissiveIntensity = took ? 0.2 : 1.6 + Math.sin(t * 4);
+    }
+
+    // rocket
+    var rk = P.rocket;
+    rk.towerLight.material.emissiveIntensity = 1 + Math.sin(t * 4) * 1;
+    if (B.launch) {
+      var L2 = B.launch; L2.t += dt;
+      var burn = L2.t > 2.4;
+      rk.flame.visible = L2.t > 1.2; rk.flame.scale.set(1, 0.6 + Math.random() * 0.8 + (burn ? 0.6 : 0), 1);
+      rk.light.intensity = L2.t > 1.2 ? 4 + Math.random() * 2 : 0;
+      if (burn) { rk.v += (2.2 + L2.t * 1.4) * dt; rk.y += rk.v * dt; }
+      rk.group.position.y = rk.y;
+      if (L2.t > 1.2) for (i = 0; i < 6; i++) {
+        var ang = Math.random() * 6.28, sp = burn ? 9 + Math.random() * 12 : 3 + Math.random() * 4;
+        W.emit(rk.base.x + Math.cos(ang) * 1.2, rk.base.y + Math.max(0.4, rk.y * 0.55) + 0.6, rk.base.z + Math.sin(ang) * 1.2,
+          { vx: Math.cos(ang) * sp * (rk.y < 14 ? 1 : 0.15), vy: rk.y < 14 ? 1.5 + Math.random() * 3 : -6, vz: Math.sin(ang) * sp * (rk.y < 14 ? 1 : 0.15), life: 2.4, size: 1.6, grow: 4, color: Math.random() < 0.3 ? 0xffc27a : 0xe6e0d8, alpha: 0.6 });
+      }
+      W.cam.shake = Math.max(W.cam.shake, burn ? 0.5 * Math.max(0, 1 - rk.y / 160) : 0.12);
+    }
+  };
+  B.startLaunch = function () { B.launch = { t: 0 }; P.rocket.y = 0; P.rocket.v = 0; };
+  B.rocketPos = function (out) { return out.set(P.rocket.base.x, P.rocket.base.y + P.rocket.y + 10, P.rocket.base.z); };
+})(window.JA);

@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Astro Outpost — Junior Astronaut Mission Trainer</title>
+<meta name="description" content="Be the astronaut. Carry power cells, mine ice, shield your home, drive the rover and dodge real solar storms on the Moon or Mars.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="scene" aria-label="3D view of your outpost"></canvas>
+<div id="storm-fx" aria-hidden="true"></div>
+<div id="tags" aria-hidden="true"></div>
+<div id="toasts" aria-hidden="true"></div>
+
+<!-- top bar -->
+<header id="hud" class="hidden">
+  <div class="chip sol-chip">
+    <b id="sol-text">Sol 1 of 5</b>
+    <small id="site-text">Mars</small>
+    <div class="clock" title="Time left in today's shift"><i id="clock-fill"></i><em id="clock-storm"></em><span id="clock-sun">☀️</span></div>
+  </div>
+  <div class="meters">
+    <div class="meter" data-res="air" title="Air: what the crew breathes">
+      <span class="m-icon">💨</span>
+      <div class="m-body"><div class="m-top"><b>Air</b><span class="m-val">60</span></div><div class="m-bar"><i></i></div><small class="m-note"></small></div>
+    </div>
+    <div class="meter" data-res="food" title="Food: meals for the crew">
+      <span class="m-icon">🥬</span>
+      <div class="m-body"><div class="m-top"><b>Food</b><span class="m-val">45</span></div><div class="m-bar"><i></i></div><small class="m-note"></small></div>
+    </div>
+    <div class="meter" data-res="dose" title="Radiation badge: when it is full, the mission is over">
+      <span class="m-icon">☢️</span>
+      <div class="m-body"><div class="m-top"><b>Radiation</b><span class="m-val">0</span></div><div class="m-bar"><i></i></div><small class="m-note"></small></div>
+    </div>
+  </div>
+  <div class="hud-right">
+    <div class="chip stars" title="Mission points"><span>⭐</span><b id="sci-val">0</b></div>
+    <button id="btn-sound" class="icon-btn" aria-label="Sound on or off" title="Sound">🔊</button>
+    <button id="btn-read" class="icon-btn" aria-label="Read text aloud" title="Read aloud">🗣️</button>
+    <button id="btn-info" class="icon-btn" aria-label="Help and the real science" title="Help">❔</button>
+  </div>
+</header>
+
+<aside id="goals" class="hidden"><h4 id="goals-title">Today</h4><ul id="goal-list"></ul></aside>
+<div id="banner" class="hidden"></div>
+
+<!-- robot buddy speech -->
+<div id="bolt" class="hidden">
+  <div class="bolt-face" aria-hidden="true"><i></i><i></i></div>
+  <p id="bolt-text"></p>
+</div>
+
+<!-- what the E key will do right now -->
+<div id="prompt" class="hidden"><kbd id="prompt-key">E</kbd><span id="prompt-text"></span></div>
+<!-- what you are carrying -->
+<div id="hands" class="hidden"><span id="hands-icon">🔋</span><div><b id="hands-name">power cell</b><small id="hands-hint">Hold F to aim a throw</small><div class="power"><i id="power-fill"></i></div></div></div>
+<div id="rover-hud" class="hidden"><span>🚙</span><div><b id="rover-text">Battery</b><div class="power"><i id="rover-fill"></i></div></div></div>
+
+<!-- skill mini-games -->
+<div id="mini" class="hidden">
+  <b id="mini-title">Drilling</b>
+  <div class="mini-row"><span>Depth</span><div class="bar depth"><i id="mini-depth"></i></div></div>
+  <div class="mini-row" id="mini-heat-row"><span>Heat</span><div class="bar heat"><i id="mini-heat"></i></div></div>
+  <div class="dial hidden" id="mini-dial"><em id="dial-zone"></em><i id="dial-needle"></i></div>
+  <div class="pips hidden" id="mini-pips"></div>
+  <small id="mini-hint">Hold E to drill. Let go before it overheats!</small>
+</div>
+
+<!-- inside the habitat -->
+<div id="inside" class="hidden">
+  <b>🏠 Inside the habitat</b>
+  <p id="inside-text">Safe and cosy.</p>
+  <div class="inside-actions">
+    <button class="btn ghost" id="btn-fast">⏩ Fast-forward</button>
+    <button class="btn ghost" id="btn-sleep">😴 End the day</button>
+    <button class="btn primary" id="btn-out">🧑‍🚀 Go outside</button>
+  </div>
+</div>
+
+<!-- discovery card -->
+<button id="card" class="hidden"><span id="card-icon">🧪</span><span class="card-body"><small id="card-kicker">New discovery</small><b id="card-title"></b><span id="card-text"></span><em id="card-src"></em></span></button>
+
+<!-- touch controls -->
+<div id="stick" class="hidden"><i></i></div>
+<div id="touch-btns" class="hidden">
+  <button id="t-throw" aria-label="Throw">🎯</button>
+  <button id="t-use" aria-label="Use">✋</button>
+  <button id="t-jump" aria-label="Jump">⤴</button>
+</div>
+
+<!-- title screen -->
+<section id="title">
+  <div class="title-card">
+    <p class="kicker">Junior Astronaut Mission Trainer</p>
+    <h1>Astro<span>Outpost</span></h1>
+    <p class="tag">Be the astronaut. Carry power, mine ice, shield your home, drive the rover — and dodge real solar storms.</p>
+    <button id="btn-start" class="btn primary big">▶ Start mission</button>
+    <div class="title-links">
+      <button id="btn-how" class="link">How to play</button>
+      <button id="btn-science" class="link">The real science</button>
+    </div>
+    <p id="best" class="best"></p>
+    <p class="turn-tip">📱 Tip: turn your phone sideways for a bigger view.</p>
+  </div>
+</section>
+
+<div id="fade"></div>
+<div id="modal-root"></div>
+<div id="fatal" class="hidden"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
+<script src="js/data.js"></script>
+<script src="js/archive-data.js"></script>
+<script src="js/spaceweather.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/terrain.js"></script>
+<script src="js/world.js"></script>
+<script src="js/base.js"></script>
+<script src="js/actors.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
