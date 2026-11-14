@@ -62,10 +62,8 @@ kbd { display: inline-grid; place-items: center; min-width: 30px; height: 30px; 
 .m-note.bad { color: #ff9aa8; font-weight: 600; }
 .meter.low { box-shadow: inset 0 0 0 2px var(--danger); animation: wobble 0.9s ease-in-out infinite; }
 .meter.low .m-bar i { background: var(--danger); }
-.meter.bump, .stars.bump { animation: bump 0.35s; }
+.meter.bump { animation: bump 0.35s; }
 .hud-right { display: flex; gap: 8px; align-items: center; }
-.stars { display: flex; align-items: center; gap: 6px; font-size: 1.15rem; padding: 9px 14px; }
-.stars b { font-variant-numeric: tabular-nums; min-width: 1.6em; text-align: right; }
 @keyframes wobble { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-1.2deg); } 75% { transform: rotate(1.2deg); } }
 @keyframes bump { 0% { transform: scale(1); } 40% { transform: scale(1.1); } 100% { transform: scale(1); } }
 
@@ -183,7 +181,6 @@ body.touch #hands, body.touch #rover-hud { bottom: calc(112px + var(--safe-b)); 
 #title .tag { position: static; transform: none; background: none; box-shadow: none; white-space: normal; font-weight: 400; font-size: 1.15rem; line-height: 1.4; margin: 16px auto 24px; max-width: 30em; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9); text-wrap: balance; }
 .title-links { margin-top: 18px; display: flex; gap: 8px; justify-content: center; }
 .title-links .link { color: #fff; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9); }
-.best { color: var(--power); font-weight: 600; min-height: 1.4em; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9); }
 .turn-tip { display: none; color: var(--muted); font-size: 0.9rem; margin-top: 10px; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9); }
 
 /* ---------- pop-up cards ---------- */
@@ -349,7 +346,7 @@ body.cine #fade { z-index: 27; }      /* during the film, titles and subtitles s
 @media (max-width: 900px) {
   .meter { padding: 6px 8px; gap: 5px; } .m-icon { font-size: 1.1rem; } .m-top b { font-size: 0.8rem; }
   .sol-chip { min-width: 112px; padding: 7px 10px; } .sol-chip b { font-size: 0.95rem; }
-  .hud-right { gap: 5px; } .icon-btn { width: 36px; height: 36px; } .stars { padding: 7px 10px; font-size: 1rem; }
+  .hud-right { gap: 5px; } .icon-btn { width: 36px; height: 36px; }
   #goals { width: 220px; top: calc(104px + var(--safe-t)); } #goal-list li { font-size: 0.8rem; }
   .cards, .cards.three { grid-template-columns: 1fr; } .cards.four { grid-template-columns: 1fr 1fr; }
   .modal { padding: 18px 16px 16px; border-radius: 22px; } .modal h2 { font-size: 1.4rem; }
@@ -392,7 +389,7 @@ body.touch #goal-list li.now { display: grid; font-size: 0.86rem; }
 body.touch #radio { top: calc(var(--hud-b, 86px) + 58px); left: calc(12px + var(--safe-l)); }
 @media (max-width: 640px) {
   /* keep the day chip and the buttons on one row, so the top bar is two rows tall, not three */
-  .hud-right { gap: 4px; } .stars { padding: 7px 8px; gap: 4px; } .stars b { min-width: 1.1em; } .sol-chip { min-width: 104px; }
+  .hud-right { gap: 4px; } .sol-chip { min-width: 104px; }
   #banner { top: calc(var(--hud-b, 150px) + 8px); white-space: normal; text-align: center; }
   #goals { top: calc(var(--hud-b, 150px) + 56px); }
   body.touch #goals { top: calc(var(--hud-b, 150px) + 8px); }
@@ -450,10 +447,10 @@ body.fx-on #storm-fx.active { opacity: 0.45; }
 
 /* ---------- type: Lexend for reading (drawn for young readers), Exo 2 for titles and numbers ---------- */
 body { -webkit-font-smoothing: antialiased; }
-h1, h2, h3, h4, .kicker, .btn, .sol-chip b, .m-top b, .m-val, .stars b, #banner, #mini b, #inside b, #card-title, .pick b, .rank h2, .opt b, kbd {
+h1, h2, h3, h4, .kicker, .btn, .sol-chip b, .m-top b, .m-val, #banner, #mini b, #inside b, #card-title, .pick b, .rank h2, .opt b, kbd {
   font-family: var(--font-display); letter-spacing: 0.005em; }
 .kicker, #goals h4, #card-kicker, .tagline { letter-spacing: 0.14em; }
-.m-val, .stars b, #sol-text { font-variant-numeric: tabular-nums; }
+.m-val, #sol-text { font-variant-numeric: tabular-nums; }
 
 /* ---------- drawn icons (js/icons.js swaps the emoji for these) ---------- */
 img.ico { width: 1.2em; height: 1.2em; vertical-align: -0.24em; display: inline-block; pointer-events: none; -webkit-user-drag: none; }

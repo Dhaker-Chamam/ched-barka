@@ -289,7 +289,7 @@
     }
     seal(ctx, cx, y + L.cy, L.r, tidy(rank.icon, 16) || '🚀');
     put(ctx, tidy(rank.name, 40) || 'Astronaut', cx, y + L.nameY, { weight: 700, size: L.nameSize, min: 24, maxW: 1300, color: goldFill(ctx, y + L.nameY - L.nameSize * 0.75, y + L.nameY + L.nameSize * 0.1) });
-    stat('⭐', many(num(info.points), 'mission point', 'mission points'), true);
+    stat('📅', many(num(info.days), String(info.dayWord || 'days').replace(/s$/, ''), info.dayWord || 'days'), true);
     if (finds > 0) stat('🔬', many(finds, 'discovery', 'discoveries'), false);
     if (decisions > 0) stat('🧭', many(decisions, 'big decision', 'big decisions'), false);
     runs(ctx, parts, cx, y + L.statY, L.statSize, 1340, 14);
@@ -320,7 +320,7 @@
       ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255, 210, 63, 0.5)'; ctx.stroke();
       disc(ctx, x + h / 2, 0, h / 2 - 5, GOLD);
       disc(ctx, x + h / 2, 0, h / 2 - 7.5, '#17224f');
-      emoji(ctx, tidy(row[i] && row[i].icon, 16) || '⭐', x + h / 2, 0, h * 0.5, h * 0.62);
+      emoji(ctx, tidy(row[i] && row[i].icon, 16) || '🏅', x + h / 2, 0, h * 0.5, h * 0.62);
       ctx.font = font(600, size); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = INK;
       ctx.fillText(names[i], x + h + 2, size * 0.35);
       x += widths[i] + gap;

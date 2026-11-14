@@ -10,7 +10,7 @@
 (function (JA) {
   'use strict';
   var T = window.THREE, W = JA.world, Tn = JA.terrain;
-  var K = JA.sky = { points: 35 };
+  var K = JA.sky = {};
   if (!T) return;
 
   // on which days a rock falls, for 5, 8 and 10 day missions (never on launch day)
@@ -219,13 +219,13 @@
     var st = s && s.sky && s.sky.site; if (!st) return null;
     return { text: 'Find the fresh crater and pick up the space rock', target: st.exact ? out.set(st.x, st.y, st.z) : null };
   };
-  // Pick the meteorite up. Returns the discovery (the game shows the card and the points).
+  // Pick the meteorite up. Returns the discovery (the game shows its card).
   K.collect = function (s) {
     var k = s && s.sky, st = k && k.site; if (!st) return null;
     var defs = FINDS[s.site.id] || FINDS.mars, d = defs[k.found % defs.length];
-    var find = { title: d.title, text: d.text, src: d.src, pts: K.points, icon: '☄️', sol: s.sol, kind: 'meteor', place: 'the fresh crater' };
+    var find = { title: d.title, text: d.text, src: d.src, icon: '☄️', sol: s.sol, kind: 'meteor', place: 'the fresh crater' };
     s.finds.push(find);
-    JA.sim.addSci(s, K.points, 'Space rock found');
+    JA.sim.didScience(s);
     k.found++; k.site = null;
     if (mesh) {                                               // the crater stays as a landmark; the rock and the beacon go
       mesh.group.remove(mesh.rock); mesh.group.remove(mesh.ring);

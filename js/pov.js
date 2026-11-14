@@ -22,7 +22,7 @@
     el = $('visor'); strip = $('visor-strip'); data = $('visor-data');
     if (!el || !strip || !data) { el = null; return; }
     DIRS.forEach(function (d, i) { marks.push(mark(d, i * Math.PI / 4, i % 2 ? 'minor' : '')); });
-    home = mark('🏠', 0, 'pin'); goal = mark('⭐', 0, 'pin');
+    home = mark('🏠', 0, 'pin'); goal = mark('🎯', 0, 'pin');
   }
   // Slide one compass mark to where it belongs. heading and ang are clockwise from north.
   function place(m, heading, ang, on) {

@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="css/keepsake.css">
 <link rel="stylesheet" href="css/hud.css">
 <link rel="stylesheet" href="css/colony.css">
+<link rel="stylesheet" href="css/panels.css">
 </head>
 <body>
 <canvas id="scene" aria-label="3D view of your outpost"></canvas>
@@ -57,12 +58,15 @@
     </div>
   </div>
   <div class="hud-right">
-    <div class="chip stars" title="Mission points"><span class="star-badge" aria-hidden="true">⭐</span><b id="sci-val">0</b><em class="sci-plus" aria-hidden="true"></em></div>
-    <button id="btn-view" class="icon-btn" aria-label="Helmet view: see through your own visor" aria-pressed="false" title="Helmet view (V)">👁️</button>
-    <button id="btn-pause" class="icon-btn" aria-label="Pause and change the day length" title="Pause · day length (P)">⏸</button>
-    <button id="btn-sound" class="icon-btn" aria-label="Sound on or off" title="Sound">🔊</button>
-    <button id="btn-read" class="icon-btn" aria-label="Read text aloud" title="Read aloud">🗣️</button>
-    <button id="btn-info" class="icon-btn" aria-label="Help and the real science" title="Help">❔</button>
+    <!-- one Settings button; the menu under it holds the helmet view, pause, sound, read aloud and help -->
+    <button id="btn-settings" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false" aria-controls="settings-menu" title="Settings">⚙️</button>
+    <div id="settings-menu" class="hidden" role="menu" aria-label="Settings">
+      <button id="btn-view" class="set-item" role="menuitemcheckbox" aria-pressed="false" aria-label="Helmet view: see through your own visor"><span class="set-ic" aria-hidden="true">👁️</span><span class="set-name">Helmet view</span><kbd>V</kbd><span class="sw" aria-hidden="true"></span></button>
+      <button id="btn-pause" class="set-item" role="menuitem" aria-label="Pause and change the day length"><span class="set-ic" aria-hidden="true">⏸</span><span class="set-name">Pause · day length</span><kbd>P</kbd></button>
+      <button id="btn-sound" class="set-item" role="menuitemcheckbox" aria-label="Sound on or off"><span class="set-ic" aria-hidden="true">🔊</span><span class="set-name">Sound</span><span class="sw" aria-hidden="true"></span></button>
+      <button id="btn-read" class="set-item" role="menuitemcheckbox" aria-label="Read text aloud"><span class="set-ic" aria-hidden="true">🗣️</span><span class="set-name">Read aloud</span><span class="sw" aria-hidden="true"></span></button>
+      <button id="btn-info" class="set-item" role="menuitem" aria-label="Help and the real science"><span class="set-ic" aria-hidden="true">❔</span><span class="set-name">Help</span><kbd>H</kbd></button>
+    </div>
   </div>
 </header>
 
@@ -130,7 +134,6 @@
       <button id="btn-how" class="link">How to play</button>
       <button id="btn-science" class="link">The real science</button>
     </div>
-    <p id="best" class="best"></p>
     <p class="turn-tip">📱 Tip: turn your phone sideways for a bigger view.</p>
   </div>
 </section>

@@ -1,0 +1,38 @@
+/* Astro Outpost — the look of every panel and window: one dark blue, semi-transparent, with no frame.
+   --panel-fill is that colour. Its last number is how solid the panels are: lower lets more of the world
+   show through, higher makes them more solid. Change it here to change them all.
+   Panels that mean something keep a thin coloured edge: gold = a job in progress or a button that is on,
+   red = danger, green = good news.
+   Loaded last, so it wins over style.css and hud.css. */
+:root {
+  --panel-fill: rgba(6, 20, 60, 0.68);
+  --panel-drop: 0 8px 22px rgba(2, 4, 14, 0.3);
+  --edge-gold: inset 0 0 0 2px rgba(255, 210, 63, 0.9);
+  --edge-red: inset 0 0 0 2px rgba(255, 84, 104, 0.95);
+  --edge-green: inset 0 0 0 2px rgba(77, 255, 154, 0.85);
+}
+
+/* The lists repeat the coloured states and the touch-screen versions, whose old rules are stronger. */
+#hud .sol-chip, #hud .meter, #hud .icon-btn, #goals, #radio, #banner.info, #prompt, #hands, #rover-hud,
+#mini, #inside, #card, .tag, .modal, #settings-menu,
+body.touch #hud .sol-chip, body.touch #hud .meter, body.touch #goals, #hud .icon-btn.on, #card.conseq, #card.conseq.good, #card.conseq.bad {
+  background: var(--panel-fill);
+  border: 0;
+  box-shadow: var(--panel-drop);
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+
+/* ---------- the coloured edges ---------- */
+#hud .icon-btn.on, #prompt, #mini, .tag.warn, #card.conseq { box-shadow: var(--edge-gold), var(--panel-drop); }
+#prompt.info { box-shadow: var(--panel-drop); }
+#hud .meter.low, .tag.bad, #card.conseq.bad, .modal.crisis { box-shadow: var(--edge-red), var(--panel-drop); }
+#card.conseq.good { box-shadow: var(--edge-green), var(--panel-drop); }
+
+/* ---------- the Settings menu ---------- */
+#settings-menu { padding: 6px; border-radius: 16px; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.4); }
+
+/* ---------- windows: a thin scroll bar that fits the rounded corners ---------- */
+.modal::-webkit-scrollbar { width: 8px; }
+.modal::-webkit-scrollbar-track { margin: 22px 0; background: transparent; }
+.modal::-webkit-scrollbar-thumb { border-radius: 4px; background: rgba(220, 232, 255, 0.35); }
+.modal::-webkit-scrollbar-thumb:hover { background: rgba(220, 232, 255, 0.55); }

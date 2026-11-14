@@ -5,12 +5,12 @@
 (function (JA) {
   'use strict';
   var MAP = {
-    '💨': 'air', '🥬': 'food', '☢': 'radiation', '⭐': 'star', '☀': 'sun',
+    '💨': 'air', '🥬': 'food', '☢': 'radiation', '☀': 'sun',
     '🛡': 'shield', '🔬': 'lab', '📡': 'dish', '🚙': 'rover',
     '🔋': 'cell', '🧊': 'ice', '🧱': 'bag', '🧪': 'core', '📦': 'inst', '🧳': 'case',
     '🚀': 'rocket', '🏠': 'home'
   };
-  var NAMES = { air: 'air', food: 'food', radiation: 'radiation', star: 'points', sun: 'sun', shield: 'shield', lab: 'science lab',
+  var NAMES = { air: 'air', food: 'food', radiation: 'radiation', sun: 'sun', shield: 'shield', lab: 'science lab',
     dish: 'radio dish', rover: 'rover', cell: 'power cell', ice: 'ice', bag: 'soil bag', core: 'rock core', inst: 'instrument',
     'case': 'sample case', rocket: 'rocket', home: 'habitat' };
   var keys = Object.keys(MAP).sort(function (a, b) { return b.length - a.length; });

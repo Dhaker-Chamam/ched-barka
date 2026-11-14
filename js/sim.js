@@ -80,7 +80,7 @@
       weather: JA.weather.pickWindow(opts.weather, level.sols, level.id, rng),
       env: makeEnv(site, level, rng),
       sol: 0, totalSols: level.sols, t: 0,
-      air: level.id === 'cadet' ? 50 : 60, food: level.id === 'cadet' ? 28 : 45, dose: 0, sci: 0, bags: 0,
+      air: level.id === 'cadet' ? 50 : 60, food: level.id === 'cadet' ? 28 : 45, dose: 0, bags: 0,
       rack: { charge: 0, cells: 0, eff: [1, 1, 1], broken: false },
       m: {
         air: { power: 0, queue: 0, prog: 0, broken: false },
@@ -125,11 +125,11 @@
     }
     var gp = s.glitchPlan[s.sol];
     s.glitch = gp ? { machine: gp.machine, at: gp.at * s.dayLength, state: 'pending', replyAt: 0, misses: 0, asked: false } : null;
-    s.today = { breath: 0, airMade: 0, ice: 0, crates: 0, doseBase: 0, doseStorm: 0, sci: [], cells: {}, bags: 0, late: false, repair: null,
+    s.today = { breath: 0, airMade: 0, ice: 0, crates: 0, doseBase: 0, doseStorm: 0, science: 0, cells: {}, bags: 0, late: false, repair: null,
       panels: {}, dishEarly: false, leaked: 0, goalDone: false, extra: [],
       bagRoom: R.shieldSlots - s.bags, coreRoom: s.cores.length * 2 - s.finds.filter(function (f) { return f.kind === 'core'; }).length };
     s.day = dayInfo(s);
-    s.morning = { air: s.air, food: s.food, dose: s.dose, sci: s.sci };
+    s.morning = { air: s.air, food: s.food, dose: s.dose };
     if (JA.crisis) JA.crisis.startSol(s);
   }
 
@@ -187,12 +187,8 @@
     return 'none';
   }
   function machine(s, id) { return id === 'rack' ? s.rack : s.m[id]; }
-  function addSci(s, v, text) {
-    s.sci += v;
-    var list = s.today.sci;
-    for (var i = 0; i < list.length; i++) if (list[i].text === text) { list[i].v += v; list[i].n++; return; }
-    list.push({ text: text, v: v, n: 1 });
-  }
+  // some science was done today (tonight's space fact can be about science)
+  function didScience(s) { s.today.science++; }
 
   // ---------- one slice of time ----------
   // ctx: { outside, sprint, driving }. Returns a list of things that just happened.
@@ -285,8 +281,7 @@
     if (JA.crisis) JA.crisis.tick(s, ctx, ev);
     if (!s.today.goalDone && dayGoalDone(s)) {
       s.today.goalDone = true; s.stats.dayGoals++;
-      addSci(s, R.dayGoalPts, 'Daily challenge');
-      ev.push({ type: 'daygoal', pts: R.dayGoalPts });
+      ev.push({ type: 'daygoal' });
     }
 
     if (s.air <= 0) ev.push({ type: 'fail', reason: 'air' });
@@ -341,18 +336,17 @@
   function submitCore(s, core) { if (s.m.lab.queue.length >= R.labQueue) return no('The Lab tray is full. It needs a power cell to study the cores.'); s.m.lab.queue.push(core); return OK; }
   function discover(s, core) {
     var site = JA.GEO[s.site.id][core.site], f = site.finds[core.n] || site.finds[0];
-    var pts = R.corePts[core.quality];
-    var find = { title: f.title, text: f.text, src: f.src, pts: pts, quality: core.quality, place: site.name, icon: site.icon, sol: s.sol, kind: 'core' };
+    var find = { title: f.title, text: f.text, src: f.src, quality: core.quality, place: site.name, icon: site.icon, sol: s.sol, kind: 'core' };
     s.finds.push(find);
-    addSci(s, pts, 'Rock core studied');
+    didScience(s);
     return find;
   }
   function deploy(s, id) {
     if (s.inst[id]) return null;
     var def = JA.INSTRUMENTS[s.site.id].filter(function (x) { return x.id === id; })[0];
     s.inst[id] = true;
-    addSci(s, R.instPts, 'Instrument set up');
-    var find = { title: def.name + ' is working!', text: def.text, src: def.src, pts: R.instPts, perk: def.perk, icon: def.icon, sol: s.sol, kind: 'inst' };
+    didScience(s);
+    var find = { title: def.name + ' is working!', text: def.text, src: def.src, perk: def.perk, icon: def.icon, sol: s.sol, kind: 'inst' };
     s.finds.push(find);
     return find;
   }
@@ -360,12 +354,12 @@
     if (s.photos[i]) return null;
     var def = JA.PHOTOS[s.site.id][i];
     s.photos[i] = true;
-    addSci(s, R.photoPts, 'Postcard photo');
-    var find = { title: 'Postcard: ' + def.name, text: def.text, src: def.src, pts: R.photoPts, icon: '📸', sol: s.sol, kind: 'photo' };
+    didScience(s);
+    var find = { title: 'Postcard: ' + def.name, text: def.text, src: def.src, icon: '📸', sol: s.sol, kind: 'photo' };
     s.finds.push(find);
     return find;
   }
-  function trick(s, dist) { s.stats.tricks++; s.stats.bestThrow = Math.max(s.stats.bestThrow, dist); addSci(s, R.trickPts, 'Trick shots'); }
+  function trick(s, dist) { s.stats.tricks++; s.stats.bestThrow = Math.max(s.stats.bestThrow, dist); }
   function servicePanel(s, i) { s.rack.eff[i] = 1; s.today.panels[i] = 1; }
   function cleanAllPanels(s) { s.rack.eff = [1, 1, 1]; }
 
@@ -428,13 +422,12 @@
       t.doseStorm >= 0.05 ? { text: 'Solar storm', v: r1(t.doseStorm) } : null,
       night ? { text: 'Night (shield blocked ' + Math.round(sf * 100) + '%)', v: r1(night) } : null
     ].filter(Boolean) });
-    lines.push({ res: 'sci', icon: '⭐', parts: t.sci.length ? t.sci.map(function (x) { return { text: x.text + (x.n > 1 ? ' ×' + x.n : ''), v: x.v }; }) : [{ text: 'No mission points today', v: 0 }] });
 
     var fail = null;
     if (s.air <= 0) fail = 'air'; else if (s.food < 0) fail = 'food'; else if (s.dose >= 100) fail = 'dose';
     s.food = clamp(s.food, 0, 100);
     var report = {
-      sol: s.sol, lines: lines, before: s.morning, after: { air: s.air, food: s.food, dose: s.dose, sci: s.sci },
+      sol: s.sol, lines: lines, before: s.morning, after: { air: s.air, food: s.food, dose: s.dose },
       fail: fail, last: last, events: ev, fact: pickFact(s), repair: t.repair,
       finds: s.finds.filter(function (f) { return f.sol === s.sol; }), forecast: null, shield: sf,
       day: s.day, goalDone: t.goalDone,
@@ -453,15 +446,8 @@
     return report;
   }
 
-  // The crew lifts off. Bonus points for a healthy crew and for bringing the samples home.
-  function finish(s) {
-    var bonus = [];
-    if (s.caseLoaded) { s.sci += R.casePts; bonus.push({ text: 'Rock samples on their way to Earth', v: R.casePts }); }
-    var health = Math.max(0, Math.round((100 - s.dose) / 4));
-    s.sci += health; bonus.push({ text: 'Healthy crew bonus', v: health });
-    s.over = { type: 'win', bonus: bonus };
-    return bonus;
-  }
+  // The crew lifts off.
+  function finish(s) { s.over = { type: 'win' }; }
 
   function pickFact(s) {
     var tags = [], t = s.today, e = env(s).kind;
@@ -472,7 +458,7 @@
     if (t.ice) tags.push('ice');
     if (t.bags) tags.push('shield');
     if (t.cells.rover) tags.push('rover');
-    if (t.sci.length) tags.push('science');
+    if (t.science) tags.push('science');
     if (t.cells.comms) tags.push('comms');
     if (t.crates || t.cells.food) tags.push('food');
     if (t.airMade) tags.push('air');
@@ -485,11 +471,7 @@
     return rest[Math.floor(s.rng() * rest.length)] || JA.FACTS[0];
   }
 
-  function rankFor(s) { var best = JA.RANKS[0]; JA.RANKS.forEach(function (r, i) { if (s.sci >= s.level.rankMins[i]) best = r; }); return best; }
-  function nextRank(s) {
-    for (var i = 0; i < JA.RANKS.length; i++) if (s.sci < s.level.rankMins[i]) return { rank: JA.RANKS[i], need: s.level.rankMins[i] };
-    return null;
-  }
+  function rankFor(s) { return JA.RANKS[s.level.id] || JA.RANKS.cadet; }
   function badges(s) {
     var b = [];
     if (s.stats.storms && s.stats.stormOut < 1) b.push({ icon: '⚡', name: 'Storm Dodger', text: 'Never caught outside in a solar storm' });
@@ -538,7 +520,7 @@
     tick: tick, takeCell: takeCell, plug: plug, feedIce: feedIce, addBag: addBag, plant: plant, harvest: harvest, storeCrate: storeCrate,
     coresLeft: coresLeft, drillCore: drillCore, submitCore: submitCore, deploy: deploy, photo: photo, trick: trick,
     servicePanel: servicePanel, cleanAllPanels: cleanAllPanels, commInfo: commInfo, askEarth: askEarth, repairMiss: repairMiss, repairDone: repairDone,
-    endSol: endSol, finish: finish, rankFor: rankFor, nextRank: nextRank, badges: badges, hint: hint, addSci: addSci,
+    endSol: endSol, finish: finish, rankFor: rankFor, badges: badges, hint: hint, didScience: didScience,
     dayMods: dayMods, airDrain: airDrain, dinner: dinner, dayInfo: dayInfo, harderList: harderList,
     dayGoalDone: dayGoalDone, dayGoalProgress: dayGoalProgress, setDayLength: setDayLength, machine: machine
   };

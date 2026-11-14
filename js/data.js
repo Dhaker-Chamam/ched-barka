@@ -64,19 +64,19 @@ window.JA = window.JA || {};
     cadet: {
       id: 'cadet', name: 'Cadet', ages: 'Ages 7–9', sols: 5, airDrain: 30, dinner: 14, cellBonus: 1,
       stormScale: 0.6, warnBonus: 12, ease: 1.5, glitchSols: [2], crisisSols: [3, 4], ramp: 0.6, doseScale: 0.7,
-      storms: [1, 4], stormsArchive: [3, 7], rankMins: [0, 120, 220, 320],
+      storms: [1, 4], stormsArchive: [3, 7],
       blurb: 'A 5-day mission with extra power and longer storm warnings.'
     },
     commander: {
       id: 'commander', name: 'Commander', ages: 'Ages 10–12', sols: 8, airDrain: 36, dinner: 18, cellBonus: 0,
       stormScale: 1, warnBonus: 0, ease: 1, glitchSols: [2, 4, 6, 7], crisisSols: [3, 5, 7], ramp: 1, doseScale: 0.55,
-      storms: [3, 8], stormsArchive: [8, 14], rankMins: [0, 180, 320, 460],
+      storms: [3, 8], stormsArchive: [8, 14],
       blurb: 'An 8-day mission. Every power cell matters, and every day is tougher.'
     },
     veteran: {
       id: 'veteran', name: 'Veteran', ages: 'Ages 12+', sols: 10, airDrain: 38, dinner: 19, cellBonus: 0,
       stormScale: 1, warnBonus: -4, ease: 0.9, glitchSols: [2, 4, 6, 7, 8, 9], crisisSols: [3, 5, 7, 9], ramp: 1.15, doseScale: 0.45,
-      storms: [4, 10], stormsArchive: [8, 15], rankMins: [0, 220, 380, 520],
+      storms: [4, 10], stormsArchive: [8, 15],
       blurb: 'A 10-day expedition. Worn-out machines, thin supplies and four big decisions.'
     }
   };
@@ -92,7 +92,6 @@ window.JA = window.JA || {};
   // GAME rules, all in one place so they are easy to tune and to explain.
   JA.RULES = {
     dayLength: 300,                // seconds of play for one working day (the player can change it)
-    dayGoalPts: 20,
     startAir: 65, startFood: 45,
     morningCells: 2, chargeSpan: 0.72, rackMax: 4, effMin: 0.5,
     airPerIce: 14, iceTime: 6, airCharges: 3, hopperMax: 4,
@@ -101,8 +100,7 @@ window.JA = window.JA || {};
     labCharges: 3, analyzeTime: 8, labQueue: 4,
     roverPerCell: 100, roverMax: 200, roverBed: 4,
     stormDuration: 28, warnDish: 45, warnNoDish: 12, radWarn: 10,
-    sprintAir: 1.5, lateAir: 6,
-    corePts: [12, 20, 30], instPts: 40, photoPts: 15, casePts: 50, trickPts: 3
+    sprintAir: 1.5, lateAir: 6
   };
 
   JA.MACHINES = {
@@ -279,12 +277,12 @@ window.JA = window.JA || {};
     { id: 'apollo13', site: 'any', tags: ['repair', 'air'], src: 'apollo', text: 'On Apollo 13 the air filters started to fail. The crew built a new filter holder out of plastic bags, cardboard and duct tape — and it worked.' }
   ];
 
-  JA.RANKS = [
-    { name: 'Space Cadet', icon: '🎒', line: 'You brought the crew home. That is the hardest part!' },
-    { name: 'Mission Pilot', icon: '🚀', line: 'Safe crew and solid science. Nicely balanced!' },
-    { name: 'Outpost Commander', icon: '🧑‍🚀', line: 'You juggled power, air, food and radiation like a pro.' },
-    { name: 'Legend of the Outpost', icon: '🏆', line: 'Mission Control is speechless. What a mission!' }
-  ];
+  // the title on the mission-complete screen and the certificate: one per mission length
+  JA.RANKS = {
+    cadet: { name: 'Space Cadet', icon: '🎒', line: 'You brought the crew home. That is the hardest part!' },
+    commander: { name: 'Outpost Commander', icon: '🧑‍🚀', line: 'You juggled power, air, food and radiation like a pro.' },
+    veteran: { name: 'Legend of the Outpost', icon: '🏆', line: 'Ten days of worn-out machines and real storms. Mission Control is speechless!' }
+  };
 
   JA.FAIL = {
     air: { icon: '💨', title: 'The air ran out', text: 'The air tanks hit empty, so the crew climbed into the rocket and flew home early. Everyone is safe.',

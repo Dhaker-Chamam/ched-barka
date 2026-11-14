@@ -69,12 +69,8 @@
     if (m.n !== note) { m.n = note; m.note.textContent = note || ''; }
     if (m.bad !== bad) { m.bad = bad; m.note.classList.toggle('bad', bad); }
   }
-  var hud = { sol: $('sol-text'), site: $('site-text'), fill: $('clock-fill'), sun: $('clock-sun'), storm: $('clock-storm'), left: $('time-left'), sci: $('sci-val') };
-  var stars = document.querySelector('#hud .stars'), plus = stars.querySelector('.sci-plus'), starPop = { flip: false }, plusPop = { flip: false };
+  var hud = { sol: $('sol-text'), site: $('site-text'), fill: $('clock-fill'), sun: $('clock-sun'), storm: $('clock-storm'), left: $('time-left') };
   var lastSol = '', lastTime = '', lastF = -1, lastStorm = '', stormNow = false;
-  // mission points count up to the new score instead of jumping
-  var sciTo = null, sciShown = 0, sciFrom = 0, sciT0 = 0;
-  function clock() { return window.performance && performance.now ? performance.now() : Date.now(); }
   U.setHud = function (s) {
     var L = s.level, left = Math.max(0, 1 - s.t / s.dayLength), last = s.sol >= s.totalSols;
     var solText = s.site.dayWord + ' ' + s.sol + ' of ' + s.totalSols;
@@ -91,21 +87,6 @@
     var secs = Math.max(0, Math.ceil(s.dayLength - s.t)), tl = Math.floor(secs / 60) + ':' + ('0' + (secs % 60)).slice(-2) + ' left';
     if (tl !== lastTime) { lastTime = tl; hud.left.textContent = tl; hud.left.classList.toggle('low', left < 0.15); }
     setMeter('dose', s.dose, s.dose >= 75, 'home shield ' + Math.round(sim.shield(s) * 100) + '%', false);
-    // points: count up, pop the gold pill and float a "+5" under it
-    var sci = Math.round(s.sci), t = clock();
-    if (sci !== sciTo) {
-      if (sciTo !== null && sci > sciTo) {
-        sciFrom = sciShown; sciT0 = t;
-        plus.textContent = '+' + (sci - sciTo); pop(plusPop, plus); pop(starPop, stars);
-      } else { sciShown = sciFrom = sci; hud.sci.textContent = sci; }
-      sciTo = sci;
-    }
-    if (sciShown !== sciTo) {
-      var k = Math.min(1, (t - sciT0) / 700), shown;
-      k = 1 - (1 - k) * (1 - k) * (1 - k);
-      shown = Math.round(sciFrom + (sciTo - sciFrom) * k);
-      if (shown !== sciShown) { sciShown = shown; hud.sci.textContent = shown; }
-    }
     // the shift bar moves in steps of 0.1%, so it is written a few times a second, not every frame
     var f = Math.round(Math.min(1, s.t / s.dayLength) * 1000) / 10;
     if (f !== lastF) { lastF = f; hud.fill.style.width = f + '%'; hud.sun.style.left = f + '%'; }
@@ -120,7 +101,7 @@
   };
 
   // ---------- goals ----------
-  // Must-do jobs first, then the bonus jobs (optional: the ⭐ challenge, shield, science...).
+  // Must-do jobs first, then the bonus jobs (optional: the challenge, shield, science...).
   // Rows are kept and updated in place (found again by their emoji), so when a job gets done
   // its tick can animate instead of the whole list being redrawn.
   var goalKey = '', goalTitle = null, goalRows = {}, goalBox = $('goals'), goalUl = $('goal-list');
@@ -246,7 +227,7 @@
     c.className = f.kind === 'conseq' ? 'conseq ' + (f.tone || 'mixed') : '';
     $('card-icon').textContent = f.icon || '🧪';
     $('card-kicker').textContent = f.kind === 'conseq' ? 'What your choice led to'
-      : (f.kind === 'core' ? 'Discovery at ' + f.place : f.kind === 'inst' ? 'Instrument online' : f.kind === 'meteor' ? 'A rock from space' : 'Postcard') + ' · +' + f.pts + ' ⭐';
+      : (f.kind === 'core' ? 'Discovery at ' + f.place : f.kind === 'inst' ? 'Instrument online' : f.kind === 'meteor' ? 'A rock from space' : 'Postcard');
     $('card-title').textContent = f.title;
     $('card-text').textContent = f.text + (f.perk ? ' ' + f.perk : '');
     $('card-src').textContent = src ? 'Source: ' + src.name : f.kind === 'conseq' ? 'Tap to close' : '';
@@ -314,6 +295,6 @@
       '. Soil bags on the dome help — and do not get caught far from home!</p></div></div>';
   };
   U.findRow = function (f) {
-    return '<div class="find"><em>' + (f.icon || '🧪') + '</em><div><b>' + esc(f.title) + '</b><span>' + esc(f.text) + '</span></div><i>+' + f.pts + ' ⭐</i></div>';
+    return '<div class="find"><em>' + (f.icon || '🧪') + '</em><div><b>' + esc(f.title) + '</b><span>' + esc(f.text) + '</span></div></div>';
   };
 })(window.JA);
