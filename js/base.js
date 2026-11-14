@@ -20,9 +20,12 @@
 
   // A power socket: a cup on a post. A plugged-in cell glows inside it; green pips show charge left.
   function socket(g, id, x, z) {
-    var s = new T.Group(); s.position.set(x, 0, z); g.add(s);
-    add(s, cyl(0.28, 0.4, 1.0, 10), soft(0x8a8fa0), 0, 0.5, 0);
-    add(s, cyl(0.62, 0.5, 0.5, 16), soft(0x2b3147), 0, 1.2, 0);
+    var s = new T.Group(), sm = model('socket'); s.position.set(x, 0, z); g.add(s);
+    if (sm) s.add(sm);                                   // Blender socket: bolted post, light box and contact cup
+    else {
+      add(s, cyl(0.28, 0.4, 1.0, 10), soft(0x8a8fa0), 0, 0.5, 0);
+      add(s, cyl(0.62, 0.5, 0.5, 16), soft(0x2b3147), 0, 1.2, 0);
+    }
     var ring = add(s, new T.TorusGeometry(0.62, 0.09, 8, 24), glow(0xffd23f, 1.4), 0, 1.46, 0, true); ring.rotation.x = Math.PI / 2;
     var cell = add(s, cyl(0.33, 0.33, 0.9, 12), glow(0xffe36a, 1.8), 0, 1.65, 0, true); cell.visible = false;
     var pips = [];
@@ -40,8 +43,9 @@
   }
   // A hopper: an open funnel you drop or throw things into.
   function hopper(g, id, x, y, z, r, color) {
-    var m = new T.MeshStandardMaterial({ color: 0xc9ccd6, roughness: 0.5, metalness: 0.4, side: T.DoubleSide });
-    add(g, new T.CylinderGeometry(r, r * 0.45, 1.0, 16, 1, true), m, x, y, z);
+    var hm = model('hopper');
+    if (hm) { hm.position.set(x, y, z); hm.scale.set(r, 1, r); g.add(hm); }
+    else add(g, new T.CylinderGeometry(r, r * 0.45, 1.0, 16, 1, true), new T.MeshStandardMaterial({ color: 0xc9ccd6, roughness: 0.5, metalness: 0.4, side: T.DoubleSide }), x, y, z);
     var rim = add(g, new T.TorusGeometry(r, 0.09, 8, 26), glow(color, 1.2), x, y + 0.5, z, true); rim.rotation.x = Math.PI / 2;
     B.spots.hoppers[id] = wp(g, x, y + 0.5, z);
     return rim;
@@ -146,12 +150,15 @@
     });
     B.pos.solar = wp(g, 0, 6.4, 0);
 
-    var r = group(L.rack);
-    add(r, box(5.2, 0.5, 1.7), soft(0x2f3550), 0, 0.25, 0);
-    add(r, box(5.2, 2.3, 0.3), soft(0x3a4058), 0, 1.4, -0.7);
-    add(r, box(5.5, 0.16, 2.1), soft(0xffd23f), 0, 2.62, -0.1);
+    var r = group(L.rack), rm = model('charge_rack');
+    if (rm) r.add(rm);         // Blender rack: louvred cabinet, four charging cradles, breaker box, bus bar, yellow canopy
+    else {
+      add(r, box(5.2, 0.5, 1.7), soft(0x2f3550), 0, 0.25, 0);
+      add(r, box(5.2, 2.3, 0.3), soft(0x3a4058), 0, 1.4, -0.7);
+      add(r, box(5.5, 0.16, 2.1), soft(0xffd23f), 0, 2.62, -0.1);
+    }
     for (var i = 0; i < R.rackMax; i++) {
-      add(r, cyl(0.42, 0.42, 0.25, 12), soft(0x8a8fa0), -1.65 + i * 1.1, 0.6, 0.15);
+      if (!rm) add(r, cyl(0.42, 0.42, 0.25, 12), soft(0x8a8fa0), -1.65 + i * 1.1, 0.6, 0.15);
       B.spots.rackSlots.push(wp(r, -1.65 + i * 1.1, 1.18, 0.15));
     }
     // a glass tube that fills as the next cell charges
@@ -166,9 +173,13 @@
 
   // ---------- air maker ----------
   function airMaker() {
-    var g = group(L.air);
-    add(g, box(3.4, 0.3, 3.4), soft(0x3a4058), 0, 0.15, 0);
-    add(g, box(3.0, 2.6, 3.0), new T.MeshStandardMaterial({ color: 0xe9b93c, metalness: 0.75, roughness: 0.3 }), 0, 1.6, 0);
+    var g = group(L.air), mdl = model('air_maker'), fan;
+    // Blender air maker: gold-foil box in a steel frame on a skid, fan grille, valve, caged tank (the fan spins)
+    if (mdl) { g.add(mdl); fan = mdl.getObjectByName('air_fan'); }
+    else {
+      add(g, box(3.4, 0.3, 3.4), soft(0x3a4058), 0, 0.15, 0);
+      add(g, box(3.0, 2.6, 3.0), new T.MeshStandardMaterial({ color: 0xe9b93c, metalness: 0.75, roughness: 0.3 }), 0, 1.6, 0);
+    }
     var rim = hopper(g, 'air', 0, 3.4, 0, 1.25, 0x4fd8ff);
     var ice = [];
     for (var i = 0; i < R.hopperMax; i++) {
@@ -176,14 +187,16 @@
       c.visible = false; ice.push(c);
     }
     // the oxygen tank: the glowing column inside IS the crew's air supply
-    add(g, cyl(1.25, 1.25, 0.4, 20), soft(0x3a4058), 3.1, 0.2, 0);
+    if (!mdl) add(g, cyl(1.25, 1.25, 0.4, 20), soft(0x3a4058), 3.1, 0.2, 0);
     add(g, cyl(1.15, 1.15, 5.0, 20), new T.MeshStandardMaterial({ color: 0xbfe8ff, transparent: true, opacity: 0.22, roughness: 0.08, depthWrite: false }), 3.1, 2.9, 0, true);
     var lg = cyl(0.95, 0.95, 4.8, 20); lg.translate(0, 2.4, 0);
     var level = add(g, lg, new T.MeshStandardMaterial({ color: 0x7fe6ff, emissive: 0x4fd8ff, emissiveIntensity: 0.9, transparent: true, opacity: 0.85 }), 3.1, 0.45, 0, true);
-    add(g, cyl(1.25, 1.25, 0.3, 20), soft(0xf2f3f7), 3.1, 5.5, 0);
-    add(g, cyl(0.16, 0.16, 1.6, 8), soft(0xdfe2ea), 1.75, 2.2, 0).rotation.z = Math.PI / 2;
-    var fan = new T.Group(); fan.position.set(-0.9, 2.2, 1.56); g.add(fan);
-    add(fan, box(1.3, 0.24, 0.06), mat(0xdfe2ea), 0, 0, 0); add(fan, box(0.24, 1.3, 0.06), mat(0xdfe2ea), 0, 0, 0);
+    if (!fan) {
+      add(g, cyl(1.25, 1.25, 0.3, 20), soft(0xf2f3f7), 3.1, 5.5, 0);
+      add(g, cyl(0.16, 0.16, 1.6, 8), soft(0xdfe2ea), 1.75, 2.2, 0).rotation.z = Math.PI / 2;
+      fan = new T.Group(); fan.position.set(-0.9, 2.2, 1.56); g.add(fan);
+      add(fan, box(1.3, 0.24, 0.06), mat(0xdfe2ea), 0, 0, 0); add(fan, box(0.24, 1.3, 0.06), mat(0xdfe2ea), 0, 0, 0);
+    }
     var lamp = add(g, box(1.2, 0.3, 0.1), glow(0x4fd8ff, 0.2), 0.75, 2.2, 1.52, true);
     socket(g, 'air', -1.1, 2.7);
     P.air = Object.assign(P.air || {}, { ice: ice, level: level, fan: fan, lamp: lamp, rim: rim });
@@ -194,24 +207,26 @@
 
   // ---------- greenhouse ----------
   function greenhouse() {
-    var g = group(L.food), i;
-    add(g, box(10.5, 0.3, 4.6), soft(0xdfe2ea), 0, 0.15, -0.6);
-    var glass = new T.Mesh(new T.CylinderGeometry(3.3, 3.3, 10.2, 22, 1, true, Math.PI / 2 - 0.25, Math.PI / 2 + 0.25),
-      new T.MeshStandardMaterial({ color: 0xc8f0ff, transparent: true, opacity: 0.24, roughness: 0.08, side: T.DoubleSide, depthWrite: false }));
-    glass.rotation.z = Math.PI / 2; glass.position.set(0, 0.3, 0.9); g.add(glass);
-    var rib = soft(0xf2f3f7);
-    for (i = 0; i < 5; i++) {
-      var r = add(g, new T.TorusGeometry(3.3, 0.09, 6, 16, Math.PI / 2 + 0.25), rib, -5.1 + i * 2.55, 0.3, 0.9);
-      r.rotation.set(0, Math.PI / 2, 0);
+    var g = group(L.food), i, mdl = model('greenhouse');
+    // Blender greenhouse: paved floor, aluminium ribs over glass, framed ends with a door, hydroponic trays, tank cage
+    if (mdl) g.add(mdl);
+    else {
+      add(g, box(10.5, 0.3, 4.6), soft(0xdfe2ea), 0, 0.15, -0.6);
+      var glass = new T.Mesh(new T.CylinderGeometry(3.3, 3.3, 10.2, 22, 1, true, Math.PI / 2 - 0.25, Math.PI / 2 + 0.25),
+        new T.MeshStandardMaterial({ color: 0xc8f0ff, transparent: true, opacity: 0.24, roughness: 0.08, side: T.DoubleSide, depthWrite: false }));
+      glass.rotation.z = Math.PI / 2; glass.position.set(0, 0.3, 0.9); g.add(glass);
+      var rib = soft(0xf2f3f7);
+      for (i = 0; i < 5; i++) {
+        var r = add(g, new T.TorusGeometry(3.3, 0.09, 6, 16, Math.PI / 2 + 0.25), rib, -5.1 + i * 2.55, 0.3, 0.9);
+        r.rotation.set(0, Math.PI / 2, 0);
+      }
     }
-    add(g, box(10.2, 0.14, 0.3), glow(0xff5fd0, 0.2), 0, 3.3, -0.3, true);
-    var lampM = g.children[g.children.length - 1].material;
+    var lampM = add(g, box(10.2, 0.14, 0.3), glow(0xff5fd0, 0.2), 0, 3.3, -0.3, true).material;
     var light = new T.PointLight(0xff5fd0, 0, 13, 2); light.position.set(0, 2.6, 0.2); g.add(light);
     var beds = [], leafA = mat(0x4fd15a), leafB = mat(0x2fa64a), fruitM = glow(0xff4a3a, 0.5), soil = mat(0x4a3324);
     for (i = 0; i < R.beds; i++) {
       var bx = -3.6 + i * 2.4;
-      add(g, box(2.0, 0.7, 1.7), soft(0xdfe2ea), bx, 0.65, 0.2);
-      add(g, box(1.8, 0.12, 1.5), soil, bx, 1.02, 0.2);
+      if (!mdl) { add(g, box(2.0, 0.7, 1.7), soft(0xdfe2ea), bx, 0.65, 0.2); add(g, box(1.8, 0.12, 1.5), soil, bx, 1.02, 0.2); }
       var pg = new T.Group(); pg.position.set(bx, 1.08, 0.2); g.add(pg);
       var fruits = [];
       for (var k = 0; k < 5; k++) {
@@ -256,20 +271,26 @@
 
   // ---------- science lab ----------
   function lab() {
-    var g = group(L.lab), white = soft(0xf2f3f7);
-    var body = add(g, new T.CapsuleGeometry(2.2, 4.2, 8, 20), white, 0, 2.8, -0.6); body.rotation.z = Math.PI / 2;
-    [-1.7, 0, 1.7].forEach(function (x) { add(g, new T.TorusGeometry(2.23, 0.12, 6, 26), soft(0xffb84d), x, 2.8, -0.6).rotation.y = Math.PI / 2; });
-    [-2.2, 2.2].forEach(function (x) { [-1.6, 0.4].forEach(function (z) { add(g, cyl(0.14, 0.2, 1.2, 6), mat(0x8a8fa0), x, 0.5, z); }); });
+    var g = group(L.lab), white = soft(0xf2f3f7), mdl = model('lab'), arm;
+    // Blender lab: panelled hull with orange rings, landing legs, observatory dome, radiator, workbench (the arm swings)
+    if (mdl) { g.add(mdl); arm = mdl.getObjectByName('lab_arm'); }
+    else {
+      var body = add(g, new T.CapsuleGeometry(2.2, 4.2, 8, 20), white, 0, 2.8, -0.6); body.rotation.z = Math.PI / 2;
+      [-1.7, 0, 1.7].forEach(function (x) { add(g, new T.TorusGeometry(2.23, 0.12, 6, 26), soft(0xffb84d), x, 2.8, -0.6).rotation.y = Math.PI / 2; });
+      [-2.2, 2.2].forEach(function (x) { [-1.6, 0.4].forEach(function (z) { add(g, cyl(0.14, 0.2, 1.2, 6), mat(0x8a8fa0), x, 0.5, z); }); });
+      add(g, new T.SphereGeometry(1.0, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2), soft(0xdfe2ea), 1.4, 4.9, -0.6);
+      var scope = add(g, cyl(0.24, 0.3, 1.9, 10), soft(0x3a4058), 1.4, 5.8, -0.3); scope.rotation.x = 0.6;
+      add(g, box(2.2, 0.2, 1.4), soft(0x8a8fa0), -1.6, 1.0, 2.5);
+      add(g, cyl(0.12, 0.12, 1.0, 6), mat(0x8a8fa0), -1.6, 0.5, 2.5);
+    }
     var screen = add(g, box(1.9, 1.1, 0.1), glow(0x9fe8ff, 0.3), 1.2, 2.9, 1.62, true);
-    add(g, new T.SphereGeometry(1.0, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2), soft(0xdfe2ea), 1.4, 4.9, -0.6);
-    var scope = add(g, cyl(0.24, 0.3, 1.9, 10), soft(0x3a4058), 1.4, 5.8, -0.3); scope.rotation.x = 0.6;
-    add(g, box(2.2, 0.2, 1.4), soft(0x8a8fa0), -1.6, 1.0, 2.5);
-    add(g, cyl(0.12, 0.12, 1.0, 6), mat(0x8a8fa0), -1.6, 0.5, 2.5);
     hopper(g, 'lab', -1.6, 1.7, 2.5, 0.95, 0xffb84d);
     var tubes = [];
     for (var i = 0; i < R.labQueue; i++) { var t = add(g, cyl(0.1, 0.1, 0.6, 8), glow(0xffb84d, 1.2), -2.1 + i * 0.33, 1.4, 1.75, true); t.visible = false; tubes.push(t); }
-    var arm = new T.Group(); arm.position.set(-0.4, 2.1, 1.5); g.add(arm);
-    add(arm, box(0.16, 0.16, 1.5), soft(0x3a4058), 0, 0, 0.7); add(arm, ball(0.18, 8, 8), soft(0xffb84d), 0, 0, 1.45);
+    if (!arm) {
+      arm = new T.Group(); arm.position.set(-0.4, 2.1, 1.5); g.add(arm);
+      add(arm, box(0.16, 0.16, 1.5), soft(0x3a4058), 0, 0, 0.7); add(arm, ball(0.18, 8, 8), soft(0xffb84d), 0, 0, 1.45);
+    }
     socket(g, 'lab', 2.6, 2.6);
     P.lab = Object.assign(P.lab || {}, { screen: screen, tubes: tubes, arm: arm });
     B.pos.lab = wp(g, 0, 7, -0.6);
@@ -280,15 +301,24 @@
 
   // ---------- radio dish ----------
   function comms() {
-    var g = group(L.comms), steel = mat(0xdfe2ea, { flatShading: false });
-    add(g, cyl(1.4, 1.8, 0.7, 10), soft(0x3a4058), 0, 0.35, 0);
-    [[-0.6, -0.6], [0.6, -0.6], [0.6, 0.6], [-0.6, 0.6]].forEach(function (p) { add(g, cyl(0.07, 0.09, 7, 5), steel, p[0], 4.0, p[1]); });
-    for (var y = 1.6; y < 7.4; y += 1.45) add(g, box(1.4, 0.08, 1.4), steel, 0, y, 0);
+    var g = group(L.comms), steel = mat(0xdfe2ea, { flatShading: false }), mdl = model('radio_dish'), i;
     var head = new T.Group(); head.position.set(0, 8.0, 0); g.add(head);
-    var pts = [];
-    for (var i = 0; i <= 10; i++) { var r = (i / 10) * 3.1; pts.push(new T.Vector2(r, r * r * 0.16)); }
-    add(head, new T.LatheGeometry(pts, 28), new T.MeshStandardMaterial({ color: 0xf2f3f7, roughness: 0.5, side: T.DoubleSide }), 0, 0, 0);
-    add(head, cyl(0.04, 0.04, 2.2, 5), mat(0x8a8fa0), 0, 1.1, 0);
+    if (mdl) {
+      // Blender dish: concrete footing, braced lattice tower with a caged ladder, equipment cabinet; the reflector
+      // with its back frame and feed horn (dish_head) moves into the head group so the game can aim it
+      g.add(mdl);
+      var dh = mdl.getObjectByName('dish_head');
+      if (dh) { head.add(dh); dh.position.set(0, 0, 0); }
+      collide(g, -2.25, 0.7, 0.65);
+    } else {
+      add(g, cyl(1.4, 1.8, 0.7, 10), soft(0x3a4058), 0, 0.35, 0);
+      [[-0.6, -0.6], [0.6, -0.6], [0.6, 0.6], [-0.6, 0.6]].forEach(function (p) { add(g, cyl(0.07, 0.09, 7, 5), steel, p[0], 4.0, p[1]); });
+      for (var y = 1.6; y < 7.4; y += 1.45) add(g, box(1.4, 0.08, 1.4), steel, 0, y, 0);
+      var pts = [];
+      for (i = 0; i <= 10; i++) { var r = (i / 10) * 3.1; pts.push(new T.Vector2(r, r * r * 0.16)); }
+      add(head, new T.LatheGeometry(pts, 28), new T.MeshStandardMaterial({ color: 0xf2f3f7, roughness: 0.5, side: T.DoubleSide }), 0, 0, 0);
+      add(head, cyl(0.04, 0.04, 2.2, 5), mat(0x8a8fa0), 0, 1.1, 0);
+    }
     var tip = add(head, ball(0.2, 10, 10), glow(0xff8fb8, 0.3), 0, 2.2, 0, true);
     var waves = [];
     for (var k = 0; k < 3; k++) {

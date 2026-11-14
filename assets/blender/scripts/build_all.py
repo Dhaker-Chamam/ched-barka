@@ -7,12 +7,14 @@ ASSETS = os.path.dirname(os.path.dirname(SCRIPTS))
 MODELS = os.path.join(ASSETS, 'models')
 if SCRIPTS not in sys.path: sys.path.insert(0, SCRIPTS)
 
-BUILD = ['build_rocks', 'build_flag', 'build_astronaut', 'build_habitat', 'build_rocket', 'build_rover', 'build_props']
+BUILD = ['build_rocks', 'build_flag', 'build_astronaut', 'build_habitat', 'build_rocket', 'build_rover', 'build_props', 'build_machines']
 EXPORT = [  # root object -> file name
     ('Rocket', 'rocket'), ('Habitat', 'habitat'), ('Astronaut', 'astronaut'), ('Flag', 'flag'), ('FlagMarker', 'flag_marker'),
     ('Rocks', 'rocks'), ('Rover', 'rover'), ('Buddy', 'buddy'), ('PowerCell', 'power_cell'), ('FoodCrate', 'food_crate'),
     ('SupplyCase', 'supply_case'), ('SoilBag', 'soil_bag'), ('CoreSample', 'core_sample'), ('Instrument', 'instrument'),
     ('PathLantern', 'path_lantern'), ('SolarPanel', 'solar_panel'), ('Telescope', 'telescope'),
+    ('AirMaker', 'air_maker'), ('ChargeRack', 'charge_rack'), ('Greenhouse', 'greenhouse'), ('Lab', 'lab'),
+    ('RadioDish', 'radio_dish'), ('Socket', 'socket'), ('Hopper', 'hopper'),
 ]
 
 

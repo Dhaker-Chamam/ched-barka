@@ -6,12 +6,20 @@ with +Y up lands back on the exact numbers used in js/base.js and js/actors.js.
 
 Angles around the vertical axis use the game's convention: az = 0 faces +z (front), az = pi/2 faces +x.
 """
-import bpy, bmesh, math, os, random, colorsys
+import bpy, bmesh, math, os, random, colorsys, json
 from mathutils import Vector, Matrix, Quaternion, noise as mnoise
 
 TAU = math.tau
 PI = math.pi
 ASSET_BLEND = 'astro_outpost_assets.blend'
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+TEXDIR = os.path.join(REPO, 'assets', 'textures')
+try:                                     # made by make_textures.py: where each label sits on the sheet, metres per texture repeat
+    with open(os.path.join(TEXDIR, 'decals.json'), encoding='utf-8') as _f: _DEC = json.load(_f)
+except OSError:
+    _DEC = {'size': [1024, 1024], 'cells': {}, 'tile': {}}
+DECALS = _DEC['cells']
+TILE = _DEC['tile']
 
 # ---------------------------------------------------------------- shared palette: grey metal, sparse accents
 PANELS = [0xB9BEC5, 0xA9AFB7, 0xC6CBD1, 0x9DA3AC, 0xB2B7BE]   # light steel panels (vary per panel)
@@ -363,7 +371,7 @@ MATS = {
     'Rock':       dict(vcol=True, rough=0.95, metal=0.0, tint=0x9A9EA6),
     'Visor':      dict(color=0xFFB733, rough=0.14, metal=0.9, emit=0.35, ecolor=0x6B4A08),
     'DarkGlass':  dict(color=0x10182C, rough=0.16, metal=0.3),
-    'SolarGlass': dict(vcol=True, rough=0.22, metal=0.4, emit=0.3, ecolor=0x1B3F96),   # blue lives in the vertex colours: the game tints material.color for dust
+    'SolarGlass': dict(vcol=True, rough=1.0, metal=0.15, tex='solar', nrm=0.8, emit=0.3, ecolor=0x1B3F96),   # solar cells (texture); the game tints material.color for dust
     'Glow_Warm':  dict(color=0xFFC766, emit=2.6),
     'Glow_Cool':  dict(color=0x7FE6FF, emit=2.2),
     'Glow_Green': dict(color=0x4DFF9A, emit=2.4),
@@ -375,13 +383,70 @@ MATS = {
     'Glow_Inst':  dict(color=0x5CF0FF, emit=0.9),    # instrument band: the game colours it per instrument
     'Sack':       dict(vcol=True, rough=0.95, metal=0.0, tint=0xB8926A),   # soil bag: tint per site
     'Ice':        dict(color=0xDFF7FF, rough=0.15, metal=0.0, emit=0.9, ecolor=0x58C8FF),
+    # ---- textured (the machines): `tex` names a set made by make_textures.py; its roughness map holds the real
+    # roughness, so `rough` only scales it. Colour comes from the vertex colours times the texture.
+    'TexPanel':   dict(vcol=True, rough=1.0, metal=0.35, tex='panel', nrm=1.0),     # painted metal sheeting
+    'TexSteel':   dict(vcol=True, rough=1.0, metal=0.7, tex='steel', nrm=0.6),      # brushed / bare steel
+    'TexFoil':    dict(vcol=True, rough=1.0, metal=0.85, tex='foil', nrm=1.0),      # gold insulation blanket (paint it white)
+    'TexTread':   dict(vcol=True, rough=1.0, metal=0.55, tex='tread', nrm=1.0),     # diamond tread plate decks
+    'TexPad':     dict(vcol=True, rough=1.0, metal=0.0, tex='pad', nrm=1.0),        # sintered regolith pavers
+    'TexSoil':    dict(vcol=True, rough=1.0, metal=0.0, tex='soil', nrm=1.0),       # growing medium (paint it white)
+    'Decal':      dict(vcol=True, rough=0.6, metal=0.1, tex='decals', alpha=0.45),  # labels: colour = vertex colour x the sheet
+    'Glass':      dict(color=0xCFEFFF, rough=0.05, metal=0.1, opacity=0.2),         # see-through panes (no shadow)
 }
+
+
+def _tex_node(nt, path, loc, colour=True):
+    img = bpy.data.images.get(os.path.basename(path))
+    if img is None and os.path.exists(path):
+        img = bpy.data.images.load(path, check_existing=True)
+    n = nt.nodes.new('ShaderNodeTexImage'); n.location = loc
+    if img is not None:
+        n.image = img
+        img.colorspace_settings.name = 'sRGB' if colour else 'Non-Color'
+    uv = nt.nodes.new('ShaderNodeUVMap'); uv.uv_map = 'UVMap'; uv.location = (loc[0] - 220, loc[1])
+    nt.links.new(uv.outputs['UV'], n.inputs['Vector'])
+    return n
+
+
+def _textured(m, spec):
+    """Blender preview of a textured material (the game builds its own from the same pictures)."""
+    nt = m.node_tree
+    bsdf = next(n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED')
+    ca = nt.nodes.new('ShaderNodeVertexColor'); ca.layer_name = 'Col'; ca.location = (-520, 420)
+    t = spec['tex']
+    if t == 'decals':
+        c = _tex_node(nt, os.path.join(TEXDIR, 'decals.png'), (-520, 160))
+        nt.links.new(c.outputs['Alpha'], bsdf.inputs['Alpha'])
+        try: m.surface_render_method = 'DITHERED'
+        except Exception: pass
+    else:
+        c = _tex_node(nt, os.path.join(TEXDIR, t + '_c.jpg'), (-520, 160))
+        r = _tex_node(nt, os.path.join(TEXDIR, t + '_r.jpg'), (-520, -100), colour=False)
+        nm = _tex_node(nt, os.path.join(TEXDIR, t + '_n.jpg'), (-520, -360), colour=False)
+        nn = nt.nodes.new('ShaderNodeNormalMap'); nn.location = (-240, -360); nn.inputs['Strength'].default_value = spec.get('nrm', 1.0)
+        nt.links.new(nm.outputs['Color'], nn.inputs['Color']); nt.links.new(nn.outputs['Normal'], bsdf.inputs['Normal'])
+        nt.links.new(r.outputs['Color'], bsdf.inputs['Roughness'])
+    mx = nt.nodes.new('ShaderNodeMix'); mx.data_type = 'RGBA'; mx.blend_type = 'MULTIPLY'; mx.location = (-240, 300)
+    mx.inputs[0].default_value = 1.0
+    nt.links.new(ca.outputs['Color'], mx.inputs[6]); nt.links.new(c.outputs['Color'], mx.inputs[7])
+    nt.links.new(mx.outputs[2], bsdf.inputs['Base Color'])
+    bsdf.inputs['Metallic'].default_value = spec.get('metal', 0.0)
+    if spec.get('emit'):
+        bsdf.inputs['Emission Color'].default_value = tuple(_lin(c) for c in rgb(spec['ecolor'])) + (1.0,)
+        bsdf.inputs['Emission Strength'].default_value = spec['emit']
+    m.use_backface_culling = True
+    return m
 
 
 def get_mat(name):
     m = bpy.data.materials.get(name)
     if m: return m
     spec = MATS[name]
+    if spec.get('tex'):
+        m = bpy.data.materials.new(name)
+        if not m.node_tree: m.use_nodes = True
+        return _textured(m, spec)
     m = bpy.data.materials.new(name)
     if not m.node_tree: m.use_nodes = True
     nt = m.node_tree
@@ -410,8 +475,54 @@ def get_mat(name):
             bsdf.inputs['Emission Strength'].default_value = spec['emit']
             if 'rough' not in spec: bsdf.inputs['Roughness'].default_value = 0.4
         m.diffuse_color = tuple(rgb(spec['color'])) + (1.0,)
-    m.use_backface_culling = True
+        if spec.get('opacity') is not None:
+            bsdf.inputs['Alpha'].default_value = spec['opacity']
+            try: m.surface_render_method = 'BLENDED'
+            except Exception: pass
+    m.use_backface_culling = spec.get('opacity') is None
     return m
+
+
+def textured(mat):
+    return bool(MATS.get(mat, {}).get('tex'))
+
+
+# ---------------------------------------------------------------- texture coordinates
+def _face_normal(pts):
+    nx = ny = nz = 0.0
+    k = len(pts)
+    for i in range(k):
+        a = pts[i]; b = pts[(i + 1) % k]
+        nx += (a[1] - b[1]) * (a[2] + b[2]); ny += (a[2] - b[2]) * (a[0] + b[0]); nz += (a[0] - b[0]) * (a[1] + b[1])
+    ln = math.sqrt(nx * nx + ny * ny + nz * nz)
+    return (nx / ln, ny / ln, nz / ln) if ln > 0 else (0.0, 1.0, 0.0)
+
+
+def uv_box(pts):
+    """Project a face on the axis plane it faces most (metres), oriented as seen from outside."""
+    nx, ny, nz = _face_normal(pts)
+    ax, ay, az = abs(nx), abs(ny), abs(nz)
+    if ax >= ay and ax >= az:
+        s = 1 if nx > 0 else -1
+        return [(-p[2] * s, p[1]) for p in pts]
+    if az >= ay:
+        s = 1 if nz > 0 else -1
+        return [(p[0] * s, p[1]) for p in pts]
+    s = 1 if ny > 0 else -1
+    return [(p[0], -p[2] * s) for p in pts]
+
+
+def uv_cyl(pts):
+    """Wrap around the local y axis (metres along the surface); flat caps get a top-down projection."""
+    nx, ny, nz = _face_normal(pts)
+    if abs(ny) > 0.75:
+        s = 1 if ny > 0 else -1
+        return [(p[0], -p[2] * s) for p in pts]
+    angs = [math.atan2(p[0], p[2]) for p in pts]
+    if max(angs) - min(angs) > PI:
+        angs = [a + TAU if a < 0 else a for a in angs]
+    rad = sum(math.hypot(p[0], p[2]) for p in pts) / len(pts)
+    return [(a * rad, p[1]) for a, p in zip(angs, pts)]
 
 
 # ---------------------------------------------------------------- Part: accumulates one mesh object
@@ -419,14 +530,18 @@ class Part:
     def __init__(self, name, seed=1):
         self.name = name
         self.rng = random.Random(seed)
-        self.V, self.F, self.C, self.M, self.S = [], [], [], [], []
+        self.V, self.F, self.C, self.M, self.S, self.U = [], [], [], [], [], []
         self.stack = [Matrix.Identity(4)]
 
     # transform stack
     def push(self, M): self.stack.append(self.stack[-1] @ M)
     def pop(self): self.stack.pop()
 
-    def add(self, geo, col, M=None, mat='Paint', smooth=False, jit=0.05, fjit=0.02, flip=False):
+    def add(self, geo, col, M=None, mat='Paint', smooth=False, jit=0.05, fjit=0.02, flip=False, uv=None):
+        """uv (textured materials only): None = box projection of the finished shape; 'cyl' = wrapped around the
+        shape's own y axis (lathes, cylinders); 'lbox' = box projection in the shape's own axes (turns with it);
+        'y' = straight down the shape's own y axis (dishes, domes seen from above).
+        Labels use decal() instead."""
         verts, faces = geo
         if _closed(faces):
             if _signed_volume(verts, faces) < 0: faces = [f[::-1] for f in faces]
@@ -451,6 +566,11 @@ class Part:
             else:
                 fc = jitter(pc, self.rng, fjit) if fjit else pc
             self.F.append([base + i for i in f]); self.C.append(fc); self.M.append(mat); self.S.append(smooth)
+            if not textured(mat) or uv is None: self.U.append(None)
+            elif uv == 'cyl': self.U.append(('m', uv_cyl([lv[i] for i in f])))
+            elif uv == 'lbox': self.U.append(('m', uv_box([lv[i] for i in f])))
+            elif uv == 'y': self.U.append(('m', [(lv[i][0], -lv[i][2]) for i in f]))
+            else: self.U.append(None)
         return self
 
     def stamp(self, other, M=None, jit=0.0):
@@ -464,6 +584,25 @@ class Part:
             idx = [base + i for i in f]
             if neg: idx.reverse()
             self.F.append(idx); self.C.append(shade(c, k)); self.M.append(m); self.S.append(s)
+        self.U.extend(other.U)
+        return self
+
+    def decal(self, cell, M, w, h=None, col=0xFFFFFF, lift=0.004, mat='Decal'):
+        """A label from the decal sheet: a w x h quad in the local xy plane, facing local +z, lifted off the surface."""
+        u0, v0, u1, v1 = DECALS[cell]
+        if h is None:
+            W, H = _DEC['size']
+            h = w * ((v1 - v0) * H) / ((u1 - u0) * W)
+        X = (self.stack[-1] @ M if M is not None else self.stack[-1]) @ T(0, 0, lift)
+        base = len(self.V)
+        for (x, y) in ((-w / 2, -h / 2), (w / 2, -h / 2), (w / 2, h / 2), (-w / 2, h / 2)):
+            self.V.append(X @ Vector((x, y, 0)))
+        f = [base, base + 1, base + 2, base + 3]
+        if X.to_3x3().determinant() < 0: f.reverse()
+        self.F.append(f); self.C.append(rgb(col)); self.M.append(mat); self.S.append(False)
+        uvs = [(u0, v0), (u1, v0), (u1, v1), (u0, v1)]
+        if X.to_3x3().determinant() < 0: uvs.reverse()
+        self.U.append(('a', uvs))
         return self
 
     # shortcuts ---------------------------------------------------------
@@ -471,9 +610,11 @@ class Part:
         return self.add(g_box(w, h, d, bevel, top), col, T(*at) @ ROT(*rot), **kw)
 
     def cyl(self, r0, r1, h, col, at=(0, 0, 0), rot=(0, 0, 0), n=12, bevel=0.0, **kw):
+        kw.setdefault('uv', 'cyl')
         return self.add(g_cyl(r0, r1, h, n, bevel), col, T(*at) @ ROT(*rot), **kw)
 
     def lathe(self, profile, col, at=(0, 0, 0), rot=(0, 0, 0), n=16, az0=0.0, sweep=TAU, caps=True, **kw):
+        kw.setdefault('uv', 'cyl')
         return self.add(g_lathe(profile, n, az0, sweep, caps), col, T(*at) @ ROT(*rot), **kw)
 
     def sphere(self, r, col, at=(0, 0, 0), rot=(0, 0, 0), scale=(1, 1, 1), n=14, m=8, t0=0.0, t1=PI, **kw):
@@ -510,6 +651,25 @@ class Part:
         for nme in names: mesh.materials.append(get_mat(nme))
         mesh.polygons.foreach_set('material_index', [names.index(m) for m in self.M])
         mesh.polygons.foreach_set('use_smooth', self.S)
+        if any(textured(m) for m in names):
+            # texture coordinates, in repeats of each material's texture; every face is shifted by whole repeats
+            # so the numbers stay small (the game packs them as 16-bit integers)
+            uvl = mesh.uv_layers.new(name='UVMap')
+            flat = []
+            for fi, f in enumerate(self.F):
+                mt = self.M[fi]
+                if not textured(mt):
+                    flat.extend((0.0, 0.0) * len(f)); continue
+                u = self.U[fi]
+                if u is None: kind, pts = 'm', uv_box([V[i] for i in f])
+                else: kind, pts = u
+                if kind == 'm':
+                    tl = TILE.get(MATS[mt]['tex'], 1.0)
+                    pts = [(a / tl, b / tl) for (a, b) in pts]
+                    du = math.floor(min(a for a, _ in pts)); dv = math.floor(min(b for _, b in pts))
+                    pts = [(a - du, b - dv) for (a, b) in pts]
+                for (a, b) in pts: flat.extend((a, b))
+            uvl.data.foreach_set('uv', flat)
         attr = mesh.color_attributes.new('Col', 'FLOAT_COLOR', 'CORNER')
         data = []
         for fi, f in enumerate(self.F):

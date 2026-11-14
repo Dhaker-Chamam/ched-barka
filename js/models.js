@@ -8,9 +8,24 @@
    game keeps drawing its own simple shapes. */
 (function (JA) {
   'use strict';
-  var T = window.THREE, D = window.JA_MODELS || null;
+  var T = window.THREE, D = window.JA_MODELS || null, TX = window.JA_TEXTURES || {};
   var M = JA.models = { has: function () { return false; } };
   if (!T || !D || !D.models) return;
+  var texs = {}, aniso = 4;                              // the machine textures (js/textures-data.js), shared by every copy
+
+  // A texture from js/textures-data.js (data: URLs, so it also works when the game is opened from disk).
+  // It starts empty and fills in a moment later, when the picture has been decoded.
+  function tex(name, colour) {
+    if (texs[name]) return texs[name];
+    if (!TX[name]) return null;
+    var img = new Image(), t = new T.Texture(img);
+    img.onload = function () { t.needsUpdate = true; };
+    img.src = TX[name];
+    t.wrapS = t.wrapT = T.RepeatWrapping;
+    t.anisotropy = aniso;
+    if (colour) t.encoding = T.sRGBEncoding;
+    return (texs[name] = t);
+  }
 
   var LIN = new Float32Array(256);                       // sRGB byte -> linear
   for (var i = 0; i < 256; i++) { var c = i / 255; LIN[i] = c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
@@ -23,7 +38,7 @@
     return u8.buffer;
   }
 
-  function decode(pr, s) {
+  function decode(pr, s, us) {
     var p = new Int16Array(bytes(pr.P)), n = new Int8Array(bytes(pr.N)), cnt = p.length / 3, k;
     var pos = new Float32Array(p.length), nrm = new Float32Array(n.length);
     for (k = 0; k < p.length; k++) { pos[k] = p[k] * s; nrm[k] = n[k] / 127; }
@@ -35,6 +50,11 @@
       for (k = 0; k < c8.length; k++) col[k] = LIN[c8[k]];
       g.setAttribute('color', new T.BufferAttribute(col, 3));
     }
+    if (pr.U) {                                          // texture coordinates (textured materials only)
+      var u16 = new Int16Array(bytes(pr.U)), uv = new Float32Array(u16.length);
+      for (k = 0; k < u16.length; k++) uv[k] = u16[k] * us;
+      g.setAttribute('uv', new T.BufferAttribute(uv, 2));
+    }
     g.setIndex(new T.BufferAttribute(pr.w === 4 ? new Uint32Array(bytes(pr.I)) : new Uint16Array(bytes(pr.I)), 1));
     g.computeBoundingSphere();
     return g;
@@ -43,16 +63,27 @@
   function geometry(name) {
     if (geos[name]) return geos[name];
     var m = D.models[name];
-    return (geos[name] = m.nodes.map(function (nd) { return nd.g.map(function (pr) { return decode(pr, m.s); }); }));
+    return (geos[name] = m.nodes.map(function (nd) { return nd.g.map(function (pr) { return decode(pr, m.s, m.us); }); }));
   }
 
   function material(name) {
     var d = D.materials[name] || { c: [1, 1, 1], r: 0.6, m: 0, vc: 1 };
     var o = { color: new T.Color(d.c[0], d.c[1], d.c[2]), roughness: d.r, metalness: d.m, vertexColors: !!d.vc };
     if (d.e) { o.emissive = new T.Color(d.e[0], d.e[1], d.e[2]); o.emissiveIntensity = d.ei; }
+    if (d.t === 'decals') {                              // labels: cut out along the picture's edges
+      o.map = tex('decals', true); o.alphaTest = d.at || 0.5;
+      o.polygonOffset = true; o.polygonOffsetFactor = -2; o.polygonOffsetUnits = -2;
+      if (!o.map) o.visible = false;                     // no label sheet loaded: hide the labels rather than show blank squares
+    } else if (d.t) {                                    // a surface set: colour (or grey detail), bumps, roughness
+      o.map = tex(d.t + '_c', true); o.normalMap = tex(d.t + '_n'); o.roughnessMap = tex(d.t + '_r');
+      if (d.n != null) o.normalScale = new T.Vector2(d.n, d.n);
+      if (!o.map) { delete o.map; delete o.normalMap; delete o.roughnessMap; o.roughness = 0.5; }
+    }
+    if (d.o != null) { o.transparent = true; o.opacity = d.o; o.depthWrite = false; o.side = T.DoubleSide; }
     var mt = new T.MeshStandardMaterial(o);
     mt.name = name;
     if (env && d.m > 0 && !d.e) { mt.envMap = env; mt.envMapIntensity = 0.55 + d.m * 0.5; }
+    else if (env && d.o != null) { mt.envMap = env; mt.envMapIntensity = 1.2; }   // glass shows the sky
     return mt;
   }
 
@@ -79,8 +110,8 @@
     var root = objs[0];
     root.traverse(function (o) {
       if (!o.isMesh) return;
-      var glow = !!(D.materials[o.material.name] || {}).e;
-      o.castShadow = opts.shadow !== false && !glow;
+      var md = D.materials[o.material.name] || {}, glow = !!md.e && !md.t;
+      o.castShadow = opts.shadow !== false && !glow && md.o == null && md.t !== 'decals';
       o.receiveShadow = opts.shadow !== false;
     });
     root.userData.materials = mats;
@@ -98,6 +129,7 @@
   // from that site's sky and ground colours; W.build calls this before the outpost is built.
   M.prepare = function (renderer, look) {
     if (env) { env.dispose(); env = null; }
+    if (renderer && renderer.capabilities) aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy() || 1);
     if (!renderer || !look || !T.PMREMGenerator) return;
     try {
       var sc = new T.Scene(), g = new T.SphereGeometry(50, 32, 16), col = [], p = g.attributes.position;

@@ -91,22 +91,36 @@ def path_lantern(p):
 
 def solar_panel(p):
     # post: a braced steel mast with a ball joint on top (pivot at y = 3.8)
-    p.add(g_tube([(0, -0.2, 0), (0.01, 1.8, 0.0), (0, 3.62, 0)], lambda t: 0.2 - 0.07 * t, 8), PANELS[1], smooth=True, fjit=0.03)
+    # footing: a sintered regolith pad with a bolted base plate
+    p.add(g_cyl(1.25, 1.15, 0.16, 12), 0xB7B2AA, T(0, -0.1, 0), mat='TexPad', uv='cyl')
+    p.add(g_cyl(0.45, 0.45, 0.05, 12), FRAME_D, T(0, 0.06, 0), mat='TexSteel', uv='cyl')
+    for k in range(6):
+        a = k * TAU / 6
+        p.add(g_cyl(0.035, 0.035, 0.04, 6), CHROME, T(math.sin(a) * 0.37, 0.11, math.cos(a) * 0.37), mat='Metal', jit=0)
+    p.add(g_tube([(0, -0.2, 0), (0.01, 1.8, 0.0), (0, 3.62, 0)], lambda t: 0.2 - 0.07 * t, 8), PANELS[1], mat='TexPanel', smooth=True, fjit=0.03)
     for k in range(3):
         a = k * TAU / 3 + 0.5
-        beam(p, (math.sin(a) * 1.0, 0.0, math.cos(a) * 1.0), (math.sin(a) * 0.1, 1.5, math.cos(a) * 0.1), 0.12, 0.12, FRAME, jit=0.06)
+        beam(p, (math.sin(a) * 1.0, 0.0, math.cos(a) * 1.0), (math.sin(a) * 0.1, 1.5, math.cos(a) * 0.1), 0.12, 0.12, FRAME, jit=0.06, mat='TexSteel')
     for k in range(4): p.add(g_torus(0.185, 0.02, 8, 4), CABLE, T(0, 1.42 + k * 0.035, 0), jit=0.03)
-    p.add(g_cyl(0.2, 0.16, 0.3, 8), STEEL, T(0, 3.5, 0), mat='Metal')
-    p.add(g_sphere(0.19, 10, 6), STEEL_D, T(0, 3.8, 0), mat='Metal', smooth=True)
+    # tracker motor and its cable down the mast
+    p.add(g_box(0.34, 0.4, 0.26, 0.03), PANELS[0], T(0.0, 2.4, 0.25), mat='TexPanel')     # low enough to clear the tilting panel
+    p.add(g_tube([(0.0, 2.2, 0.3), (0.05, 1.6, 0.21), (0.05, 0.4, 0.19), (0.3, 0.02, 0.5)], 0.025, 5), CABLE, smooth=True)
+    p.add(g_cyl(0.2, 0.1, 0.22, 8), STEEL, T(0, 3.5, 0), mat='Metal')
+    p.add(g_sphere(0.085, 10, 6), STEEL_D, T(0, 3.8, 0), mat='Metal', smooth=True)   # the joint stays inside the panel when it tilts
     q = Part('solar_panel', 7)
     q.push(T(0, 3.8, 0))
-    q.box(5.8, 0.14, 3.6, FRAME, at=(0, 0, 0), bevel=0.03)
-    q.box(5.6, 0.06, 3.4, 0x1E3C86, at=(0, 0.06, 0), mat='SolarGlass', jit=0, fjit=0.02)
+    q.box(5.8, 0.14, 3.6, FRAME, at=(0, 0, 0), bevel=0.03, mat='TexSteel')
+    q.box(5.6, 0.06, 3.4, 0xFFFFFF, at=(0, 0.06, 0), mat='SolarGlass', jit=0, fjit=0.0)
     for i in range(1, 4): q.box(0.05, 0.02, 3.4, STEEL, at=(-2.8 + i * 1.4, 0.1, 0), mat='Metal')
     for i in range(1, 3): q.box(5.6, 0.02, 0.05, STEEL, at=(0, 0.1, -1.7 + i * 1.133), mat='Metal')
     for sx in (-1, 1):
         for sz in (-1, 1): q.box(0.3, 0.17, 0.3, STEEL, at=(sx * 2.78, 0, sz * 1.68), bevel=0.03, mat='Metal')
-    q.box(0.5, 0.12, 2.6, FRAME_D, at=(0, -0.1, 0))
+    # torque tube, purlins and the junction box under the panel
+    q.add(g_cyl(0.11, 0.11, 5.4, 10), FRAME_D, T(-2.7, -0.17, 0) @ RZ(-PI / 2), mat='TexSteel', uv='cyl')
+    for z in (-1.2, 1.2): q.box(5.4, 0.08, 0.1, FRAME, at=(0, -0.11, z), mat='TexSteel')
+    q.box(0.5, 0.12, 2.6, FRAME_D, at=(0, -0.1, 0), mat='TexSteel')
+    q.box(0.42, 0.1, 0.3, DARK, at=(1.4, -0.12, 0.7), bevel=0.02)
+    q.decal('volt', T(1.4, -0.172, 0.7) @ RX(PI / 2), 0.16)
     q.pop()
     return [(q, (0, 3.8, 0))]
 

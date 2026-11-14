@@ -8,6 +8,8 @@ SPOTS = {  # root name: (x, y, z) in Blender units (y negative = toward the fron
     'PowerCell': (-6, -4, 0.4), 'FoodCrate': (-4.2, -4, 0.25), 'SupplyCase': (-2.4, -4, 0.25), 'SoilBag': (-0.6, -4, 0.3),
     'CoreSample': (1.0, -4, 0.35), 'Instrument': (2.4, -4, 0.35),
     'Rocks': (0, -9, 0),
+    'AirMaker': (-24, -20, 0), 'ChargeRack': (-13, -20, 0), 'Greenhouse': (0, -20, 0), 'Lab': (15, -20, 0),
+    'RadioDish': (28, -20, 0), 'Socket': (4.5, -4, 0), 'Hopper': (6.8, -4, 0.62),
 }
 
 
