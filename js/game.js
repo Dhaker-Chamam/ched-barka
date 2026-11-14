@@ -392,7 +392,7 @@
     else if (JA.interior) offer(d2(p, sp.rocketDoor), 3.4, { label: 'Climb into the rocket', run: function () { goInside('rocket'); } });
     ext('alien', 'offer', p, offer, startDance);
     for (i = 0; i < sp.photo.length; i++) (function (i) {
-      if (!s.photos[i]) offer(d2(p, sp.photo[i]), 2.6, { label: 'Take a postcard photo', run: function () { var f = sim.photo(s, i); if (f) { Au.play('photo'); U.fade(true); setTimeout(function () { U.fade(false); }, 140); U.card(f); } } });
+      if (!s.photos[i]) offer(d2(p, sp.photo[i]), 2.6, { label: 'Take a postcard photo', run: function () { var f = sim.photo(s, i); if (f) { Au.play('photo'); if (JA.fx) JA.fx.snap(); U.fade(true); setTimeout(function () { U.fade(false); }, 140); U.card(f); } } });
     })(i);
     ext('sky', 'offer', s, p, offer, collectRock);
     return best;
@@ -690,7 +690,7 @@
     U.show(el, show);
     if (show) el.textContent = f.icon + ' ' + f.name;
   }
-  function setFx(on) { if (JA.fx) JA.fx.setOn(on); fxTag(); }
+  function nextFx() { if (JA.fx) JA.fx.nextLevel(); fxTag(); }          // full, lite, off
   function nextFilter() {
     if (!JA.fx || !JA.fx.available()) return;
     if (!JA.fx.on) JA.fx.setOn(true);
@@ -761,7 +761,7 @@
         (JA.sunwatch ? extra('sun', '☀️', 'Sun Watch', 'The real NASA flares behind your mission.') : '') +
         (JA.music ? extra('music', '🎵', 'Music', musicOn() ? 'On. Pick to switch it off.' : 'Off. Pick to switch it on.', musicOn()) : '') +
         (JA.fx && JA.fx.available() ? extra('filter', JA.fx.current().icon, 'Camera: ' + JA.fx.current().name, touch ? 'See like a real space camera. Pick to change.' : 'See like a real space camera. Key: L') +
-          extra('fx', '✨', 'Film effects', (JA.fx.on ? 'On: glow, lens flare, film grain.' : 'Off: the plain picture.') + (touch ? '' : ' Key: X'), JA.fx.on) : '') + '</div>' +
+          extra('fx', '✨', 'Camera effects: ' + JA.fx.LEVELS[JA.fx.level], (JA.fx.level === 2 ? 'Glow, lens flare, film grain.' : JA.fx.level === 1 ? 'A lighter version for slower devices.' : 'The plain picture.') + (touch ? ' Pick to change.' : ' Key: X'), JA.fx.level > 0) : '') + '</div>' +
         '<div class="modal-actions"><button class="btn ghost" data-act="quit">Quit mission</button><button class="btn ghost" data-act="how">How to play</button><button class="btn primary" data-act="ok">Back to work ▶</button></div>',
         { cls: 'wide pause', noFocus: true, actions: {
           shift: function (el) { var v = parseInt(el.getAttribute('data-v'), 10); sim.setDayLength(s, v); G.opts.shift = v; Au.play('tap'); draw(); refocus('[data-act="shift"][data-v="' + v + '"]'); },
@@ -770,7 +770,7 @@
           sun: function () { Au.play('tap'); ext('sunwatch', 'open', s, G.weather); },
           music: function () { setMusic(!musicOn()); Au.play('tap'); draw(); refocus('[data-act="music"]'); },
           filter: function () { nextFilter(); draw(); refocus('[data-act="filter"]'); },
-          fx: function () { setFx(!JA.fx.on); Au.play('tap'); draw(); refocus('[data-act="fx"]'); },
+          fx: function () { nextFx(); Au.play('tap'); draw(); refocus('[data-act="fx"]'); },
           how: function () { Au.play('tap'); howInfo(); },
           quit: function () { Au.play('tap'); U.closeModal(); titleScene(); },
           ok: function () { Au.play('tap'); U.closeModal(); }
@@ -788,6 +788,7 @@
       G.bannerUntil = G.clock + 1;
     } else if (ph === 'active') {
       W.env.storm = 1; U.stormFx(outside ? 'active' : 'inside');
+      if (outside && JA.fx && JA.fx.level && s.t > st.start + 2) tip('flashes', 'See those tiny streaks of light? Astronauts really see flashes like that when space radiation zips through their eyes!');
       U.banner(outside ? '☢️ RADIATION STORM! Get inside!' : '☢️ Storm outside — home shield blocks ' + Math.round(sim.shield(s) * 100) + '%', outside ? 'active' : '');
       G.bannerUntil = G.clock + 1;
       G.geiger -= G.dt;
@@ -1223,7 +1224,7 @@
   function howInfo() {
     var keys = touch
       ? '<div class="keys"><span>🕹️</span><div>Left stick: walk (push all the way to run) · drive the rover</div><span>⏸</span><div>Pause · change how long a day lasts</div><span>👆</span><div>Drag anywhere to look around</div><span>✋</span><div>Use, pick up, plug in, drill (hold)</div><span>🎯</span><div>Hold to aim a throw, let go to throw</div><span>⤴</span><div>Jump</div><span>👁</span><div>Helmet view: see through your own visor</div></div>'
-      : '<div class="keys"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><div>Walk · drive the rover (arrow keys work too)</div><span><kbd>Mouse</kbd></span><div>Drag to look around · wheel to zoom</div><span><kbd>E</kbd></span><div>Use, pick up, plug in, drill (hold)</div><span><kbd>F</kbd></span><div>Hold to aim a throw, let go to throw</div><span><kbd>Space</kbd></span><div>Jump</div><span><kbd>Shift</kbd></span><div>Run (uses more air)</div><span><kbd>Q</kbd></span><div>Put down what you are holding</div><span><kbd>V</kbd></span><div>Helmet view: see through your own visor (A and D turn you)</div><span><kbd>C</kbd></span><div>Save a postcard picture</div><span><kbd>L</kbd></span><div>Camera filter: see like a real space camera</div><span><kbd>X</kbd></span><div>Film effects on or off</div></div>';
+      : '<div class="keys"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><div>Walk · drive the rover (arrow keys work too)</div><span><kbd>Mouse</kbd></span><div>Drag to look around · wheel to zoom</div><span><kbd>E</kbd></span><div>Use, pick up, plug in, drill (hold)</div><span><kbd>F</kbd></span><div>Hold to aim a throw, let go to throw</div><span><kbd>Space</kbd></span><div>Jump</div><span><kbd>Shift</kbd></span><div>Run (uses more air)</div><span><kbd>Q</kbd></span><div>Put down what you are holding</div><span><kbd>V</kbd></span><div>Helmet view: see through your own visor (A and D turn you)</div><span><kbd>C</kbd></span><div>Save a postcard picture</div><span><kbd>L</kbd></span><div>Camera filter: see like a real space camera</div><span><kbd>X</kbd></span><div>Camera effects: full, lite or off</div></div>';
     openInfo('<h2>How to play</h2>' + keys +
       '<div class="info-row"><span class="ic">🔋</span><div><b>Power cells</b><p>The Solar Rack charges a few cells each day. Carry or throw each one into a machine\'s socket: Air Maker, Greenhouse, Soil Bagger, Lab, Radio Dish or Rover.</p></div></div>' +
       '<div class="info-row"><span class="ic">🧊</span><div><b>Ice = air and water</b><p>Mine ice at the far crater. Drop it in the Air Maker to make oxygen, or in the Greenhouse tank to water the plants. The rover bed carries four things.</p></div></div>' +
@@ -1410,7 +1411,7 @@
       if (e.code === 'KeyV' && !e.repeat && (G.mode === 'play' || G.mode === 'inside')) setPov(!G.pov);
       if (e.code === 'KeyC' && !e.repeat) snapPostcard();
       if (e.code === 'KeyL' && !e.repeat && (G.mode === 'play' || G.mode === 'inside')) nextFilter();
-      if (e.code === 'KeyX' && !e.repeat && JA.fx && JA.fx.available()) { setFx(!JA.fx.on); if (G.mode === 'play' || G.mode === 'inside') say(JA.fx.on ? 'Camera effects on.' : 'Camera effects off.', true); }
+      if (e.code === 'KeyX' && !e.repeat && JA.fx && JA.fx.available()) { nextFx(); U.toast('Camera effects: ' + JA.fx.LEVELS[JA.fx.level].toLowerCase(), W.w / 2, W.h * 0.3, '#ffd23f'); }
       if (e.code === 'KeyM' && !e.repeat && JA.music) { setMusic(!musicOn()); if (G.mode === 'play') say(musicOn() ? 'Music on.' : 'Music off.', true); }
       if (e.code === 'Escape' || e.code === 'KeyP') { if (G.mode === 'intro') JA.intro.skip(); else pauseModal(); }
     });
