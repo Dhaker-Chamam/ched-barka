@@ -501,14 +501,13 @@
     if (s.stats.drive >= 150) b.push({ icon: '🚙', name: 'Road Tripper', text: 'Drove the rover for ' + Math.round(s.stats.drive) + ' seconds' });
     if (s.sky && s.sky.found) b.push({ icon: '☄️', name: 'Space Rock Hunter', text: 'Picked up ' + s.sky.found + ' meteorite' + (s.sky.found > 1 ? 's' : '') + ' from a fresh crater' });
     if (s.colony && s.colony.stage) b.push({ icon: '🏘️', name: 'Town Founder', text: 'Your outpost looked after itself so well that ' + (s.colony.stage > 1 ? 'settlers came' : 'a supply ship came') + ' from Earth' });
-    if (s.flags.alienDance) b.push({ icon: '👽', name: 'Dance Buddy', text: 'Found the secret alien and danced together' + (s.flags.alienBest ? ' (groove score ' + s.flags.alienBest + ')' : '') });
     if (s.dose < 40) b.push({ icon: '💚', name: 'Healthy Crew', text: 'Kept radiation under 40%' });
     if (s.stats.dayGoals >= s.totalSols - 2) b.push({ icon: '🎓', name: 'Star Student', text: 'Finished every daily challenge' });
     if (s.decisions.length) b.push({ icon: '🧭', name: 'Decision Maker', text: 'Made ' + s.decisions.length + ' big call' + (s.decisions.length > 1 ? 's' : '') + ' with no checklist' });
     return b;
   }
 
-  // BOLT's advice: the most urgent thing right now.
+  // Mission Control's advice: the most urgent thing right now.
   function hint(s) {
     var m = s.m, L = s.level, left = (s.dayLength - s.t) / s.dayLength;
     var airNeed = airDrain(s) * s.stale * left + s.leak * left;

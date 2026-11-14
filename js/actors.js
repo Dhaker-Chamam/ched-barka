@@ -1,4 +1,4 @@
-/* Astro Outpost — things that move: the astronaut, the robot buddy, the rover, dust devils,
+/* Astro Outpost — things that move: the astronaut, the rover, dust devils,
    and every object you can pick up, carry and throw (with real Moon / Mars gravity). */
 (function (JA) {
   'use strict';
@@ -8,7 +8,7 @@
   // models made in Blender (js/models.js); without them the plain shapes below are drawn
   function hasModel(name) { return !!(MD && MD.has(name)); }
   var root, site, grav = 3.71, add, mat, soft, glow;
-  var astro, buddy, rover;
+  var astro, rover;
   var v1 = new T.Vector3(), v2 = new T.Vector3(), v3 = new T.Vector3(), UP = new T.Vector3(0, 1, 0), q1 = new T.Quaternion();
   var THROW_ANGLE = 0.72, THROW_MIN = 3.2, THROW_MAX = 9.5;
 
@@ -62,28 +62,6 @@
     add(drill, new T.BoxGeometry(0.3, 0.5, 0.3), soft(0xffc533), 0, 0.2, 0);
     var bit = add(drill, new T.ConeGeometry(0.09, 0.9, 6), new T.MeshStandardMaterial({ color: 0xb8bcc8, metalness: 0.8, roughness: 0.3 }), 0, -0.45, 0); bit.rotation.x = Math.PI;
     return { group: g, body: body, armL: armL, armR: armR, legL: legL, legR: legR, tip: tip, drill: drill, bit: bit };
-  }
-
-  function buildBuddy() {
-    if (hasModel('buddy')) {
-      var m = MD.make('buddy'), ring = m.getObjectByName('buddy_ring'), spin = new T.Group();
-      // the update spins the ring with rotation.z (written for a ring standing in the XY plane);
-      // a holder turned a quarter round makes that same spin go around the vertical axis
-      spin.position.copy(ring.position); spin.rotation.x = Math.PI / 2; ring.parent.add(spin);
-      spin.add(ring); ring.position.set(0, 0, 0); ring.rotation.x = -Math.PI / 2;
-      root.add(m);
-      return { group: m, eL: m.getObjectByName('buddy_eyeL'), eR: m.getObjectByName('buddy_eyeR'), ring: spin, pos: new T.Vector3(1.4, 2.4, 13) };
-    }
-    var g = new T.Group(), white = soft(0xfafbff, { roughness: 0.4 });
-    add(g, new T.SphereGeometry(0.38, 20, 16), white, 0, 0, 0);
-    var face = add(g, new T.SphereGeometry(0.33, 20, 16), soft(0x131a2e, { roughness: 0.2 }), 0, 0.02, 0.11); face.scale.set(1, 0.7, 0.9);
-    var eyeM = glow(0x5cf0ff, 2.2);
-    var eL = add(g, new T.SphereGeometry(0.065, 10, 10), eyeM, -0.13, 0.05, 0.39, true), eR = add(g, new T.SphereGeometry(0.065, 10, 10), eyeM, 0.13, 0.05, 0.39, true);
-    add(g, new T.CylinderGeometry(0.015, 0.015, 0.3, 5), white, 0, 0.48, 0);
-    add(g, new T.SphereGeometry(0.055, 8, 8), glow(0xffd23f, 2.5), 0, 0.65, 0, true);
-    var ring = add(g, new T.TorusGeometry(0.46, 0.035, 6, 24), glow(0x5cf0ff, 1.2), 0, -0.32, 0, true); ring.rotation.x = Math.PI / 2;
-    root.add(g);
-    return { group: g, eL: eL, eR: eR, ring: ring, pos: new T.Vector3(1.4, 2.4, 13) };
   }
 
   // ---------- rover ----------
@@ -289,7 +267,6 @@
     add = W.add; mat = W.mat; soft = W.soft; glow = W.glow;
     A.items = [];
     astro = A.astro = buildAstronaut(suitColor || 0xff7a3d);
-    buddy = A.buddy = buildBuddy();
     rover = A.rover = buildRover();
     buildDevils();
     A.resetAstro();
@@ -335,12 +312,6 @@
       a.group.position.copy(a.pos); a.group.rotation.y = a.yaw;
       a.legL.rotation.x = a.legR.rotation.x = -1.45; a.armL.rotation.x = a.armR.rotation.x = -1.2;
       a.body.rotation.x = 0; a.drill.visible = false;
-      return;
-    }
-    // dancing: another module (js/alien.js) poses the body through A.pose(astro, dt)
-    if (a.mode === 'dance') {
-      a.drill.visible = false;
-      if (A.pose) A.pose(a, dt); else { a.group.position.copy(a.pos); a.group.rotation.y = a.yaw; }
       return;
     }
     if (a.mode === 'walk' && input) { ix = input.x; iz = input.z; jump = input.jump; sprint = input.sprint; }
@@ -492,25 +463,9 @@
     updateAstro(dt, rover.driver ? null : input);
     updateItems(dt);
     updateDevils(dt);
-    // robot buddy
+    // the helmet lamp
     var f = astro.mode === 'hidden' ? null : astro.pos;
-    if (f) {
-      buddy.group.visible = true;
-      v1.set(f.x + Math.cos(astro.yaw) * 1.5, f.y + (astro.mode === 'drive' ? 3.2 : 2.5) + Math.sin(W.time * 2.2) * 0.16, f.z - Math.sin(astro.yaw) * 1.5);
-      if (astro.fp) { v1.x += Math.sin(astro.yaw) * (A.room ? 1.6 : 3.2); v1.z += Math.cos(astro.yaw) * (A.room ? 1.6 : 3.2); v1.y -= 0.5; }      // BOLT floats ahead, in the corner of your eye
-      if (A.buddyHome) { v1.copy(A.buddyHome); v1.y += Math.sin(W.time * 2.2) * 0.05; }      // indoors BOLT rests in his spot
-      else if (A.room) {
-        var Rm = A.room, bx = v1.x - Rm.cx, bz = v1.z - Rm.cz, bd = Math.hypot(bx, bz), bmax = Rm.r - 0.5;
-        if (bd > bmax) { v1.x = Rm.cx + bx / bd * bmax; v1.z = Rm.cz + bz / bd * bmax; }
-        if (Rm.ceil) v1.y = Math.min(v1.y, Rm.ceil(v1.x, v1.z) + 1.7);
-      }
-      buddy.pos.lerp(v1, Math.min(1, dt * 4));
-      buddy.group.position.copy(buddy.pos);
-      buddy.group.lookAt(W.camera.position);
-      buddy.ring.rotation.z += dt * 2;
-      buddy.eL.scale.y = buddy.eR.scale.y = (W.time % 3.4) > 3.25 ? 0.1 : 1;
-      W.setLamp(f.x, f.y + 2.1, f.z, Math.sin(astro.yaw), Math.cos(astro.yaw));
-    } else buddy.group.visible = false;
+    if (f) W.setLamp(f.x, f.y + 2.1, f.z, Math.sin(astro.yaw), Math.cos(astro.yaw));
   };
 
   A.enterRover = function () { rover.driver = true; astro.mode = 'drive'; astro.vel.set(0, 0, 0); };

@@ -39,11 +39,15 @@ Needs Node 22 or newer, plus `ffmpeg` and `ffprobe` on the PATH. The test also n
 
 - **A missing recording is never an error.** A sound effect falls back to its synthesized version; a voice line
   falls back to the speech bubble alone (and the browser voice when read-aloud is on).
+- **Voices from Earth sound like a radio.** Every Mission Control line (CAST `radio: true`) goes through a radio
+  filter when it is built: only the middle of the voice (about 300 to 3,400 Hz), squeezed, a little clipped, with a
+  soft hiss. The game adds the two Quindar beeps around each message. The landing film's radio clips get the same
+  filter with `node tools/audio/build.js landing` (originals in `<raw>/landing/`).
 - **Four mix groups** (`bus` in the manifest): `ui` is never turned down; `fx` dips while someone speaks;
   `world` is also filtered by the place; `amb` holds the background beds.
 - **The place changes the sound.** Outside on the Moon there is no air, so world sounds are muffled as if they
   reached you through the suit. Thin Mars air dulls them less. Inside the habitat you hear the machines faintly
-  through the walls. BOLT explains this on day 2.
+  through the walls. Mission Control explains this on day 2.
 - **Sounds have a position.** Machine hums, sparks and the charging chime get quieter with distance and pan left
   and right with the camera.
 - **Loops are joined in the browser**: the tail is cross-faded into the head after decoding, because an mp3

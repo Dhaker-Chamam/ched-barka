@@ -174,7 +174,6 @@
     add(chair, cyl(0.05, 0.05, 0.45, 8), steel, 0, 0.22, 0);
     add(chair, cyl(0.3, 0.3, 0.08, 18), std(0x3d7dff), 0, 0.48, 0);
     add(chair, box(0.55, 0.55, 0.08), std(0x3d7dff), 0, 0.8, 0.27);
-    add(g, cyl(0.32, 0.36, 0.05, 20), W.glow(0x5cf0ff, 0.9), 1.85, F + 0.03, -2.9);   // BOLT's charging pad
     // ---- plants under grow lights (east)
     var shelf = std(0xeceff5), pot = std(0xc77b4a), leaf = std(0x4fd15a), leaf2 = std(0x2fa84a);
     [0.5, 1.15, 1.8].forEach(function (y, row) {
@@ -394,11 +393,9 @@
     var yaw = Math.atan2(ahead.x, ahead.z);
     light.position.copy(c); light.position.y += id === 'hab' ? 3.9 : 3.8;
     light.intensity = id === 'hab' ? 1.25 : 0.95; light.distance = id === 'hab' ? 11 : 6;
-    // BOLT waits on his charging pad in the habitat, and up by the ceiling in the cockpit, out of your view
-    var buddy = id === 'hab' ? toWorld(room, 1.85, F + 0.62, -2.9, new T.Vector3()) : toWorld(room, 1.35, F + 3.7, -1.1, new T.Vector3());
     for (i = 0; i < room.screens.length; i++) room.screens[i].drawn = -1;
     redrawAt = 0;
-    return { walk: walk, cam: cam, spawn: spawn, yaw: yaw, center: c, buddy: buddy };
+    return { walk: walk, cam: cam, spawn: spawn, yaw: yaw, center: c };
   };
   I.leave = function () {
     var P = B.P;

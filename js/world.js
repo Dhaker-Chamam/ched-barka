@@ -421,7 +421,7 @@
     if (JA.models.prepare) JA.models.prepare(renderer, look);   // reflections for the Blender models (js/models.js)
     JA.base.build(root, site);
     JA.actors.build(root, site, suitColor);
-    ['interior', 'colony', 'alien'].forEach(function (k) {         // optional extras: the world still works without them
+    ['interior', 'colony'].forEach(function (k) {         // optional extras: the world still works without them
       var m = JA[k];
       if (m && typeof m.build === 'function') { try { m.build(root, site); } catch (e) { if (window.console) console.warn('Astro Outpost add-on ' + k + '.build failed:', e); } }
     });

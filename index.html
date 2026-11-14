@@ -10,7 +10,6 @@
 <link rel="stylesheet" href="css/sunwatch.css">
 <link rel="stylesheet" href="css/keepsake.css">
 <link rel="stylesheet" href="css/hud.css">
-<link rel="stylesheet" href="css/alien.css">
 <link rel="stylesheet" href="css/colony.css">
 </head>
 <body>
@@ -74,10 +73,10 @@
 </aside>
 <div id="banner" class="hidden"></div>
 
-<!-- robot buddy speech -->
-<div id="bolt" class="hidden">
-  <div class="bolt-face" aria-hidden="true"><i></i><i></i></div>
-  <p id="bolt-text"></p>
+<!-- Mission Control on Earth, over the radio -->
+<div id="radio" class="hidden">
+  <div class="radio-badge" aria-hidden="true">📡<i></i><i></i></div>
+  <p><small>Mission Control · Earth</small><span id="radio-text"></span></p>
 </div>
 
 <!-- what the E key will do right now -->
@@ -178,7 +177,6 @@
 <script src="js/keepsake.js"></script>
 <script src="js/interior.js"></script>
 <script src="js/colony.js"></script>
-<script src="js/alien.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/game.js"></script>
 </body>

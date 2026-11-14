@@ -1,5 +1,5 @@
 /* Astro Outpost — crisis moments.
-   A crisis is a problem with NO checklist. BOLT cannot help, Earth is too far or too slow, and there
+   A crisis is a problem with NO checklist. Mission Control cannot help in time, and there
    is more than one thing you could do. You choose, the game carries on, and the consequences show up
    later: in a minute, tonight, or tomorrow morning. Every crisis is based on something that really
    happened to a space crew or a rover; the night report tells that story.

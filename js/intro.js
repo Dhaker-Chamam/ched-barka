@@ -36,8 +36,8 @@
     return [
       { t: 4.6, who: 'Mission Control', text: 'Outpost One, you are GO for landing.', dur: 3.0, radio: true, vo: '01-go-for-landing' },
       { t: 8.4, text: 'There it is. The robots finished building it last week.', dur: 3.4, vo: '05-there-it-is' },
-      { t: 12.6, who: 'BOLT', text: 'Sixty metres… thirty… the engine is kicking up dust!', dur: 3.6, radio: true, vo: '02-sixty-metres' },
-      { t: TM.land + 0.3, who: 'BOLT', text: 'Contact! Engines off.', dur: 2.3, radio: true, vo: '03-contact' },
+      { t: 12.6, who: 'Mission Control', text: 'Sixty metres… thirty… the engine is kicking up dust!', dur: 3.6, radio: true, vo: '02-sixty-metres' },
+      { t: TM.land + 0.3, who: 'Mission Control', text: 'Contact! Engines off.', dur: 2.3, radio: true, vo: '03-contact' },
       { t: TM.land + 2.8, text: 'We made it.', dur: 1.9, vo: '06-we-made-it' },
       { t: TM.step + 0.4, text: 'Here goes. My first step on ' + s.site.name + '.', dur: 2.6, vo: moon ? '09-first-step-moon' : '17-first-step-mars' },
       { t: TM.step + 3.7, text: moon ? 'My first bootprint. With no wind and no rain, it could stay here for a million years.'
@@ -48,7 +48,7 @@
       { t: TM.sit + 2.7, text: 'Stop. Sit. Breathe.', dur: 2.3, vo: '08-stop-sit-breathe' },
       { t: TM.vista + 2.6, text: 'That is the outpost. My home for the next ' + s.totalSols + ' ' + dw + '.', dur: 3.6, vo: home },
       { t: TM.vista + 6.8, text: moon ? 'And that is Earth. Everyone I have ever known is on that small blue ball.' : 'Somewhere in that sky, Earth is just a pale dot of light.', dur: 3.9, vo: moon ? '16-earth-moon' : '24-earth-mars' },
-      { t: TM.vista + 11.0, who: 'BOLT', text: 'Ready when you are, Commander.', dur: 2.6, radio: true, vo: '04-ready-commander' }
+      { t: TM.vista + 11.0, who: 'Mission Control', text: 'Ready when you are, Commander.', dur: 2.6, radio: true, vo: '04-ready-commander' }
     ];
   }
   function say(c) {
@@ -247,15 +247,6 @@
     e.yaw = lerp(st.yawSit, st.yawEnd, ease(seg(tau, 1.8, 10.6)));
     e.fov = lerp(54, 44, ease(seg(tau, 2, 14))); e.roll = 0;
     st.bodyYaw = st.yawSit; st.sitQ = 1;
-    // BOLT drifts into the corner of your eye
-    var bud = A.buddy, k = ease(seg(tau, 9.6, 12.0));
-    if (k > 0) {
-      var by = st.yawEnd - lerp(1.0, 0.46, k), bd = 6.4;
-      bud.group.visible = true;
-      bud.group.position.set(e.x + Math.sin(by) * bd, e.y - 0.25 + Math.sin(t * 2.2) * 0.09, e.z + Math.cos(by) * bd);
-      bud.group.lookAt(W.camera.position);
-      bud.ring.rotation.z += 0.035;
-    }
   }
 
   // ---------- the running order ----------
@@ -333,7 +324,6 @@
     var done = st.done, rk = B.P.rocket;
     rk.group.position.set(0, 0, 0); rk.flame.visible = false; rk.light.intensity = 0;
     W.root.remove(st.rig.group); W.root.remove(st.rig.shadow);
-    A.buddy.group.visible = false;
     Au.stopAll();
     $('cine').className = 'hidden'; $('cine-line').className = ''; title();
     document.body.classList.remove('cine');

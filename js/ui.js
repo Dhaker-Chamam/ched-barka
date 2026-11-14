@@ -159,7 +159,7 @@
     Object.keys(goalRows).forEach(function (id) { if (!seen[id]) delete goalRows[id]; });
   };
 
-  // ---------- banner, buddy, prompt, hands ----------
+  // ---------- banner, radio, prompt, hands ----------
   var bannerText = null;
   U.banner = function (text, cls) {
     var b = $('banner');
@@ -169,13 +169,14 @@
     bannerText = text + cls; b.className = cls || ''; b.textContent = text;
   };
   var lastSay = '';
+  // Mission Control on Earth, over the radio.
   // vid: the recorded voice line for these words (a list plays one after the other); without one, read-aloud speaks them
   U.say = function (text, vid) {
     if (!text || text === lastSay) return;
     lastSay = text;
-    var b = $('bolt');
+    var b = $('radio');
     b.classList.remove('hidden');
-    $('bolt-text').textContent = text;
+    $('radio-text').textContent = text;
     b.classList.remove('say'); void b.offsetWidth; b.classList.add('say');
     if (!JA.audio.line(vid)) JA.audio.speak(text);
   };
@@ -301,7 +302,7 @@
     var date = w && w.date ? JA.weather.prettyDate(w.date) : '';
     if (!known) {
       return '<div class="info-row"><span class="ic">❓</span><div><b>No space-weather forecast</b>' +
-        '<p>The Radio Dish was off, so Earth could not send a forecast. BOLT\'s small sensor only gives a few seconds of warning.</p></div></div>';
+        '<p>The Radio Dish was off, so Earth could not send a forecast. Your suit\'s small sensor only gives a few seconds of warning.</p></div></div>';
     }
     if (!w || w.level === 0) {
       var what = w && w.cls ? 'only small flares (the strongest was class ' + esc(w.cls) + ')' : 'no solar flares at all';

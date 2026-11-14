@@ -4,7 +4,8 @@
    - The place decides how the world sounds: the Moon has no air, so outside you only hear what travels
      through your suit (muffled); thin Mars air dulls sounds a little; inside the lander everything is clear.
    - Sounds that have a place (machines, sparks, the rack) get quieter with distance and move left and right.
-   - Voice lines are mp3 files: audio/landing/ (the film) and audio/voice/ (BOLT and Mission Control).
+   - Voice lines are mp3 files: audio/landing/ (the film) and audio/voice/ (Mission Control on Earth).
+     The Earth voices are recorded through a radio filter (tools/audio/build.js), so they sound the same from disk.
      Everything else dips a little while someone speaks.
    - Music is streamed from audio/music/.
    - Read-aloud for younger players uses the browser's speech voice. */
@@ -160,8 +161,9 @@
     radio: function () { tone(2525, 0.16, 'sine', 0.05); noise(0.12, 0.05, 0.16, 2600); },
     pad: function () { [130.8, 196, 261.6, 329.6, 493.9].forEach(function (f, i) { tone(f, 9, 'sine', 0.06, i * 0.7); tone(f * 2.005, 9, 'sine', 0.018, i * 0.7 + 0.3); }); }
   };
-  // Mission Control's lines open and close with the two beeps real NASA radio used (Quindar tones)
-  function quindar(opening) { tone(opening ? 2525 : 2475, 0.25, 'sine', 0.05); }
+  // Every message from Earth opens and closes with the two beeps real NASA radio used (Quindar tones),
+  // and a short hiss as the radio opens and shuts.
+  function radioKey(opening) { tone(opening ? 2525 : 2475, 0.25, 'sine', 0.05); noise(opening ? 0.16 : 0.12, 0.05, opening ? 0.22 : 0.18, 2600); }
 
   // ---------- where you are, and where things are ----------
   // lp: how much treble the place lets through; range: how far sounds carry (1 = normal)
@@ -302,13 +304,13 @@
   // A plain <audio> element, so the lines also play when the game is opened straight from disk.
   // One voice at a time: a new line cuts the one before.
   var voices = {}, voiceEl = null, VOX = 'audio/voice/';
-  var lineQ = [], lineOn = false, lineMc = false, lineTimer = null, lineAt = 0;
+  var lineQ = [], lineOn = false, lineKeyed = false, lineTimer = null, lineAt = 0;
   function preloadVoice(src) {
     if (!voices[src]) { var a = new Audio(); a.preload = 'auto'; a.src = src; voices[src] = a; }
     return voices[src];
   }
   function cut() { if (voiceEl) { var a = voiceEl; voiceEl = null; a.onended = a.onerror = null; try { a.pause(); } catch (e) { /* not started */ } } }
-  function stopVoice() { if (lineTimer) { clearTimeout(lineTimer); lineTimer = null; } lineQ = []; lineOn = false; lineMc = false; cut(); }
+  function stopVoice() { if (lineTimer) { clearTimeout(lineTimer); lineTimer = null; } lineQ = []; lineOn = false; lineKeyed = false; cut(); }
   function startClip(src, then) {
     cut();
     var a = preloadVoice(src), done = false;
@@ -324,11 +326,11 @@
   function lineNext() {
     lineTimer = null;
     var id = lineQ.shift();
-    if (!id) { var mc = lineMc; lineOn = false; lineMc = false; if (mc) quindar(false); return; }
+    if (!id) { var keyed = lineKeyed; lineOn = false; lineKeyed = false; if (keyed) radioKey(false); return; }
     lineAt = Date.now(); startClip(VOX + id + '.mp3', lineNext);
   }
-  // BOLT and Mission Control: one line, or several in a row, by id (see js/audio-list.js).
-  // Returns true when a recording will be heard. o.plain: no radio beep around it.
+  // Mission Control: one line, or several in a row, by id (see js/audio-list.js).
+  // Returns true when a recording will be heard. o.plain: no radio beeps around it.
   function line(ids, o) {
     var L = JA.VOICE || {};
     if (typeof ids === 'string') ids = [ids];
@@ -340,9 +342,8 @@
     lineQ = ids.slice(); lineOn = true; lineAt = Date.now();
     note('voice:' + ids.join('+'));
     if (o && o.plain) { lineNext(); return true; }
-    lineMc = L[ids[0]].w === 'mc';
-    if (lineMc) quindar(true); else play('bolt');
-    lineTimer = setTimeout(lineNext, lineMc ? 320 : 230);
+    lineKeyed = true; radioKey(true);
+    lineTimer = setTimeout(lineNext, 380);
     return true;
   }
   function voicePlaying() { return lineOn || !!(voiceEl && !voiceEl.paused && !voiceEl.ended); }

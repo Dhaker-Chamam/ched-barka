@@ -101,7 +101,7 @@
     });
   });
 
-  section('Voice lines', 'BOLT\'s lines start with a small chirp; Mission Control\'s are wrapped in the two radio beeps.');
+  section('Voice lines', 'Mission Control talks from Earth: every line is recorded through a radio filter and wrapped in the two radio beeps.');
   M.VOICE.forEach(function (v) {
     list.appendChild(row(v.id, !!VO[v.id], false, M.CAST[v.who].name + ' · ' + v.when, v.text, [btn('▶ Say', function () { Au.line(v.id); })]));
   });

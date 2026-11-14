@@ -23,7 +23,7 @@
   function d2(a, b) { return Math.hypot(a.x - b.x, a.z - b.z); }
   function dayWord() { return G.s.site.dayWord; }
   function dustFor(kind) { return { clear: 0, dusty: 0.4, storm: 1, sun: 0, lowsun: 0.3, shadow: 0.8 }[kind] || 0; }
-  // BOLT's speech bubble. vid: the recorded voice line for these words (found from the words when left out).
+  // Mission Control's radio messages from Earth. vid: the recorded voice line for these words (found from the words when left out).
   // A line that is being spoken is allowed to finish: a forced line waits its turn, a passing hint is dropped.
   // Urgent lines (storms, breakdowns) cut in at once.
   function say(text, force, vid, urgent) {
@@ -82,12 +82,11 @@
   //  TITLE + SETUP
   // =====================================================================
   function hideHud() {
-    ['hud', 'goals', 'banner', 'bolt', 'prompt', 'hands', 'rover-hud', 'mini', 'inside', 'stick', 'touch-btns'].forEach(function (id) { U.show($(id), false); });
+    ['hud', 'goals', 'banner', 'radio', 'prompt', 'hands', 'rover-hud', 'mini', 'inside', 'stick', 'touch-btns'].forEach(function (id) { U.show($(id), false); });
     U.tags([]); U.marks([]); U.stormFx(''); U.clearCards();
   }
   function titleScene() {
     if (G.room) leaveRoom(true);
-    if (G.mode === 'dance') endDance();
     G.mode = 'title'; G.s = null;
     if (A.astro) A.astro.mode = 'hidden';
     W.cam.mode = 'title'; W.env.t = 0.3; W.env.dust = 0; W.env.storm = 0;
@@ -137,7 +136,7 @@
 
   function startMission(data) {
     G.weather = data;
-    A.room = null; W.cam.room = null; G.room = null; A.buddyHome = null; G.colonyVisit = 0;
+    A.room = null; W.cam.room = null; G.room = null; G.colonyVisit = 0;
     W.build(G.opts.site, G.opts.suit);
     var s = G.s = sim.newGame({ site: G.opts.site, level: G.opts.level, weather: data, dayLength: G.opts.shift });
     G.tips = {}; G.tut = {}; G.tutStep = 0; G.mini = null; G.charge = null; G.ending = null; G.caseItem = null; G.fast = false; G.clock = 0; G.sayAt = 0; G.sayQ = []; G.sparkAt = 0;
@@ -167,7 +166,7 @@
     else wx = '<div class="info-row"><span class="ic">🛰️</span><div><b>The real Sun is in this game</b><p>' + U.dataTag(s) + 'Solar storms replay the real Sun from ' + d1 + ' to ' + dN + (s.weatherSource === 'live' ? ', fetched just now from NASA\'s space-weather database.' : ' — one of the stormiest times in 20 years.') + '</p></div></div>';
     var n = s.totalSols, dw = dayWord().toLowerCase() + 's';
     U.modal('<h2>Welcome to ' + esc(s.site.name) + ', Commander!</h2>' +
-      '<p class="sub">' + esc(s.site.place) + ' · I am BOLT, your robot buddy.</p>' +
+      '<p class="sub">' + esc(s.site.place) + ' · This is Mission Control on Earth. We are with you on the radio all the way.</p>' +
       '<div class="info-row"><span class="ic">🎯</span><div><b>Your mission</b><p>Keep the crew alive for ' + n + ' ' + dw + (s.site.id === 'mars' ? ' (a sol is one Mars day)' : '') + ', do real science, then ride the rocket home. ' + esc(s.site.why) + '</p></div></div>' +
       '<div class="info-row"><span class="ic">🔋</span><div><b>You do everything by hand</b><p>The Sun charges only a few power cells a day. YOU carry each one to the machine that needs it most — air, food, shield, science or radio. There is never enough for all of them.</p></div></div>' +
       '<div class="info-row"><span class="ic">📈</span><div><b>Every day is harder, and teaches something new</b><p>The outpost wears down the longer you stay. And ' + s.level.crisisSols.length + ' times, something will go wrong that has no checklist: you alone will choose what to do, and live with what follows.</p></div></div>' +
@@ -175,7 +174,7 @@
       '<div class="info-row"><span class="ic">📡</span><div><b>Talking to Earth</b><p>' + esc(s.site.commText) + '</p></div></div>' +
       '<div class="info-row good"><span class="ic">' + day.icon + '</span><div><b>' + esc(dayWord()) + ' 1 · ' + esc(day.title) + ' · ' + esc(day.topic) + '</b><p>' + esc(day.learn) + '</p>' + srcLine(day.src) + '</div></div>' +
       '<div class="modal-actions"><button class="btn ghost" data-act="how">How to play</button><button class="btn primary" data-act="ok">Step outside ▶</button></div>',
-      { speak: 'Welcome to ' + s.site.name + ', Commander! I am BOLT, your robot buddy. Keep the crew alive for ' + n + ' ' + dw + ', do real science, then ride the rocket home.', line: 'welcome-' + s.site.id,
+      { speak: 'Welcome to ' + s.site.name + ', Commander! This is Mission Control on Earth. We are with you on the radio all the way. Keep the crew alive for ' + n + ' ' + dw + ', do real science, then ride the rocket home.', line: 'welcome-' + s.site.id,
         actions: { how: howInfo, ok: function () { Au.play('door'); U.closeModal(); beginSol(); } } });
   }
 
@@ -222,7 +221,7 @@
       var line, vox;
       if (s.sol === 1) { line = touch ? 'Welcome outside! Use the stick to walk and drag the screen to look around.' : 'Welcome outside! Walk with W A S D, drag the mouse to look around, and press Space to jump.'; vox = 'act-welcome'; }
       else {
-        line = look.label + ' today. ' + (s.forecast ? (w.level ? U.stormWords(w.level) + ' is coming today. Stay ready to run home!' : 'The Sun is quiet today.') : 'The dish was off, so there is no storm forecast. Keep an eye on me!') + (last ? ' Last day: load the sample case and board the rocket!' : '');
+        line = look.label + ' today. ' + (s.forecast ? (w.level ? U.stormWords(w.level) + ' is coming today. Stay ready to run home!' : 'The Sun is quiet today.') : 'The dish was off, so there is no storm forecast. Listen for your suit sensor!') + (last ? ' Last day: load the sample case and board the rocket!' : '');
         // the morning report is spoken as up to three recorded lines in a row: the weather, the storm forecast, the last-day reminder
         vox = ['day-' + DAY_VOX[env.kind], s.forecast ? (w.level ? 'forecast-' + (w.level >= 3 ? 'big' : w.level === 2 ? 'medium' : 'small') : 'forecast-quiet') : 'forecast-none'];
         if (last) vox.push('day-last');
@@ -390,7 +389,6 @@
     offer(d2(p, sp.door), 2.4, { label: 'Go inside the habitat', run: enterHab });
     if (s.sol >= s.totalSols) offer(d2(p, sp.rocketDoor), 4, { label: 'Board the rocket and fly home', run: JA.interior ? function () { goInside('rocket'); } : boardModal });
     else if (JA.interior) offer(d2(p, sp.rocketDoor), 3.4, { label: 'Climb into the rocket', run: function () { goInside('rocket'); } });
-    ext('alien', 'offer', p, offer, startDance);
     for (i = 0; i < sp.photo.length; i++) (function (i) {
       if (!s.photos[i]) offer(d2(p, sp.photo[i]), 2.6, { label: 'Take a postcard photo', run: function () { var f = sim.photo(s, i); if (f) { Au.play('photo'); if (JA.fx) JA.fx.snap(); U.fade(true); setTimeout(function () { U.fade(false); }, 140); U.card(f); } } });
     })(i);
@@ -543,8 +541,8 @@
           var r = sim.askEarth(s);
           if (!r.ok) { Au.play('deny'); return; }
           Au.play('page'); U.closeModal();
-          say(s.site.id === 'moon' ? 'Message sent! The Moon is only 1.3 light-seconds away. The answer will be here in a moment.'
-            : 'Message sent! It takes ' + r.info.oneWay + ' to reach Earth, and the answer takes just as long to come back. Keep working — I will call you.', true, s.site.id === 'moon' ? 'dish-sent-moon' : 'dish-sent-mars');
+          say(s.site.id === 'moon' ? 'We got your question! The Moon is only 1.3 light-seconds from Earth, so our answer is on its way.'
+            : 'Your question is on its way to Earth. It takes ' + r.info.oneWay + ' to get here, and our answer takes just as long to come back. Keep working — we will call you.', true, s.site.id === 'moon' ? 'dish-sent-moon' : 'dish-sent-mars');
         }
       } });
   }
@@ -581,12 +579,12 @@
         var inside = G.mode === 'inside';
         if (e.phase === 'warning') {
           fxPulse('glitch', 0.7); Au.play('storm-alert');
-          say(inside ? 'A solar storm is on its way. Good thing we are inside!' : s.m.comms.on ? 'Mission Control spotted a solar flare! A radiation storm is coming. Head for the airlock!' : 'My sensor just caught a solar storm! The dish is off, so there was no early warning. RUN for the airlock!',
+          say(inside ? 'A solar storm is on its way. Good thing you are inside!' : s.m.comms.on ? 'We just spotted a solar flare! A radiation storm is coming. Head for the airlock!' : 'Your suit sensor just caught a solar storm! The dish is off, so we could not warn you early. RUN for the airlock!',
             true, inside ? 'storm-inside' : s.m.comms.on ? 'storm-spotted' : 'storm-no-warning', true);
         }
         else if (e.phase === 'active') {
-          if (!inside) say('Radiation storm! You cannot see it or feel it, but my sensor can. Get inside!', true, 'storm-active', true);
-          tip('clicks', 'That clicking is my radiation sensor. More clicks mean more radiation.');
+          if (!inside) say('Radiation storm! You cannot see it or feel it, but your suit sensor can. Get inside!', true, 'storm-active', true);
+          tip('clicks', 'That clicking is your suit\'s radiation sensor. More clicks mean more radiation.');
         }
         else { Au.play('good'); say('The storm has passed. All clear!', true); }
       }
@@ -608,10 +606,10 @@
     if (G.mini) { endMini(); U.dialUi(null); }
     G.charge = null; A.astro.aim = false; hideAim(); Au.stopAll(); Au.play('alarm');
     W.cam.shake = Math.max(W.cam.shake, 0.3);
-    var far = s.site.id === 'mars' ? ' Earth is ' + sim.commInfo(s).oneWay + ' away by radio, far too slow to ask.' : ' There is no time to ask Earth.';
+    var far = s.site.id === 'mars' ? ' Our radio takes ' + sim.commInfo(s).oneWay + ' to reach you, far too slow to help in time.' : ' There is no time to talk it through.';
     U.modal('<div class="day-head crisis-head"><span class="big-icon">' + v.icon + '</span><div><small>⚠ ' + esc(v.alarm) + ' · YOUR CALL</small><h2>' + esc(v.title) + '</h2></div></div>' +
       '<p>' + esc(v.text) + '</p>' +
-      '<div class="crisis-bolt"><div class="bolt-face" aria-hidden="true"><i></i><i></i></div><p>I have no checklist for this one, Commander.' + esc(far) + ' There is more than one thing you could do. You decide.</p></div>' +
+      '<div class="crisis-radio"><div class="radio-badge" aria-hidden="true">📡<i></i><i></i></div><p><small>Mission Control · Earth</small>We have no checklist for this one, Commander.' + esc(far) + ' There is more than one thing you could do. You decide.</p></div>' +
       v.options.map(function (o) { return '<button class="opt" data-act="pick" data-v="' + o.id + '"><b>' + o.icon + ' ' + esc(o.label) + '</b><span>' + esc(o.text) + '</span></button>'; }).join('') +
       '<p class="sub crisis-foot">⏸ The clock is stopped while you think. Nobody will tell you which choice is best. You will see what yours leads to.</p>',
       { cls: 'crisis', noFocus: true, speak: v.title + ' ' + v.text + ' You decide.' + v.options.map(function (o, i) { return ' Choice ' + (i + 1) + ': ' + o.label + '. ' + o.text; }).join(''), line: 'crisis-your-call', actions: { pick: function (el) { crisisPick(el.getAttribute('data-v')); } } });
@@ -712,7 +710,7 @@
   function musicMood() {
     if (Au.musicOn && Au.musicOn()) return 'off';             // a recorded piece is playing (title, night, film): the generated music waits
     if (G.mode === 'title' || G.mode === 'end') return 'title';
-    if (G.mode === 'intro' || G.mode === 'dance') return 'off';     // the landing film and the dance party have their own sound
+    if (G.mode === 'intro') return 'off';     // the landing film has its own sound
     if (G.mode === 'vision') return 'launch';
     if (G.mode === 'night' || G.mode === 'brief') return 'night';
     if (G.mode === 'launch') return 'launch';
@@ -826,7 +824,7 @@
       if (G.qPressed && a.carrying && !G.charge) { A.setDown(); Au.play('drop'); }
     }
     stormFrame(true);
-    // things BOLT points out once, when they matter
+    // things Mission Control points out once, when they matter
     Au.breathe(dt, G.input.sprint && moving && !r.driver);
     if (s.leak > 0) tip('leak' + s.sol, 'Air leak! The tanks are losing air.');
     else if (s.stale > 1) tip('stale' + s.sol, 'The air is going stale. It is draining fast!');
@@ -889,7 +887,7 @@
     $('btn-fast').classList.remove('on');
     if (r) {
       G.room = id; document.body.classList.add('in-room');
-      A.room = r.walk; W.cam.room = r.cam; A.buddyHome = r.buddy || null;
+      A.room = r.walk; W.cam.room = r.cam;
       var a = A.astro;
       a.mode = 'walk'; a.pos.copy(r.spawn); a.vel.set(0, 0, 0); a.vy = 0; a.onGround = true; a.yaw = r.yaw;
       W.cam.mode = 'play'; W.cam.yaw = r.yaw + Math.PI; W.cam.pitch = 0.28; W.cam.fpPitch = 0.05; W.cam.dist = id === 'rocket' ? 2 : 4.2;
@@ -912,7 +910,7 @@
   function leaveRoom(quiet) {
     var id = G.room;
     ext('interior', 'leave');
-    A.room = null; W.cam.room = null; G.room = null; A.buddyHome = null; document.body.classList.remove('in-room');
+    A.room = null; W.cam.room = null; G.room = null; document.body.classList.remove('in-room');
     if (G.povAuto) { G.povAuto = false; setPov(false, true); }
     U.show($('inside'), false);
     if (quiet) return;
@@ -989,8 +987,8 @@
   // =====================================================================
   function onDayEnd() {
     var s = G.s;
-    if (s.sol >= s.totalSols) { launchHome('Time is up — BOLT is flying you to the rocket!', 'launch-time-up'); return; }
-    if (G.mode === 'play') { say('The shift is over! I am towing you home. That rush used extra air.', true, null, true); endDay({ late: true }); }
+    if (s.sol >= s.totalSols) { launchHome('Time is up, Commander! It is launch time. We are bringing you home!', 'launch-time-up'); return; }
+    if (G.mode === 'play') { say('The shift is over! We are calling you home. That rush used extra air.', true, null, true); endDay({ late: true }); }
     else endDay({});
   }
   function endDay(info) {
@@ -1004,7 +1002,7 @@
     if (A.astro.carrying) A.setDown();
     A.astro.mode = 'hidden';
     U.fade(true);
-    ['goals', 'prompt', 'hands', 'rover-hud', 'mini', 'inside', 'bolt'].forEach(function (id) { U.show($(id), false); });
+    ['goals', 'prompt', 'hands', 'rover-hud', 'mini', 'inside', 'radio'].forEach(function (id) { U.show($(id), false); });
     touchUi(false);
     U.banner(null); U.stormFx(''); U.tags([]); U.marks([]); U.clearCards(); W.env.storm = 0;
     setTimeout(function () {
@@ -1103,10 +1101,9 @@
     G.ending = { fail: reason };
     startLaunchScene(reason === 'air' ? 'The air tanks are empty! Everyone to the rocket!' : 'The radiation badges are full! Everyone to the rocket!', reason === 'air' ? 'hud-air-empty' : 'hud-rad-full');
   }
-  // text, vid: BOLT's last words before the countdown, when there are any
+  // text, vid: Mission Control's last words before the countdown, when there are any
   function startLaunchScene(text, vid) {
     if (G.room) leaveRoom(true);
-    if (G.mode === 'dance') endDance();
     G.mode = 'launch'; G.launchT = 0; G.launchN = -1; G.mini = null; G.charge = null; hideAim(); Au.stopAll(); Au.music(null); G.sayQ.length = 0;
     if (A.rover.driver) A.exitRover();
     A.astro.mode = 'hidden';
@@ -1172,24 +1169,6 @@
     });
     if (!ok) { G.mode = 'end'; winModal(); }
   }
-  // ---------- the secret dance party (js/alien.js) ----------
-  function startDance() {
-    if (!JA.alien || G.mode !== 'play') return;
-    if (A.rover.driver) { A.exitRover(); Au.stopLoop('rover'); }
-    if (A.astro.carrying) A.setDown();
-    G.mode = 'dance'; G.mini = null; G.charge = null; G.fast = false; hideAim(); Au.stopAll();
-    ['goals', 'prompt', 'hands', 'rover-hud', 'mini'].forEach(function (id) { U.show($(id), false); });
-    touchUi(false); U.tags([]); U.marks([]);
-    WORLD.mode = 'dance'; WORLD.pos = me(); WORLD.s = G.s;
-    if (ext('alien', 'start', WORLD) === false) endDance();
-  }
-  function endDance() {
-    ext('alien', 'stop');
-    A.pose = null;
-    if (A.astro && A.astro.mode === 'dance') A.astro.mode = 'walk';
-    if (G.mode === 'dance') { G.mode = 'play'; W.cam.mode = 'play'; U.show($('goals'), true); touchUi(true); }
-    G.lookIdle = 0;
-  }
   // after the jingle: the last recorded line, then the theme
   function endSound(vid) {
     setTimeout(function () { if (G.mode === 'end' && !Au.readingOn()) Au.line(vid); }, 1700);
@@ -1212,7 +1191,7 @@
     hideHud(); Au.play('lose'); endSound('fail-safe');
     U.modal('<div class="rank"><span class="big-icon">' + f.icon + '</span><h2>' + esc(f.title) + '</h2></div>' +
       '<p>' + esc(f.text) + ' You made it to ' + dayWord().toLowerCase() + ' ' + s.sol + ' of ' + s.totalSols + ' and earned ⭐ ' + Math.round(s.sci) + '.</p>' +
-      '<div class="fact"><b>💡 BOLT\'s tip</b><p>' + esc(f.tip) + '</p><small>Real astronauts practise in simulators for years — and they fail there a lot. That is how they learn.</small></div>' +
+      '<div class="fact"><b>💡 Mission Control\'s tip</b><p>' + esc(f.tip) + '</p><small>Real astronauts practise in simulators for years — and they fail there a lot. That is how they learn.</small></div>' +
       decisionsBlock(s) +
       (s.finds.length ? '<h3>🔬 Your discoveries (' + s.finds.length + ')</h3>' + s.finds.map(U.findRow).join('') : '') + endButtons(),
       { cls: s.decisions.length ? 'wide' : '', actions: endActions(), speak: f.title + '. ' + f.text + ' ' + f.tip });
@@ -1232,7 +1211,7 @@
       '<div class="info-row"><span class="ic">🧪</span><div><b>Science</b><p>Drill rock cores at the glowing orange sites and study them in the Lab. Carry the instruments from the rocket pad to the blue rings. On the last day, load the sample case and board the rocket.</p></div></div>' +
       '<div class="info-row"><span class="ic">☄️</span><div><b>Rocks from the sky</b><p>Now and then a meteorite lands near the outpost. Find the fresh crater and pick up the space rock. A quake sensor pinpoints it for you.</p></div></div>' +
       '<div class="info-row"><span class="ic">📈</span><div><b>Every day is harder</b><p>Each morning brings one new thing to learn, a challenge worth bonus points, and an outpost that is a little more worn than yesterday.</p></div></div>' +
-      '<div class="info-row"><span class="ic">🧭</span><div><b>Crisis moments</b><p>Sometimes something goes wrong that has no checklist. BOLT cannot help. You pick one of several actions, and you find out later what it led to.</p></div></div>' +
+      '<div class="info-row"><span class="ic">🧭</span><div><b>Crisis moments</b><p>Sometimes something goes wrong that has no checklist, and Earth cannot help in time. You pick one of several actions, and you find out later what it led to.</p></div></div>' +
       '<div class="info-row"><span class="ic">⏸</span><div><b>Your time</b><p>Press ⏸ (or ' + (touch ? 'tap it' : 'the P key') + ') to pause, and to make the working day longer or shorter whenever you like.</p></div></div>');
   }
   function scienceInfo() {
@@ -1248,6 +1227,7 @@
       '<li><b>Discoveries and facts</b> describe real findings from NASA missions (Apollo, LCROSS, LRO, Curiosity, Opportunity, Phoenix, InSight, Perseverance) and NASA\'s Open Science Data Repository.</li></ul>' + mission +
       '<h3>What is simplified</h3><ul class="src-list">' +
       '<li>Time is squeezed: a working day lasts a few minutes (you choose how many), plants grow in a day, and a 20-minute radio wait becomes about half a minute.</li>' +
+      '<li>Mission Control talks to you live over the radio. On the Moon that is close to real: a message takes 1.3 seconds, like a phone call with a tiny pause. From Mars every message takes minutes, so real Mars crews will mostly hear recorded messages from Earth and solve problems on their own.</li>' +
       '<li>Each day is made a little harder than the one before (more air and food used, a little less power, tools that wear). Real outposts do wear down, but these amounts are game numbers.</li>' +
       '<li>The crisis moments are invented for your outpost, but each one is modelled on something that really happened: the 2018 Space Station air leak, Apollo 13\'s air filter and power-down, the mould in the Station\'s garden in 2015, and the Spirit rover stuck in soft soil in 2009.</li>' +
       '<li>The radiation badge (0–100%) is a game scale, not a medical dose. Storm strength is set from the flare class. In real life only some flares send a radiation storm to the Moon or Mars, and it can arrive minutes or hours later.</li>' +
@@ -1256,7 +1236,7 @@
       '<li>The meteorite strikes are invented events. The facts on their cards are real: the InSight lander felt a real strike on Mars in 2021, and NASA\'s Lunar Reconnaissance Orbiter has found new craters on the Moon.</li>' +
       '<li>The picture is styled like a film camera (glow, lens flare, grain). The sparkles and streaks during a solar storm copy what charged particles really do to camera sensors in space. The Heat view filter is pretend: it colours the picture by brightness, not by real temperature.</li>' +
       '<li>Power cells, air, food and points are game units, tuned so that no choice is free.</li>' +
-      '<li>Radiation is invisible. The pink glow is BOLT\'s “sensor view” so you can tell a storm is happening.</li></ul>' +
+      '<li>Radiation is invisible. The pink glow is your suit\'s “sensor view” so you can tell a storm is happening.</li></ul>' +
       '<h3>Sources</h3><ul class="src-list">' + links + '</ul>');
   }
 
@@ -1334,6 +1314,8 @@
   }
   function hudFrame() {
     var s = G.s, a = A.astro, sp = B.spots, pos = me(), i;
+    var live = Au.voicePlaying();       // the radio waves pulse while Mission Control is talking
+    if (live !== G.radioLive) { G.radioLive = live; $('radio').classList.toggle('live', live); }
     if (!s || G.mode === 'title' || G.mode === 'brief' || G.mode === 'end' || G.mode === 'night' || G.mode === 'intro' || G.mode === 'vision') return;
     U.setHud(s);
     if (G.mode !== 'play' && G.mode !== 'inside') { U.tags([]); U.marks([]); U.prompt(null); return; }
@@ -1345,7 +1327,7 @@
     if (a.carrying && !A.rover.driver && G.mode === 'play') U.hands(a.carrying, G.charge ? G.charge.power : 0, G.charge ? 'Let go to throw!' : touch ? 'Hold 🎯 to aim a throw' : 'Hold F to aim a throw · Q puts it down');
     else U.hands(null);
     U.roverHud(s.m.rover.charge, A.rover.driver && G.mode === 'play');
-    // goals + BOLT
+    // goals + Mission Control
     if (G.clock > G.goalAt) {
       G.goalAt = G.clock + 0.3;
       document.documentElement.style.setProperty('--hud-b', Math.round($('hud').getBoundingClientRect().bottom) + 'px');   // lets the CSS stack things under the top bar
@@ -1505,7 +1487,7 @@
       Au.play('step', sprint ? { vol: 1.25 } : null);
     };
     A.onBounce = function (it, hit) { if (hit > 2) Au.play('thud', { at: it.pos, vol: Math.min(1, hit / 6) }); W.dust(it.pos.x, it.pos.z, 4, 1.4, 0.35); };
-    A.onEdge = function () { say('That is as far as my radio can reach. Let us turn back!'); };
+    A.onEdge = function () { say('That is as far as the outpost radio can reach. Turn back, Commander!'); };
     A.onDevil = function (kind) {
       if (!G.s || (G.mode !== 'play' && G.mode !== 'inside')) return;
       if (kind === 'clean') { sim.cleanAllPanels(G.s); toastAt(B.pos.solar, '🌪️ Dust devil cleaned the panels!', '#ffd23f'); tip('devil', 'A dust devil just blew the dust off the solar panels! That really happened to the Spirit and Opportunity rovers.'); }
@@ -1541,7 +1523,6 @@
       if (G.mode === 'play') stepPlay(dt);
       else if (G.mode === 'inside') stepInside(dt);
       else if (G.mode === 'launch') stepLaunch(dt);
-      if (G.mode === 'dance' && !ext('alien', 'step', dt)) endDance();
       if (A.astro) A.update(dt, (G.mode === 'play' || G.mode === 'inside') && !G.mini ? G.input : null);
       if (G.mode === 'intro') JA.intro.step(dt);
       if (G.s && (G.mode === 'play' || G.mode === 'inside')) {
@@ -1551,7 +1532,6 @@
       }
       if (G.s) {
         WORLD.mode = G.mode; WORLD.pos = me(); WORLD.s = G.s;
-        if (G.mode === 'play' || G.mode === 'inside' || G.mode === 'dance') ext('alien', 'update', dt, WORLD);
         ext('colony', 'update', dt, WORLD);
       }
     }

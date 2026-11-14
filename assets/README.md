@@ -22,7 +22,7 @@ needs no extra downloads and also works when `index.html` is opened straight fro
 | path_lantern | the six path lights | |
 | telescope | — (new) | stands beside the airlock, with a collider |
 | astronaut | `buildAstronaut()` (`js/actors.js`) | same shoulder and hip pivots; the cuffs take the suit colour chosen at setup |
-| buddy | `buildBuddy()` | |
+| buddy | — | not exported: the robot buddy was removed from the game (Mission Control now talks to you by radio) |
 | rover | `buildRover()` | wheels spin and steer, the charging ring changes colour as before |
 | power_cell, soil_bag, core_sample, food_crate, instrument, supply_case | carried items in `itemMesh()` | soil bag coloured per site, core cap per quality, instrument band per instrument |
 

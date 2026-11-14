@@ -92,18 +92,22 @@ kbd { display: inline-grid; place-items: center; min-width: 30px; height: 30px; 
 .mark.small i { width: 24px; height: 24px; font-size: 0.75rem; opacity: 0.85; }
 .mark.small span { display: none; }
 
-/* ---------- banner, buddy, prompt ---------- */
+/* ---------- banner, radio, prompt ---------- */
 #banner { position: fixed; top: calc(86px + var(--safe-t)); left: 50%; transform: translateX(-50%); z-index: 19; padding: 9px 20px; border-radius: 999px; font-weight: 700; font-size: 1.08rem; background: var(--power); color: #2a1c00; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4); white-space: nowrap; max-width: 92vw; overflow: hidden; text-overflow: ellipsis; }
 #banner.active { background: var(--danger); color: #fff; animation: flash 0.5s infinite alternate; }
 #banner.safe { background: var(--ok); color: #05301a; }
 #banner.info { background: var(--panel); color: #fff; box-shadow: inset 0 0 0 1.5px var(--line), 0 6px 20px rgba(0, 0, 0, 0.4); font-weight: 600; }
 @keyframes flash { from { filter: brightness(1); } to { filter: brightness(1.35); } }
-#bolt { position: fixed; left: 12px; bottom: calc(14px + var(--safe-b)); display: flex; align-items: center; gap: 10px; max-width: min(400px, 40vw); background: var(--panel); border-radius: 22px 22px 22px 6px; padding: 9px 14px 9px 9px; box-shadow: inset 0 0 0 1.5px var(--line), 0 10px 26px rgba(0, 0, 0, 0.4); backdrop-filter: blur(10px); z-index: 19; }
-#bolt.say { animation: bump 0.3s; }
-.bolt-face { flex: none; width: 44px; height: 44px; border-radius: 50%; background: #fafbff; display: flex; align-items: center; justify-content: center; gap: 7px; box-shadow: inset 0 0 0 9px #fafbff, inset 0 0 0 30px #131a2e; }
-.bolt-face i { width: 7px; height: 9px; border-radius: 50%; background: #5cf0ff; box-shadow: 0 0 8px #5cf0ff; animation: blink 3.6s infinite; }
-@keyframes blink { 0%, 93%, 100% { transform: scaleY(1); } 96% { transform: scaleY(0.1); } }
-#bolt-text { margin: 0; font-size: 0.93rem; line-height: 1.3; }
+#radio { position: fixed; left: 12px; bottom: calc(14px + var(--safe-b)); display: flex; align-items: center; gap: 10px; max-width: min(400px, 40vw); background: var(--panel); border-radius: 22px 22px 22px 6px; padding: 9px 14px 9px 9px; box-shadow: inset 0 0 0 1.5px var(--line), 0 10px 26px rgba(0, 0, 0, 0.4); backdrop-filter: blur(10px); z-index: 19; }
+#radio.say { animation: bump 0.3s; }
+#radio p, .crisis-radio p { margin: 0; font-size: 0.93rem; line-height: 1.3; }
+#radio small, .crisis-radio small { display: block; margin-bottom: 2px; font: 700 0.66rem ui-monospace, Consolas, monospace; letter-spacing: 0.16em; text-transform: uppercase; color: var(--air); }
+.radio-badge { position: relative; flex: none; width: 44px; height: 44px; border-radius: 50%; background: #131a2e; display: flex; align-items: center; justify-content: center; font-size: 22px; line-height: 1; box-shadow: inset 0 0 0 2px #5cf0ff55; }
+.radio-badge .ico { width: 28px; height: 28px; }
+.radio-badge i { position: absolute; inset: -2px; border-radius: 50%; border: 2px solid #5cf0ff; opacity: 0; pointer-events: none; }
+#radio.live .radio-badge i, .crisis-radio .radio-badge i { animation: wave 1.6s ease-out infinite; }
+.radio-badge i + i { animation-delay: 0.8s !important; }
+@keyframes wave { from { transform: scale(0.85); opacity: 0.85; } to { transform: scale(1.5); opacity: 0; } }
 #prompt { position: fixed; left: 50%; bottom: calc(96px + var(--safe-b)); transform: translateX(-50%); display: flex; align-items: center; gap: 10px; background: var(--panel); border-radius: 999px; padding: 8px 18px 8px 9px; font-weight: 600; font-size: 1.05rem; box-shadow: inset 0 0 0 2px var(--power), 0 8px 22px rgba(0, 0, 0, 0.45); z-index: 19; white-space: nowrap; }
 #prompt.info { box-shadow: inset 0 0 0 1.5px var(--line), 0 8px 22px rgba(0, 0, 0, 0.45); color: var(--muted); }
 #prompt.info kbd { display: none; }
@@ -164,7 +168,7 @@ kbd { display: inline-grid; place-items: center; min-width: 30px; height: 30px; 
 #touch-btns button { width: 70px; height: 70px; border-radius: 50%; font-size: 1.7rem; background: rgba(255, 255, 255, 0.16); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.35); touch-action: none; }
 #touch-btns #t-use { grid-column: 2; grid-row: 1 / 3; width: 78px; height: 78px; background: var(--power); box-shadow: 0 5px 0 #b98a00; }
 #touch-btns button:active { transform: translateY(3px); }
-body.touch #bolt { bottom: auto; top: calc(112px + var(--safe-t)); left: 12px; max-width: min(340px, 44vw); }
+body.touch #radio { bottom: auto; top: calc(112px + var(--safe-t)); left: 12px; max-width: min(340px, 44vw); }
 body.touch #goals { display: none; }
 body.touch #prompt { bottom: calc(170px + var(--safe-b)); }
 body.touch #hands, body.touch #rover-hud { bottom: calc(112px + var(--safe-b)); }
@@ -280,9 +284,9 @@ body.touch #hands, body.touch #rover-hud { bottom: calc(112px + var(--safe-b)); 
 .modal.crisis { box-shadow: inset 0 0 0 3px var(--danger), 0 24px 70px rgba(0, 0, 0, 0.7); }
 .crisis-head small { color: #ff9aa8; animation: flash 0.6s infinite alternate; }
 .crisis-head .big-icon { animation: wobble 0.5s ease-in-out infinite; display: inline-block; }
-.crisis-bolt { display: flex; align-items: center; gap: 11px; background: rgba(255, 255, 255, 0.06); border-radius: 18px 18px 18px 6px; padding: 9px 13px 9px 9px; margin: 10px 0 12px; }
-.crisis-bolt p { margin: 0; font-size: 0.93rem; color: #dfe5ff; }
-.crisis-bolt .bolt-face { width: 40px; height: 40px; box-shadow: inset 0 0 0 8px #fafbff, inset 0 0 0 27px #131a2e; gap: 6px; }
+.crisis-radio { display: flex; align-items: center; gap: 11px; background: rgba(255, 255, 255, 0.06); border-radius: 18px 18px 18px 6px; padding: 9px 13px 9px 9px; margin: 10px 0 12px; }
+.crisis-radio p { color: #dfe5ff; }
+.crisis-radio .radio-badge { width: 40px; height: 40px; }
 .modal.crisis .opt:hover { box-shadow: inset 0 0 0 2px var(--power), 0 4px 0 rgba(0, 0, 0, 0.35); }
 .crisis-foot { margin-top: 12px; font-size: 0.86rem; }
 .decision { background: rgba(255, 255, 255, 0.05); border-radius: 18px; padding: 12px 14px; margin: 8px 0; box-shadow: inset 0 0 0 1.5px var(--line); }
@@ -350,18 +354,18 @@ body.cine #fade { z-index: 27; }      /* during the film, titles and subtitles s
   .cards, .cards.three { grid-template-columns: 1fr; } .cards.four { grid-template-columns: 1fr 1fr; }
   .modal { padding: 18px 16px 16px; border-radius: 22px; } .modal h2 { font-size: 1.4rem; }
   #cine-data { font-size: 0.68rem; letter-spacing: 0.06em; } #cine-skip { right: 10px; }
-  #bolt-text { font-size: 0.85rem; } .bolt-face { width: 36px; height: 36px; box-shadow: inset 0 0 0 7px #fafbff, inset 0 0 0 24px #131a2e; gap: 5px; }
+  #radio p { font-size: 0.85rem; } .radio-badge { width: 36px; height: 36px; } .radio-badge .ico { width: 24px; height: 24px; }
 }
 @media (max-width: 640px) {
   #hud { flex-wrap: wrap; gap: 6px; } .meters { order: 3; flex-basis: 100%; } .hud-right { margin-left: auto; }
   .m-icon { display: none; } .m-note { font-size: 0.68rem; }
-  body.touch #bolt { top: calc(150px + var(--safe-t)); max-width: calc(100vw - 24px); }
+  body.touch #radio { top: calc(150px + var(--safe-t)); max-width: calc(100vw - 24px); }
   #banner { top: calc(126px + var(--safe-t)); font-size: 0.9rem; padding: 7px 14px; }
   #card { top: calc(150px + var(--safe-t)); }
   .turn-tip { display: block; }
 }
 @media (max-height: 520px) {
-  #goals { display: none; } #bolt { max-width: 300px; } #bolt-text { font-size: 0.8rem; }
+  #goals { display: none; } #radio { max-width: 300px; } #radio p { font-size: 0.8rem; }
   #title h1 { font-size: 3rem; } #title .tag { margin: 8px auto 12px; font-size: 1rem; }
   #stick { width: 108px; height: 108px; } #mini { top: 40%; }
 }
@@ -376,7 +380,7 @@ body.cine #fade { z-index: 27; }      /* during the film, titles and subtitles s
 #hud { left: calc(12px + var(--safe-l)); right: calc(12px + var(--safe-r)); }
 #stick { left: calc(22px + var(--safe-l)); }
 #touch-btns { right: calc(18px + var(--safe-r)); }
-.chip, .meter, #goals, #bolt { -webkit-backdrop-filter: blur(8px); }
+.chip, .meter, #goals, #radio { -webkit-backdrop-filter: blur(8px); }
 #stick, #touch-btns button, #scene { -webkit-touch-callout: none; }
 /* Touch: the whole checklist does not fit, so show only the step to do now, where the banner goes.
    --hud-b is the bottom edge of the top bar, measured by game.js. */
@@ -385,14 +389,14 @@ body.touch.has-banner #goals, body.touch #goals.empty { display: none; }
 body.touch #goals h4 { display: none; }
 body.touch #goal-list li { display: none; }
 body.touch #goal-list li.now { display: grid; font-size: 0.86rem; }
-body.touch #bolt { top: calc(var(--hud-b, 86px) + 58px); left: calc(12px + var(--safe-l)); }
+body.touch #radio { top: calc(var(--hud-b, 86px) + 58px); left: calc(12px + var(--safe-l)); }
 @media (max-width: 640px) {
   /* keep the day chip and the buttons on one row, so the top bar is two rows tall, not three */
   .hud-right { gap: 4px; } .stars { padding: 7px 8px; gap: 4px; } .stars b { min-width: 1.1em; } .sol-chip { min-width: 104px; }
   #banner { top: calc(var(--hud-b, 150px) + 8px); white-space: normal; text-align: center; }
   #goals { top: calc(var(--hud-b, 150px) + 56px); }
   body.touch #goals { top: calc(var(--hud-b, 150px) + 8px); }
-  body.touch #bolt { top: calc(var(--hud-b, 150px) + 64px); }
+  body.touch #radio { top: calc(var(--hud-b, 150px) + 64px); }
   #card { top: calc(var(--hud-b, 150px) + 56px); }
 }
 
@@ -439,7 +443,7 @@ body.touch.in-room #goals { display: none; }
 body.cine #fx-tag { display: none; }
 
 /* glassy sheen on the HUD panels, like a visor display (js/fx.js does the 3D view) */
-.chip, .meter, #goals, #prompt, #hands, #rover-hud, #bolt, #inside, .icon-btn { background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0) 48%); }
+.chip, .meter, #goals, #prompt, #hands, #rover-hud, #radio, #inside, .icon-btn { background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0) 48%); }
 /* the 3D view now draws its own storm glow, so the flat overlay steps back */
 body.fx-on #storm-fx.warn { opacity: 0.2; }
 body.fx-on #storm-fx.active { opacity: 0.45; }

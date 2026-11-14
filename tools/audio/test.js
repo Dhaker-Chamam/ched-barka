@@ -157,7 +157,7 @@ async function main() {
       A.astro.pos.copy(JA.base.spots.door); G.ePressed = true; step(2); out.mode = G.mode; step(40);
       await wait(1500);
       out.scene.inn = Au.debug.scene(); out.loops.inn = Au.debug.loops(); out.loops.innSounding = Au.debug.playing();
-      // BOLT's lines: the words find their recording
+      // Mission Control's lines: the words find their recording
       out.voice.exact = JA.voiceFor('The Solar Rack is full, so the panels are wasting sunshine. Use those power cells!');
       out.voice.changing = JA.voiceFor('The Air Maker is powered but hungry. Bring ice from the Shadow Crater!');
       out.voice.none = JA.voiceFor('These words are not a line.');

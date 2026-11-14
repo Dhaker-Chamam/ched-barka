@@ -5,6 +5,8 @@
      node tools/audio/build.js           process every take, then pack and list (the usual command)
      node tools/audio/build.js pack      only re-pack audio/sfx and re-list audio/voice and audio/music
                                          (after replacing an mp3 in audio/ by hand)
+     node tools/audio/build.js landing   put the landing film's Mission Control clips through the radio filter
+                                         (originals in <raw>/landing/<id>/, list in manifest LANDING_RADIO)
 
    Options:  --raw <folder>   where the raw takes are (default: ../audio-raw, next to the repo)
              --only <id,id>   process just these sounds
@@ -14,9 +16,11 @@
      <raw>/sfx/<id>.<k>/      take k of a sound with several variants, joined takes or parts
      <raw>/voice/<id>/        a voice line
      <raw>/music/<id>/        a piece of music
+     <raw>/landing/<id>/      the original of a landing-film clip that is heard over the radio
 
    What processing does: cuts the silence at both ends, brings every sound to a matched loudness (the raw takes
-   differ by up to 40 dB), adds a tiny fade so nothing clicks, and saves an mp3. Needs ffmpeg on the PATH. */
+   differ by up to 40 dB), adds a tiny fade so nothing clicks, and saves an mp3. Voices from Earth (CAST radio: true)
+   also go through a radio filter first. Needs ffmpeg on the PATH. */
 'use strict';
 const fs = require('fs'), path = require('path'), os = require('os'), { spawnSync } = require('child_process');
 const M = require('./manifest.js');
@@ -27,7 +31,7 @@ const opt = (name) => { const i = args.indexOf('--' + name); return i >= 0 ? arg
 const cmd = args[0] && !args[0].startsWith('--') ? args[0] : 'all';
 const RAW = path.resolve(opt('raw') || path.join(ROOT, '..', 'audio-raw'));
 const ONLY = opt('only') ? opt('only').split(',') : null;
-const OUT = { sfx: path.join(ROOT, 'audio', 'sfx'), voice: path.join(ROOT, 'audio', 'voice'), music: path.join(ROOT, 'audio', 'music') };
+const OUT = { sfx: path.join(ROOT, 'audio', 'sfx'), voice: path.join(ROOT, 'audio', 'voice'), music: path.join(ROOT, 'audio', 'music'), landing: path.join(ROOT, 'audio', 'landing') };
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'astro-audio-'));
 const AUDIO_EXT = /\.(mp3|wav|ogg|opus|flac|m4a)$/i;
 
@@ -105,6 +109,21 @@ function join(a, b, d) {          // one after the other, with a cross-fade of d
   ff(['-i', a, '-i', b, '-filter_complex', '[0][1]acrossfade=d=' + d + ':c1=qsin:c2=qsin', ...WAV, out]);
   return out;
 }
+// The radio: Mission Control talks from Earth. A space radio only carries the middle of a voice (about 300 to
+// 3,400 Hz, like an old telephone), squeezes it so it stays clear over the noise, clips the loudest bits a
+// little, and leaves a soft hiss underneath. The game then adds the Quindar beeps around each message.
+const RADIO = ['highpass=f=300:poles=2', 'highpass=f=300:poles=2', 'lowpass=f=3400:poles=2', 'lowpass=f=3400:poles=2',
+  'equalizer=f=1800:t=q:w=1.2:g=5', 'acompressor=threshold=0.08:ratio=8:attack=2:release=80:makeup=4', 'asoftclip=type=atan:param=1.6'].join(',');
+const HISS_DB = -36;            // the hiss, against the voice's loudest moments
+function radio(src) {
+  const sec = measure(src).sec, out = tmp();
+  ff(['-i', src, '-f', 'lavfi', '-i', 'anoisesrc=color=white:amplitude=1:seed=7:sample_rate=44100:d=' + (sec + 0.5).toFixed(2),
+    '-filter_complex', '[0]aformat=channel_layouts=mono,' + RADIO + ',alimiter=limit=0.89:level=0[v];' +
+      '[1]highpass=f=1500,lowpass=f=6000,volume=' + HISS_DB + 'dB[n];[v][n]amix=inputs=2:duration=first:normalize=0',
+    '-ac', '1', '-ar', '44100', ...WAV, out]);
+  return out;
+}
+
 // Set the level, fade the edges, save as mp3.
 //   o.loud: match the loudest tenth of a second (one-shot sounds). A spiky sound would stay quiet if only its peak
 //           counted, so it may lean up to 8 dB into a limiter.
@@ -156,13 +175,22 @@ function buildSfx(s) {
 function buildVoice(v) {
   const src = newest(path.join(RAW, 'voice', v.id));
   if (!src) return;
-  const st = finish(trim(src, 1, 0.03, 0.12), path.join(OUT.voice, v.id + '.mp3'), { mean: LOUD.voice, ceil: -2, ch: 1, rate: '64k', fadeIn: 0.008, fadeOut: 0.06 });
-  let note = '';
+  const onRadio = !!(M.CAST[v.who] || {}).radio, t = trim(src, 1, 0.03, 0.12);
+  const st = finish(onRadio ? radio(t) : t, path.join(OUT.voice, v.id + '.mp3'), { mean: LOUD.voice, ceil: -2, ch: 1, rate: '64k', fadeIn: 0.008, fadeOut: 0.06 });
+  let note = onRadio ? 'radio' : '';
   // a line spoken much faster or slower than normal speech was probably cut short, or has something added
   const rate = v.text.replace(/[^A-Za-z0-9]/g, '').length / st.sec;
-  if (v.text.length > 25 && (rate > 21 || rate < 9)) { note = 'unusual pace (' + rate.toFixed(0) + ' letters a second): listen to it'; problems.push(v.id + ': ' + note); }
+  if (v.text.length > 25 && (rate > 21 || rate < 9)) { note = (note ? note + ', ' : '') + 'unusual pace (' + rate.toFixed(0) + ' letters a second): listen to it'; problems.push(v.id + ': ' + note); }
   if (/^launch-[123]$/.test(v.id) && st.sec > 0.78) { note = 'longer than the 0.8 s between countdown numbers'; problems.push(v.id + ': ' + st.sec.toFixed(2) + ' s is ' + note); }
   report('voice', v.id, st, note);
+}
+// A landing-film clip heard over the radio. Only its sound changes: it keeps the level it had, and its own timing.
+function buildLanding(id) {
+  const src = newest(path.join(RAW, 'landing', id));
+  if (!src) { problems.push(id + ': no original in ' + path.join(RAW, 'landing', id)); return; }
+  const before = measure(src);
+  const st = finish(radio(src), path.join(OUT.landing, id + '.mp3'), { mean: before.mean, ceil: -1, ch: 2, rate: '128k', fadeIn: 0.004, fadeOut: 0.03 });
+  report('film', id, st, 'radio (level kept at ' + before.mean.toFixed(1) + ' dB)');
 }
 function buildMusic(m) {
   const src = newest(path.join(RAW, 'music', m.id));
@@ -202,7 +230,7 @@ function pack() {
   fs.writeFileSync(path.join(ROOT, 'js', 'audio-list.js'),
     '/* Astro Outpost — which voice lines and music exist as recordings.\n' +
     '   Made by tools/audio/build.js from audio/voice/, audio/music/ and tools/audio/manifest.js. Do not edit by hand.\n' +
-    '   w: who speaks (bolt, or mc for Mission Control)   t: the words */\n' +
+    '   w: who speaks (capcom or mc: both Mission Control on Earth, heard over the radio)   t: the words */\n' +
     'window.JA = window.JA || {};\nJA.VOICE = {\n' +
     voice.map((v) => "  '" + v.id + "': { w: '" + v.who + "', t: '" + esc(v.text) + "' }").join(',\n') + '\n};\n' +
     '// speech bubbles whose words change from game to game: how the bubble starts, and the line that answers it\n' +
@@ -228,6 +256,12 @@ function table() {
 }
 function main() {
   if (cmd === 'prep') { prep(); return; }
+  if (cmd === 'landing') {
+    M.LANDING_RADIO.forEach((id) => { if (!wanted(id)) return; try { buildLanding(id); } catch (e) { problems.push(id + ': ' + e.message); } });
+    table();
+    if (problems.length) { console.log('\nProblems:'); problems.forEach((x) => console.log('  - ' + x)); process.exitCode = 1; }
+    return;
+  }
   if (cmd !== 'pack') {
     const each = (list, fn, kind) => list.forEach((x) => { if (!wanted(x.id)) return; try { fn(x); } catch (e) { problems.push(x.id + ': ' + e.message); } });
     each(M.SFX, buildSfx); each(M.VOICE, buildVoice); each(M.MUSIC, buildMusic);
