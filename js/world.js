@@ -406,6 +406,7 @@
     Tn.setSite(site);
     root = W.root = new T.Group(); scene.add(root);
     buildGround(); buildSky(); buildParticles(); buildPrints();
+    if (JA.models.prepare) JA.models.prepare(renderer, look);   // reflections for the Blender models (js/models.js)
     JA.base.build(root, site);
     JA.actors.build(root, site, suitColor);
     env.dust = env.dustShown = env.storm = env.stormShown = 0;

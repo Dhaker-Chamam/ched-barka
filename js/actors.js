@@ -2,9 +2,11 @@
    and every object you can pick up, carry and throw (with real Moon / Mars gravity). */
 (function (JA) {
   'use strict';
-  var T = window.THREE, W = JA.world, Tn = JA.terrain, B = JA.base;
+  var T = window.THREE, W = JA.world, Tn = JA.terrain, B = JA.base, MD = JA.models;
   var A = JA.actors = { items: [], devils: [] };
   if (!T) return;
+  // models made in Blender (js/models.js); without them the plain shapes below are drawn
+  function hasModel(name) { return !!(MD && MD.has(name)); }
   var root, site, grav = 3.71, add, mat, soft, glow;
   var astro, buddy, rover;
   var v1 = new T.Vector3(), v2 = new T.Vector3(), v3 = new T.Vector3(), UP = new T.Vector3(0, 1, 0), q1 = new T.Quaternion();
@@ -16,6 +18,22 @@
 
   // ---------- astronaut ----------
   function buildAstronaut(color) {
+    var a = hasModel('astronaut') ? astronautModel(color) : astronautShapes(color);
+    a.group.scale.setScalar(0.84);
+    root.add(a.group);
+    return Object.assign(a, { pos: new T.Vector3(0, 0, 13), vel: new T.Vector3(), vy: 0, yaw: Math.PI, onGround: true, mode: 'walk', carrying: null,
+      aim: false, phase: 0, moving: 0, squash: 0, throwT: 0, spin: 0, stepSide: 1, moved: 0, lastStep: 0 });
+  }
+  // the Blender astronaut: same pivots (shoulders, hips, drill) as the plain one; cuffs take the chosen suit colour
+  function astronautModel(color) {
+    var g = MD.make('astronaut'), accent = MD.mat(g, 'SuitAccent'), drill = g.getObjectByName('astro_drill');
+    if (accent) accent.color.setHex(color).convertSRGBToLinear();
+    drill.visible = false;
+    return { group: g, body: g.getObjectByName('astro_body'), armL: g.getObjectByName('astro_armL'), armR: g.getObjectByName('astro_armR'),
+      legL: g.getObjectByName('astro_legL'), legR: g.getObjectByName('astro_legR'), tip: g.getObjectByName('astro_antennaTip'),
+      drill: drill, bit: g.getObjectByName('astro_drillBit') };
+  }
+  function astronautShapes(color) {
     var g = new T.Group(), body = new T.Group(); g.add(body);
     var white = soft(0xf5f6fa), accent = soft(color), grey = soft(0xcfd3de);
     add(body, new T.CapsuleGeometry(0.44, 0.46, 6, 14), white, 0, 1.08, 0);
@@ -43,14 +61,19 @@
     var drill = new T.Group(); drill.position.set(0, 0.95, 0.7); body.add(drill); drill.visible = false;
     add(drill, new T.BoxGeometry(0.3, 0.5, 0.3), soft(0xffc533), 0, 0.2, 0);
     var bit = add(drill, new T.ConeGeometry(0.09, 0.9, 6), new T.MeshStandardMaterial({ color: 0xb8bcc8, metalness: 0.8, roughness: 0.3 }), 0, -0.45, 0); bit.rotation.x = Math.PI;
-    g.scale.setScalar(0.84);
-    root.add(g);
-    return { group: g, body: body, armL: armL, armR: armR, legL: legL, legR: legR, tip: tip, drill: drill, bit: bit,
-      pos: new T.Vector3(0, 0, 13), vel: new T.Vector3(), vy: 0, yaw: Math.PI, onGround: true, mode: 'walk', carrying: null,
-      aim: false, phase: 0, moving: 0, squash: 0, throwT: 0, spin: 0, stepSide: 1, moved: 0, lastStep: 0 };
+    return { group: g, body: body, armL: armL, armR: armR, legL: legL, legR: legR, tip: tip, drill: drill, bit: bit };
   }
 
   function buildBuddy() {
+    if (hasModel('buddy')) {
+      var m = MD.make('buddy'), ring = m.getObjectByName('buddy_ring'), spin = new T.Group();
+      // the update spins the ring with rotation.z (written for a ring standing in the XY plane);
+      // a holder turned a quarter round makes that same spin go around the vertical axis
+      spin.position.copy(ring.position); spin.rotation.x = Math.PI / 2; ring.parent.add(spin);
+      spin.add(ring); ring.position.set(0, 0, 0); ring.rotation.x = -Math.PI / 2;
+      root.add(m);
+      return { group: m, eL: m.getObjectByName('buddy_eyeL'), eR: m.getObjectByName('buddy_eyeR'), ring: spin, pos: new T.Vector3(1.4, 2.4, 13) };
+    }
     var g = new T.Group(), white = soft(0xfafbff, { roughness: 0.4 });
     add(g, new T.SphereGeometry(0.38, 20, 16), white, 0, 0, 0);
     var face = add(g, new T.SphereGeometry(0.33, 20, 16), soft(0x131a2e, { roughness: 0.2 }), 0, 0.02, 0.11); face.scale.set(1, 0.7, 0.9);
@@ -66,6 +89,22 @@
   // ---------- rover ----------
   function buildRover() {
     var g = new T.Group(), body = new T.Group(); g.add(body);
+    var wheels = [], ring;
+    if (hasModel('rover')) {
+      // the Blender rover: the body tilts with the ground, the six wheels spin on their own (same order as below)
+      var m = MD.make('rover');
+      body.add(m.getObjectByName('rover_body'));
+      ring = m.getObjectByName('rover_socketRing'); body.add(ring);
+      for (var i = 0; i < 6; i++) { var mw = m.getObjectByName('rover_wheel_' + i); g.add(mw); wheels.push(mw); }
+    } else roverShapes(g, body, wheels, function (r) { ring = r; });
+    var lightL = new T.SpotLight(0xfff2cc, 0, 40, 0.7, 0.5, 1.3); lightL.position.set(0, 1.4, 2.2); body.add(lightL);
+    lightL.target.position.set(0, 0, 14); body.add(lightL.target);
+    root.add(g);
+    var p = Tn.L.roverPark;
+    return { group: g, body: body, wheels: wheels, ring: ring, light: lightL, pos: new T.Vector3(p[0], Tn.height(p[0], p[1]), p[1]),
+      yaw: Math.PI / 2, speed: 0, vy: 0, lastGnd: 0, onGround: true, pitch: 0, roll: 0, bed: [null, null, null, null], trackD: 0, driver: false };
+  }
+  function roverShapes(g, body, wheels, setRing) {
     var white = soft(0xf2f3f7), dark = soft(0x2b3147), orange = soft(0xff8a3d);
     add(body, new T.BoxGeometry(2.3, 0.4, 4.6), white, 0, 0.95, 0);
     add(body, new T.BoxGeometry(2.1, 0.5, 1.5), orange, 0, 1.3, 1.3);
@@ -85,7 +124,7 @@
     // power socket on the back
     add(body, new T.CylinderGeometry(0.45, 0.4, 0.4, 14), dark, 0, 1.25, -2.55);
     var ring = add(body, new T.TorusGeometry(0.46, 0.07, 8, 20), glow(0xffd23f, 1.4), 0, 1.46, -2.55, true); ring.rotation.x = Math.PI / 2;
-    var wheels = [];
+    setRing(ring);
     [-1.6, 0, 1.6].forEach(function (z) { [-1.25, 1.25].forEach(function (x) {
       var w = new T.Group(); w.position.set(x, 0.62, z); g.add(w);
       var tire = add(w, new T.CylinderGeometry(0.62, 0.62, 0.42, 12), mat(0x22252f), 0, 0, 0); tire.rotation.z = Math.PI / 2;
@@ -93,12 +132,6 @@
       add(w, new T.BoxGeometry(0.46, 0.14, 1.0), mat(0x3a3e4c), 0, 0, 0);
       wheels.push(w);
     }); });
-    var lightL = new T.SpotLight(0xfff2cc, 0, 40, 0.7, 0.5, 1.3); lightL.position.set(0, 1.4, 2.2); body.add(lightL);
-    lightL.target.position.set(0, 0, 14); body.add(lightL.target);
-    root.add(g);
-    var p = Tn.L.roverPark;
-    return { group: g, body: body, wheels: wheels, ring: ring, light: lightL, pos: new T.Vector3(p[0], Tn.height(p[0], p[1]), p[1]),
-      yaw: Math.PI / 2, speed: 0, vy: 0, lastGnd: 0, onGround: true, pitch: 0, roll: 0, bed: [null, null, null, null], trackD: 0, driver: false };
   }
   var BED = [[-0.5, 1.6, -0.85], [0.5, 1.6, -0.85], [-0.5, 1.6, -1.7], [0.5, 1.6, -1.7]];
   function roverLocal(x, y, z, out) {
@@ -120,7 +153,19 @@
   };
 
   // ---------- things you can carry ----------
+  var ITEM_MODEL = { cell: 'power_cell', bag: 'soil_bag', core: 'core_sample', crate: 'food_crate', inst: 'instrument', 'case': 'supply_case' };
+  function itemModel(type, data) {
+    var name = type === 'ice' ? null : ITEM_MODEL[type] || 'supply_case', m, c;
+    if (!name || !hasModel(name)) return null;
+    m = MD.make(name);
+    if (type === 'bag') MD.mat(m, 'Sack').color.setHex(site === 'mars' ? 0xa9582f : 0x7b7c87).convertSRGBToLinear();
+    else if (type === 'core') { c = MD.mat(m, 'Glow_Core'); c.color.setHex([0xc9824a, 0xdfe2ea, 0xffd23f][data ? data.quality : 1]); c.emissive.copy(c.color); }
+    else if (type === 'inst') { c = MD.mat(m, 'Glow_Inst'); c.color.setHex({ seismo: 0x5cf0ff, beam: 0xffd23f, rad: 0xff6fb1 }[data && data.id] || 0xffffff); c.emissive.copy(c.color); }
+    return m;
+  }
   function itemMesh(type, data) {
+    var mm = itemModel(type, data);
+    if (mm) return mm;
     var g = new T.Group(), k;
     if (type === 'cell') {
       add(g, new T.CylinderGeometry(0.3, 0.3, 0.8, 14), glow(0xffe36a, 1.5), 0, 0, 0);

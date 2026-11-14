@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Astro Outpost — asset viewer</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #070b1c; color: #e9e2d0; font: 14px/1.4 system-ui, sans-serif; overflow: hidden; }
+  #bar { position: fixed; left: 0; top: 0; bottom: 0; width: 190px; padding: 14px 10px; box-sizing: border-box; overflow-y: auto;
+         background: rgba(10, 14, 34, 0.82); border-right: 1px solid #2a3157; z-index: 2; }
+  #bar h1 { font-size: 15px; margin: 0 0 10px; color: #ffc766; }
+  #bar button { display: block; width: 100%; margin: 3px 0; padding: 6px 8px; text-align: left; cursor: pointer;
+                background: #161c3d; color: inherit; border: 1px solid #2a3157; border-radius: 6px; font: inherit; }
+  #bar button.on { background: #c9703a; border-color: #ffc766; color: #fff; }
+  #info { position: fixed; left: 204px; bottom: 12px; right: 12px; z-index: 2; color: #aab3d6; font-size: 12px; white-space: pre-wrap; }
+  canvas { display: block; }
+</style>
+<!-- same three.js release the game loads (r149) -->
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.module.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.149.0/examples/jsm/" } }
+</script>
+</head>
+<body>
+<div id="bar"><h1>Asset viewer</h1></div>
+<div id="info">loading…</div>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const FILES = ['rocket', 'habitat', 'astronaut', 'rover', 'buddy', 'flag', 'flag_marker', 'rocks', 'telescope', 'path_lantern',
+               'solar_panel', 'power_cell', 'food_crate', 'supply_case', 'soil_bag', 'core_sample', 'instrument'];
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.outputEncoding = THREE.sRGBEncoding;            // as in js/world.js
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a1030);
+const camera = new THREE.PerspectiveCamera(42, 1, 0.05, 2000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+scene.add(new THREE.HemisphereLight(0x9fb2d8, 0x3a3550, 0.6));
+const sun = new THREE.DirectionalLight(0xffe2b8, 1.25);
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.06;
+scene.add(sun, sun.target);
+const ground = new THREE.Mesh(new THREE.CircleGeometry(400, 64), new THREE.MeshStandardMaterial({ color: 0x151a36, roughness: 1 }));
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+
+const models = {};          // name -> THREE.Group
+const stage = new THREE.Group(); scene.add(stage);
+const info = document.getElementById('info'), bar = document.getElementById('bar');
+let errors = 0, loaded = 0, current = null;
+window.viewerStatus = { loaded: 0, errors: 0, total: FILES.length, done: false };
+
+function prepare(name, root) {
+  let tris = 0; const nodes = [];
+  root.traverse(o => {
+    if (o !== root && o.name) nodes.push(o.name);
+    if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; tris += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; }
+  });
+  if (name === 'rocks') root.children[0].children.forEach((c, i, a) => { c.position.x = (i - (a.length - 1) / 2) * 3.2; });   // variants share the origin in the file
+  if (name === 'astronaut') { const d = root.getObjectByName('astro_drill'); if (d) d.visible = false; }                       // the game hides it until drilling
+  root.userData = { tris, nodes };
+  return root;
+}
+
+function frame(obj, dir) {
+  const box = new THREE.Box3().setFromObject(obj), c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3());
+  const r = Math.max(s.x, s.y, s.z) * 0.5 + 0.2;
+  const tv = Math.tan(camera.fov * Math.PI / 360), th = tv * camera.aspect;
+  const wide = Math.hypot(s.x, s.z) * 0.5, tall = s.y * 0.5 + 0.2;                 // fit both ways, so wide line-ups fill a wide window
+  const dist = Math.max(wide / th, tall / tv) * 1.15 + wide * 0.6;
+  controls.target.copy(c);
+  camera.position.copy(c).addScaledVector(dir || new THREE.Vector3(0.55, 0.3, 0.78).normalize(), dist);
+  camera.near = dist / 200; camera.far = dist * 40; camera.updateProjectionMatrix();
+  sun.position.copy(c).add(new THREE.Vector3(-0.6, 1, 0.7).multiplyScalar(r * 3)); sun.target.position.copy(c);
+  const sc = sun.shadow.camera; sc.left = sc.bottom = -r * 1.6; sc.right = sc.top = r * 1.6; sc.near = 0.1; sc.far = r * 8; sc.updateProjectionMatrix();
+  ground.position.y = box.min.y - 0.001;
+}
+
+function show(name) {
+  current = name;
+  stage.clear();
+  [...bar.querySelectorAll('button')].forEach(b => b.classList.toggle('on', b.dataset.name === name));
+  if (name === 'all') {
+    let x = 0, tris = 0;
+    FILES.forEach(n => {
+      const m = models[n]; if (!m) return;
+      const b = new THREE.Box3().setFromObject(m), w = b.max.x - b.min.x;
+      m.position.set(x - b.min.x, 0, 0); x += w + 1.5; tris += m.userData.tris; stage.add(m);
+    });
+    frame(stage, new THREE.Vector3(0.1, 0.25, 1).normalize());
+    info.textContent = `${Object.keys(models).length} models · ${Math.round(tris).toLocaleString()} triangles · drag to orbit, wheel to zoom`;
+  } else {
+    const m = models[name]; m.position.set(0, 0, 0); stage.add(m); frame(m);
+    info.textContent = `${name}.glb · ${Math.round(m.userData.tris).toLocaleString()} triangles\nnodes: ${m.userData.nodes.join(', ')}`;
+  }
+}
+window.showModel = show;
+
+function button(name, label) {
+  const b = document.createElement('button'); b.textContent = label; b.dataset.name = name; b.onclick = () => show(name); bar.appendChild(b);
+}
+button('all', 'All (line-up)');
+const loader = new GLTFLoader();
+await Promise.all(FILES.map(n => new Promise(res => loader.load(`models/${n}.glb`,
+  g => { models[n] = prepare(n, g.scene); loaded++; res(); },
+  undefined,
+  e => { errors++; console.error('failed to load', n, e); res(); }))));
+FILES.forEach(n => { if (models[n]) button(n, n.replace(/_/g, ' ')); });
+window.viewerStatus = { loaded, errors, total: FILES.length, done: true };
+current = new URLSearchParams(location.search).get('m') || 'all';
+
+function resize() { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
+addEventListener('resize', resize); resize();
+if (current) show(current);
+renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+</script>
+</body>
+</html>
