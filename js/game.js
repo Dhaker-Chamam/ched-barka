@@ -12,7 +12,7 @@
     input: { x: 0, z: 0, jump: false, sprint: false }, keys: {}, stick: { x: 0, z: 0 },
     ePressed: false, eHeld: false, fHeld: false, charge: null, mini: null, fast: false, lookIdle: 9, zoom: 11,
     action: null, zones: [], tips: {}, tut: {}, tutStep: 0, dt: 0, clock: 0, sayAt: 0, hintAt: 0, goalAt: 0, goal: null,
-    lastWarn: -1, geiger: 0, ending: null, launchT: 0, bannerUntil: 0, caseItem: null
+    lastWarn: -1, geiger: 0, ending: null, launchT: 0, launchN: -1, bannerUntil: 0, caseItem: null, sayQ: [], sparkAt: 0
   };
   var SUITS = [0xff7a3d, 0x3d9bff, 0x4cd97b, 0xff5fa8, 0xb07cff];
   var touch = (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || ('ontouchstart' in window);
@@ -23,12 +23,24 @@
   function d2(a, b) { return Math.hypot(a.x - b.x, a.z - b.z); }
   function dayWord() { return G.s.site.dayWord; }
   function dustFor(kind) { return { clear: 0, dusty: 0.4, storm: 1, sun: 0, lowsun: 0.3, shadow: 0.8 }[kind] || 0; }
-  function say(text, force) {
+  // BOLT's speech bubble. vid: the recorded voice line for these words (found from the words when left out).
+  // A line that is being spoken is allowed to finish: a forced line waits its turn, a passing hint is dropped.
+  // Urgent lines (storms, breakdowns) cut in at once.
+  function say(text, force, vid, urgent) {
     if (!text) return;
     if (!force && G.clock < G.sayAt) return;
-    G.sayAt = G.clock + 3.5; U.say(text);
+    if (vid === undefined) vid = JA.voiceFor(text);
+    if (!urgent && Au.voicePlaying()) {
+      if (force && G.sayQ.length < 3) G.sayQ.push({ text: text, vid: vid, until: G.clock + 14 });
+      return;
+    }
+    if (urgent) G.sayQ.length = 0;
+    G.sayAt = G.clock + 3.5; U.say(text, vid);
   }
-  function tip(id, text) { if (G.tips[id]) return false; G.tips[id] = 1; say(text, true); return true; }
+  function sayNext() {
+    while (G.sayQ.length && !Au.voicePlaying()) { var q = G.sayQ.shift(); if (G.clock <= q.until) { G.sayAt = G.clock + 3.5; U.say(q.text, q.vid); } }
+  }
+  function tip(id, text, vid) { if (G.tips[id]) return false; G.tips[id] = 1; say(text, true, vid); return true; }
   function toastAt(pos, text, color) { var p = W.project(pos); if (!p.hidden) U.toast(text, clamp(p.x, 60, W.w - 60), clamp(p.y, 120, W.h - 120), color); }
   function me() { return A.rover.driver ? A.rover.pos : A.astro.pos; }
   function clockText(secs) { secs = Math.max(0, Math.ceil(secs)); return Math.floor(secs / 60) + ':' + ('0' + (secs % 60)).slice(-2); }
@@ -69,7 +81,7 @@
     if (A.astro) A.astro.mode = 'hidden';
     W.cam.mode = 'title'; W.env.t = 0.3; W.env.dust = 0; W.env.storm = 0;
     hideHud(); U.show($('title'), true); U.fade(false);
-    Au.stopAll(); showBest();
+    Au.stopAll(); Au.music('title'); showBest();
   }
 
   function setupModal() {
@@ -114,7 +126,7 @@
     G.weather = data;
     W.build(G.opts.site, G.opts.suit);
     var s = G.s = sim.newGame({ site: G.opts.site, level: G.opts.level, weather: data, dayLength: G.opts.shift });
-    G.tips = {}; G.tut = {}; G.tutStep = 0; G.mini = null; G.charge = null; G.ending = null; G.caseItem = null; G.fast = false; G.clock = 0; G.sayAt = 0;
+    G.tips = {}; G.tut = {}; G.tutStep = 0; G.mini = null; G.charge = null; G.ending = null; G.caseItem = null; G.fast = false; G.clock = 0; G.sayAt = 0; G.sayQ = []; G.sparkAt = 0;
     buildZones(); buildAim();
     JA.INSTRUMENTS[s.site.id].forEach(function (def, i) { A.spawn('inst', B.spots.pallet[i], { id: def.id, name: def.name }, 'fixed'); });
     A.roverCharge = function () { return G.s ? G.s.m.rover.charge : 1; };
@@ -133,6 +145,7 @@
     var s = G.s, day = s.day;
     G.mode = 'brief'; W.cam.mode = 'title'; W.env.t = 0.1; W.env.dust = dustFor(sim.env(s).kind);
     U.fade(false);
+    Au.music('title');          // after the landing film, the view's music fades into the theme
     var d1 = JA.weather.prettyDate(s.weather[0].date), dN = JA.weather.prettyDate(s.weather[s.weather.length - 1].date), wx;
     if (s.weatherFallback) wx = '<div class="info-row"><span class="ic">📼</span><div><b>Using saved NASA records</b><p><span class="tagline archive">NASA archive</span>We could not reach NASA just now, so the solar storms replay the real Sun from ' + d1 + ' to ' + dN + ' instead. This is not live data.</p></div></div>';
     else wx = '<div class="info-row"><span class="ic">🛰️</span><div><b>The real Sun is in this game</b><p>' + U.dataTag(s) + 'Solar storms replay the real Sun from ' + d1 + ' to ' + dN + (s.weatherSource === 'live' ? ', fetched just now from NASA\'s space-weather database.' : ' — one of the stormiest times in 20 years.') + '</p></div></div>';
@@ -146,7 +159,7 @@
       '<div class="info-row"><span class="ic">📡</span><div><b>Talking to Earth</b><p>' + esc(s.site.commText) + '</p></div></div>' +
       '<div class="info-row good"><span class="ic">' + day.icon + '</span><div><b>' + esc(dayWord()) + ' 1 · ' + esc(day.title) + ' · ' + esc(day.topic) + '</b><p>' + esc(day.learn) + '</p>' + srcLine(day.src) + '</div></div>' +
       '<div class="modal-actions"><button class="btn ghost" data-act="how">How to play</button><button class="btn primary" data-act="ok">Step outside ▶</button></div>',
-      { speak: 'Welcome to ' + s.site.name + ', Commander! I am BOLT, your robot buddy. Keep the crew alive for ' + n + ' ' + dw + ', do real science, then ride the rocket home.',
+      { speak: 'Welcome to ' + s.site.name + ', Commander! I am BOLT, your robot buddy. Keep the crew alive for ' + n + ' ' + dw + ', do real science, then ride the rocket home.', line: 'welcome-' + s.site.id,
         actions: { how: howInfo, ok: function () { Au.play('door'); U.closeModal(); beginSol(); } } });
   }
 
@@ -165,10 +178,11 @@
     }
   }
 
+  var DAY_VOX = { sun: 'bright-sunshine', lowsun: 'long-shadows', shadow: 'in-shadow', clear: 'clear-sky', dusty: 'dusty-sky', storm: 'dust-storm' };
   function beginSol() {
     var s = G.s, env = sim.env(s), look = s.site.env[env.kind], w = sim.weather(s), last = s.sol >= s.totalSols;
     if (A.rover.driver) A.exitRover();
-    A.resetAstro();
+    A.resetAstro(); Au.music(null);
     G.mode = 'play'; G.mini = null; G.charge = null; G.fast = false; A.astro.aim = false;
     W.cam.mode = 'play'; W.cam.focus = A.focus; W.cam.yaw = 0.45; W.cam.pitch = 0.36; G.zoom = 11;
     W.env.dust = dustFor(env.kind); W.env.storm = 0; W.env.t = 0.06;
@@ -181,10 +195,15 @@
     function go() {
       U.banner(dayWord() + ' ' + s.sol + ' · ' + look.icon + ' ' + look.label + ' · about ' + Math.round(s.cellsToday) + ' power cells today', 'info');
       G.bannerUntil = G.clock + 7;
-      var line;
-      if (s.sol === 1) line = touch ? 'Welcome outside! Use the stick to walk and drag the screen to look around.' : 'Welcome outside! Walk with W A S D, drag the mouse to look around, and press Space to jump.';
-      else line = look.label + ' today. ' + (s.forecast ? (w.level ? U.stormWords(w.level) + ' is coming today. Stay ready to run home!' : 'The Sun is quiet today.') : 'The dish was off, so there is no storm forecast. Keep an eye on me!') + (last ? ' Last day: load the sample case and board the rocket!' : '');
-      say(line, true);
+      var line, vox;
+      if (s.sol === 1) { line = touch ? 'Welcome outside! Use the stick to walk and drag the screen to look around.' : 'Welcome outside! Walk with W A S D, drag the mouse to look around, and press Space to jump.'; vox = 'act-welcome'; }
+      else {
+        line = look.label + ' today. ' + (s.forecast ? (w.level ? U.stormWords(w.level) + ' is coming today. Stay ready to run home!' : 'The Sun is quiet today.') : 'The dish was off, so there is no storm forecast. Keep an eye on me!') + (last ? ' Last day: load the sample case and board the rocket!' : '');
+        // the morning report is spoken as up to three recorded lines in a row: the weather, the storm forecast, the last-day reminder
+        vox = ['day-' + DAY_VOX[env.kind], s.forecast ? (w.level ? 'forecast-' + (w.level >= 3 ? 'big' : w.level === 2 ? 'medium' : 'small') : 'forecast-quiet') : 'forecast-none'];
+        if (last) vox.push('day-last');
+      }
+      say(line, true, vox);
     }
     if (s.sol === 1) go(); else dayCard(go);
   }
@@ -192,6 +211,7 @@
   // The morning briefing: one new thing to learn, today's challenge, and what got harder.
   function dayCard(done) {
     var s = G.s, day = s.day, env = sim.env(s), look = s.site.env[env.kind], w = sim.weather(s), hard = sim.harderList(s);
+    Au.play('daystart');
     var goal = day.goal ? '<div class="info-row"><span class="ic">🎯</span><div><b>Today\'s challenge · +' + R.dayGoalPts + ' ⭐</b><p>' + esc(day.goal.text) + '</p></div></div>' : '';
     U.modal('<div class="day-head"><span class="big-icon">' + day.icon + '</span><div><small>' + esc(dayWord()) + ' ' + s.sol + ' of ' + s.totalSols + '</small><h2>' + esc(day.title) + '</h2></div></div>' +
       '<div class="info-row good"><span class="ic">💡</span><div><b>New today: ' + esc(day.topic) + '</b><p>' + esc(day.learn) + '</p>' + srcLine(day.src) + '</div></div>' + goal +
@@ -199,7 +219,7 @@
       U.weatherRow(s, w, s.forecast, 'today') +
       (hard.length ? '<h3>📈 Harder than yesterday</h3><ul class="harder">' + hard.map(function (h) { return '<li><span>' + h.icon + '</span>' + esc(h.text) + '</li>'; }).join('') + '</ul>' : '') +
       '<div class="modal-actions"><button class="btn primary" data-act="ok">Start the shift ▶</button></div>',
-      { speak: dayWord() + ' ' + s.sol + '. ' + day.title + '. ' + day.learn + (day.goal ? ' Today\'s challenge: ' + day.goal.text + '.' : ''),
+      { speak: dayWord() + ' ' + s.sol + '. ' + day.title + '. ' + day.learn + (day.goal ? ' Today\'s challenge: ' + day.goal.text + '.' : ''), line: 'day-morning',
         actions: { ok: function () { Au.play('door'); U.closeModal(); done(); } } });
   }
 
@@ -213,13 +233,17 @@
       zone({ id: 'sock-' + id, pos: sp.sockets[id], r: 1.5, type: 'cell', name: JA.MACHINES[id].name, fn: function () { return plugCell(id, sp.sockets[id]); } });
     });
     zone({ id: 'sock-rover', dyn: function (o) { return A.roverSpot('socket', o); }, r: 1.3, type: 'cell', name: 'rover', fn: function () { return plugCell('rover', A.roverSpot('socket', v3)); } });
-    zone({ id: 'hop-air', pos: sp.hoppers.air, r: 1.9, type: 'ice', name: 'Air Maker', fn: function () { var r = sim.feedIce(G.s, 'air'); if (r.ok) { G.tut.ice = true; Au.play('ice'); } return r; } });
-    zone({ id: 'hop-water', pos: sp.hoppers.water, r: 1.7, type: 'ice', name: 'water tank', fn: function () { var r = sim.feedIce(G.s, 'food'); if (r.ok) Au.play('ice'); return r; } });
+    zone({ id: 'hop-air', pos: sp.hoppers.air, r: 1.9, type: 'ice', name: 'Air Maker', fn: function () { var r = sim.feedIce(G.s, 'air'); if (r.ok) { G.tut.ice = true; Au.play('ice', { at: sp.hoppers.air }); } return r; } });
+    zone({ id: 'hop-water', pos: sp.hoppers.water, r: 1.7, type: 'ice', name: 'water tank', fn: function () { var r = sim.feedIce(G.s, 'food'); if (r.ok) Au.play('ice', { at: sp.hoppers.water }); return r; } });
     zone({ id: 'hop-lab', pos: sp.hoppers.lab, r: 1.7, type: 'core', name: 'Lab', fn: function (it) { var r = sim.submitCore(G.s, it.data); if (r.ok) { Au.play('score'); if (G.s.m.lab.power === 0) say('Core loaded! The Lab needs a power cell to study it.', true); } return r; } });
-    zone({ id: 'pantry', pos: sp.hoppers.pantry, r: 1.9, type: 'crate', name: 'food hatch', fn: function () { var r = sim.storeCrate(G.s); Au.play('score'); toastAt(sp.hoppers.pantry, '+' + R.foodPerCrate + ' 🥬', '#7be36a'); return r; } });
+    zone({ id: 'pantry', pos: sp.hoppers.pantry, r: 1.9, type: 'crate', name: 'food hatch', fn: function () { var r = sim.storeCrate(G.s); if (!r.ok) return r; Au.play('score'); toastAt(sp.hoppers.pantry, '+' + R.foodPerCrate + ' 🥬', '#7be36a'); tip('pantry' + G.s.sol, 'Fresh food in the pantry!'); return r; } });
     zone({ id: 'dome', pos: sp.hoppers.dome, r: 7.4, flat: true, top: 9, type: 'bag', name: 'dome', fn: function () {
       var r = sim.addBag(G.s);
-      if (r.ok) { Au.play('thud'); toastAt(sp.hoppers.dome, '🛡️ ' + Math.round(sim.shield(G.s) * 100) + '%', '#c9a6ff'); if (G.s.bags === R.shieldSlots) say('The dome is fully covered. Maximum shielding!', true); }
+      if (r.ok) {
+        Au.play('thud', { at: sp.hoppers.dome }); toastAt(sp.hoppers.dome, '🛡️ ' + Math.round(sim.shield(G.s) * 100) + '%', '#c9a6ff');
+        if (G.s.bags === R.shieldSlots) say('The dome is fully covered. Maximum shielding!', true);
+        else tip('radIntro', 'This is your radiation badge. When it is full, the mission is over.');
+      }
       return r;
     } });
     zone({ id: 'cargo', pos: sp.hoppers.cargo, r: 2.1, type: 'case', name: 'rocket', fn: function () { G.s.caseLoaded = true; Au.play('swish'); say('Samples loaded! Scientists on Earth will study them for years.', true); return { ok: true }; } });
@@ -240,11 +264,11 @@
   function plugCell(id, pos) {
     var r = sim.plug(G.s, id);
     if (r.ok) {
-      Au.play('plug'); W.burst(pos.x, pos.y, pos.z, 16, 3, 0xffe36a, { life: 0.6, size: 0.26, grav: 0 });
+      Au.play('plug', { at: pos }); W.burst(pos.x, pos.y, pos.z, 16, 3, 0xffe36a, { life: 0.6, size: 0.26, grav: 0 });
       if (id === 'air') G.tut.airCell = true;
       if (id === 'comms') tip('comms', 'Radio Dish on! Earth will warn us early about solar storms, and can help with repairs today.');
       if (id === 'bag') tip('bagger', 'The Soil Bagger is filling bags. Grab them and throw them onto the dome!');
-      if (id === 'rover') tip('roverCell', 'Rover charged! Walk to its side and press E to drive.');
+      if (id === 'rover') tip('roverCell', touch ? 'Rover charged! Walk to its side and tap ✋ to drive.' : 'Rover charged! Walk to its side and press E to drive.', 'rover-charged');
     }
     return r;
   }
@@ -310,12 +334,12 @@
     })(i);
     for (i = 0; i < sp.beds.length; i++) (function (i) {
       var bed = s.m.food.beds[i]; d = d2(p, sp.beds[i]);
-      if (bed.state === 'empty') offer(d, 2.3, { label: 'Plant seeds', run: function () { sim.plant(s, i); Au.play('pop'); W.dust(sp.beds[i].x, sp.beds[i].z - 1.7, 4, 1, 0.3); checkGrow(); } });
-      else if (bed.state === 'ripe') offer(d, 2.3, { label: 'Pick the veggies', run: function () { if (sim.harvest(s, i)) { var cr = A.spawn('crate', A.handPos(v1), { name: 'veggie crate' }, 'rest'); A.pick(cr); Au.play('grab'); tip('crate', 'Fresh veggies! Carry the crate to the green food hatch on the dome — or throw it in.'); } } });
+      if (bed.state === 'empty') offer(d, 2.3, { label: 'Plant seeds', run: function () { sim.plant(s, i); Au.play('pop'); W.dust(sp.beds[i].x, sp.beds[i].z - 1.7, 4, 1, 0.3); checkGrow(); if (s.sol === 1) tip('foodIntro', 'This is our food. Every night, dinner comes out of it.'); } });
+      else if (bed.state === 'ripe') offer(d, 2.3, { label: 'Pick the veggies', run: function () { if (sim.harvest(s, i)) { var cr = A.spawn('crate', A.handPos(v1), { name: 'veggie crate' }, 'rest'); A.pick(cr); Au.play('harvest'); tip('crate', 'Fresh veggies! Carry the crate to the green food hatch on the dome — or throw it in.'); } } });
       else offer(d, 2.0, { label: 'Growing… ' + Math.round(bed.g * 100) + '%' + (s.m.food.lamp <= 0 ? ' · needs light' : s.m.food.water <= 0 ? ' · needs water' : '') });
     })(i);
     for (i = 0; i < sp.panels.length; i++) (function (i) {
-      if (s.rack.eff[i] < 0.86) offer(d2(p, sp.panels[i]), 2.8, { label: s.site.id === 'mars' ? 'Brush the dust off' : 'Turn the panel to the Sun', run: function () { sim.servicePanel(s, i); Au.play('pop'); W.dust(sp.panels[i].x, sp.panels[i].z - 1.4, 10, 2.5, 0.5); toastAt(sp.panels[i], '☀️ 100%', '#ffd23f'); } });
+      if (s.rack.eff[i] < 0.86) offer(d2(p, sp.panels[i]), 2.8, { label: s.site.id === 'mars' ? 'Brush the dust off' : 'Turn the panel to the Sun', run: function () { sim.servicePanel(s, i); Au.play('brush'); W.dust(sp.panels[i].x, sp.panels[i].z - 1.4, 10, 2.5, 0.5); toastAt(sp.panels[i], '☀️ 100%', '#ffd23f'); } });
     })(i);
     var g = s.glitch;
     if (g && (g.state === 'broken' || g.state === 'asked' || g.state === 'advised')) {
@@ -324,7 +348,7 @@
       else offer(d, 4, { label: g.state === 'advised' ? 'Fix it with Earth\'s instructions' : 'Fix the ' + JA.MACHINES[g.machine].name, run: function () { if (g.state === 'advised') startRepair(true); else repairModal(); } });
     }
     A.roverSpot('door', v1); var dr = Math.min(d2(p, v1), d2(p, A.rover.pos) - 1.4);
-    offer(dr, 2.6, { label: 'Drive the rover', run: function () { A.enterRover(); Au.play('grab'); tip('drive', touch ? 'Push the stick up to drive and sideways to steer. Tap ✋ to get out.' : 'W drives forward, S brakes, A and D steer. Press E to get out.'); } });
+    offer(dr, 2.6, { label: 'Drive the rover', run: function () { A.enterRover(); Au.play('rover-start'); tip('drive', 'Buckle up! The battery only drains while the rover is moving. ' + (touch ? 'Push the stick up to drive and sideways to steer. Tap ✋ to get out.' : 'W drives forward, S brakes, A and D steer. Press E to get out.'), 'rover-drive'); } });
     offer(d2(p, sp.door), 2.4, { label: 'Go inside the habitat', run: enterHab });
     if (s.sol >= s.totalSols) offer(d2(p, sp.rocketDoor), 4, { label: 'Board the rocket and fly home', run: boardModal });
     for (i = 0; i < sp.photo.length; i++) (function (i) {
@@ -336,7 +360,7 @@
     if (it.tag === 'rack') { if (!sim.takeCell(G.s)) return; it.tag = null; }
     it.tag = null;
     A.pick(it); Au.play('grab');
-    tip('throw', touch ? 'Got it! Tap ✋ next to a machine to use it, or hold 🎯 to aim a throw and let go.' : 'Got it! Press E next to a machine to use it — or hold F to aim a throw, and let go to throw.');
+    tip('throw', touch ? 'Got it! Tap ✋ next to a machine to use it, or hold 🎯 to aim a throw and let go.' : 'Got it! Press E next to a machine to use it — or hold F to aim a throw, and let go to throw.', 'act-grab');
   }
   function checkGrow() { var f = G.s.m.food; if (f.lamp > 0 && f.water > 0 && f.beds.some(function (b) { return b.state !== 'empty'; })) G.tut.grow = true; }
 
@@ -371,7 +395,7 @@
       aim.mat.color.set(ok ? 0x4dff9a : 0xffffff);
       for (i = 0; i < aim.dots.length; i++) { aim.dots[i].visible = i < n; if (i < n) aim.dots[i].position.copy(PTS[i]); }
       aim.ring.visible = true; aim.ring.position.set(A.landing.x, Tn.height(A.landing.x, A.landing.z) + 0.15, A.landing.z);
-      Au.loop('aim', 200 + ch.power * 500, 0.03, 'sine');
+      Au.loop('aim', { f: 200 + ch.power * 500, v: 0.03, type: 'sine' });
     } else {
       Au.stopLoop('aim'); hideAim();
       var it = A.throwHeld(Math.max(0.05, ch.power));
@@ -406,15 +430,15 @@
       m.lock = Math.max(0, m.lock - dt);
       if (G.eHeld && m.lock <= 0) {
         m.depth += m.rate * dt; m.heat += m.heatRate * dt;
-        Au.loop('drill', 90 + m.heat * 160, 0.07);
+        Au.loop('drill', { f: 90 + m.heat * 160, v: 0.07, rate: 0.9 + m.heat * 0.35 });
         if (Math.random() < dt * 30) W.emit(hp.x, a.pos.y + 0.3, hp.z, { vx: (Math.random() - 0.5) * 4, vy: 1 + Math.random() * 3, vz: (Math.random() - 0.5) * 4, life: 0.6, size: 0.2, grow: 1.5, color: m.kind === 'ice' ? 0xbff4ff : (s.site.id === 'mars' ? 0xd9a070 : 0xc8c9d4), alpha: 0.8, grav: W.gravity * 0.5 });
         W.cam.shake = Math.max(W.cam.shake, 0.03 + m.heat * 0.05);
       } else { m.heat = Math.max(0, m.heat - m.cool * dt); Au.stopLoop('drill'); }
       if (m.heat >= 1) {
         m.jams++; m.heat = 0.4; m.depth = Math.max(0, m.depth - 0.25); m.lock = 0.9;
-        Au.stopLoop('drill'); Au.play('bad'); W.cam.shake = 0.35;
+        Au.stopLoop('drill'); Au.play('jam'); Au.play('bad'); W.cam.shake = 0.35;
         W.burst(hp.x, a.pos.y + 0.5, hp.z, 14, 4, 0xff7a4d, { life: 0.5, size: 0.22 });
-        say('Too hot — the drill jammed! Let it cool between bursts.', true);
+        say('Too hot — the drill jammed! Let it cool between bursts.', true, 'act-drill-jam', true);
       }
       if (m.depth >= 1) {
         var q = m.jams === 0 ? 2 : m.jams === 1 ? 1 : 0, kind = m.kind, idx = m.idx;
@@ -422,8 +446,9 @@
         if (kind === 'ice') { A.pick(A.spawn('ice', A.handPos(v1), null, 'rest')); Au.play('ice'); tip('ice', 'A chunk of ice! The Air Maker can split it into oxygen. The rover bed carries four at a time.'); }
         else {
           var core = sim.drillCore(s, idx, q);
-          A.pick(A.spawn('core', A.handPos(v1), core, 'rest')); Au.play('hit');
+          A.pick(A.spawn('core', A.handPos(v1), core, 'rest')); Au.play('core');
           toastAt(B.spots.drill[idx], ['Rough core', 'Good core!', 'Perfect core! ✨'][q], '#ffd23f');
+          Au.line(['act-core-rough', 'act-core-good', 'act-core-perfect'][q]);
           tip('core', 'A rock core! Take it to the Science Lab to find out what it is made of.');
         }
         return;
@@ -439,11 +464,11 @@
           m.c = 0.15 + Math.random() * 0.7;
           if (m.hits >= m.need) {
             sim.repairDone(s); Au.play('good'); U.dialUi(null); G.mini = null; a.mode = 'walk';
-            say('Fixed! The ' + JA.MACHINES[m.machine].name + ' is running again.', true);
+            say('Fixed! The ' + JA.MACHINES[m.machine].name + ' is running again.', true, m.machine + '-fixed');
             return;
           }
         } else {
-          sim.repairMiss(s); Au.play('spark'); m.lock = 0.7; W.cam.shake = 0.25;
+          sim.repairMiss(s); Au.play('spark', { at: B.repair[m.machine] }); m.lock = 0.7; W.cam.shake = 0.25;
           var rp = B.repair[m.machine]; W.burst(rp.x, rp.y + 0.6, rp.z, 16, 5, 0xffe36a, { life: 0.5, size: 0.2 });
           say('Zap! A short circuit wasted some solar charge.', true);
         }
@@ -475,7 +500,7 @@
           if (!r.ok) { Au.play('deny'); return; }
           Au.play('page'); U.closeModal();
           say(s.site.id === 'moon' ? 'Message sent! The Moon is only 1.3 light-seconds away. The answer will be here in a moment.'
-            : 'Message sent! It takes ' + r.info.oneWay + ' to reach Earth, and the answer takes just as long to come back. Keep working — I will call you.', true);
+            : 'Message sent! It takes ' + r.info.oneWay + ' to reach Earth, and the answer takes just as long to come back. Keep working — I will call you.', true, s.site.id === 'moon' ? 'dish-sent-moon' : 'dish-sent-mars');
         }
       } });
   }
@@ -486,14 +511,14 @@
   function spawnBag() {
     var n = A.items.filter(function (it) { return it.tag === 'tray'; }).length, sl = B.spots.bagTray[n % 4];
     var it = A.spawn('bag', v1.set(sl.x, sl.y + Math.floor(n / 4) * 0.45, sl.z), { name: 'soil bag' }, 'fixed');
-    it.tag = 'tray'; Au.play('pop');
+    it.tag = 'tray'; Au.play('bag', { at: B.pos.bag });
   }
   function handleEvents(ev) {
     var s = G.s;
     for (var i = 0; i < ev.length; i++) {
       var e = ev[i];
-      if (e.type === 'cell') { syncRack(); if (d2(me(), B.spots.rack) < 40) Au.play('ding'); }
-      else if (e.type === 'air') { Au.play('air'); toastAt(B.pos.air, '+' + e.amount + ' 💨', '#4fd8ff'); }
+      if (e.type === 'cell') { syncRack(); Au.play('ding', { at: B.spots.rack }); }
+      else if (e.type === 'air') { Au.play('air', { at: B.pos.air }); toastAt(B.pos.air, '+' + e.amount + ' 💨', '#4fd8ff'); if (s.sol === 1) tip('airIntro', 'This is our air. The crew breathes it all day, so keep the Air Maker busy.'); }
       else if (e.type === 'bag') spawnBag();
       else if (e.type === 'ripe') { tip('ripe' + s.sol, 'The veggies are ripe! Pick them at the Greenhouse.'); Au.play('good'); }
       else if (e.type === 'empty') {
@@ -502,15 +527,26 @@
         else if (e.machine === 'food') say('The grow lamps ran out of power. Plants stop growing in the dark.', true);
       }
       else if (e.type === 'discovery') { Au.play('discovery'); U.card(e.find); toastAt(B.pos.lab, '+' + e.find.pts + ' ⭐', '#ffd23f'); }
-      else if (e.type === 'break') { Au.play('bad'); say(JA.REPAIRS[e.machine].title + ' Look for the sparks.', true); }
-      else if (e.type === 'advice') { Au.play('page'); say('Mission Control\'s answer has arrived! Go back to the ' + JA.MACHINES[e.machine].name + ' to finish the repair.', true); }
+      else if (e.type === 'break') {
+        var bl = (JA.VOICE || {})[e.machine + '-broken'];      // the bubble shows what the recorded line says, plus where to look
+        Au.play('bad'); Au.play('spark', { at: B.repair[e.machine] });
+        say((bl ? bl.t : JA.REPAIRS[e.machine].title) + ' Look for the sparks.', true, e.machine + '-broken', true);
+      }
+      else if (e.type === 'advice') { Au.play('page'); say('Mission Control\'s answer has arrived! Go back to the ' + JA.MACHINES[e.machine].name + ' to finish the repair.', true, 'dish-answer'); }
       else if (e.type === 'storm') {
         var inside = G.mode === 'inside';
-        if (e.phase === 'warning') say(inside ? 'A solar storm is on its way. Good thing we are inside!' : s.m.comms.on ? 'Mission Control spotted a solar flare! A radiation storm is coming. Head for the airlock!' : 'My sensor just caught a solar storm! The dish is off, so there was no early warning. RUN for the airlock!', true);
-        else if (e.phase === 'active') { if (!inside) say('Radiation storm! You cannot see it or feel it, but my sensor can. Get inside!', true); }
+        if (e.phase === 'warning') {
+          Au.play('storm-alert');
+          say(inside ? 'A solar storm is on its way. Good thing we are inside!' : s.m.comms.on ? 'Mission Control spotted a solar flare! A radiation storm is coming. Head for the airlock!' : 'My sensor just caught a solar storm! The dish is off, so there was no early warning. RUN for the airlock!',
+            true, inside ? 'storm-inside' : s.m.comms.on ? 'storm-spotted' : 'storm-no-warning', true);
+        }
+        else if (e.phase === 'active') {
+          if (!inside) say('Radiation storm! You cannot see it or feel it, but my sensor can. Get inside!', true, 'storm-active', true);
+          tip('clicks', 'That clicking is my radiation sensor. More clicks mean more radiation.');
+        }
         else { Au.play('good'); say('The storm has passed. All clear!', true); }
       }
-      else if (e.type === 'daygoal') { Au.play('discovery'); U.toast('🎯 Challenge done! +' + e.pts + ' ⭐', W.w / 2, W.h * 0.3, '#ffd23f'); say('Today\'s challenge is done: ' + s.day.goal.text.toLowerCase() + '. Nice work!', true); }
+      else if (e.type === 'daygoal') { Au.play('discovery'); U.toast('🎯 Challenge done! +' + e.pts + ' ⭐', W.w / 2, W.h * 0.3, '#ffd23f'); say('Today\'s challenge is done: ' + s.day.goal.text.toLowerCase() + '. Nice work!', true, 'hud-challenge-done'); }
       else if (e.type === 'crisis') crisisModal();
       else if (e.type === 'consequence') showConsequence(e);
       else if (e.type === 'fail') { failNow(e.reason); return; }
@@ -533,7 +569,7 @@
       '<div class="crisis-bolt"><div class="bolt-face" aria-hidden="true"><i></i><i></i></div><p>I have no checklist for this one, Commander.' + esc(far) + ' There is more than one thing you could do. You decide.</p></div>' +
       v.options.map(function (o) { return '<button class="opt" data-act="pick" data-v="' + o.id + '"><b>' + o.icon + ' ' + esc(o.label) + '</b><span>' + esc(o.text) + '</span></button>'; }).join('') +
       '<p class="sub crisis-foot">⏸ The clock is stopped while you think. Nobody will tell you which choice is best. You will see what yours leads to.</p>',
-      { cls: 'crisis', noFocus: true, speak: v.title + ' ' + v.text + ' You decide.', actions: { pick: function (el) { crisisPick(el.getAttribute('data-v')); } } });
+      { cls: 'crisis', noFocus: true, speak: v.title + ' ' + v.text + ' You decide.', line: 'crisis-your-call', actions: { pick: function (el) { crisisPick(el.getAttribute('data-v')); } } });
   }
   function crisisPick(id) {
     var s = G.s, r = JA.crisis.choose(s, id);
@@ -611,7 +647,7 @@
     var s = G.s, st = s.storm, ph = sim.stormPhase(s);
     if (ph === 'warning') {
       var secs = Math.ceil(st.start - s.t);
-      if (outside) { U.stormFx('warn'); U.banner('⚠️ Solar storm in ' + secs + ' s — get to the airlock!', ''); if (secs !== G.lastWarn) { G.lastWarn = secs; Au.play('warn'); } }
+      if (outside) { U.stormFx('warn'); U.banner('⚠️ Solar storm in ' + secs + ' s — get to the airlock!', ''); if (secs !== G.lastWarn) { if (secs === 10 && G.lastWarn > 10) say('Solar storm coming. Get to the airlock!', true, 'storm-countdown', true); G.lastWarn = secs; Au.play('warn'); } }
       else U.banner('⚠️ A solar storm is coming — you are safe inside', '');
       G.bannerUntil = G.clock + 1;
     } else if (ph === 'active') {
@@ -640,7 +676,8 @@
     G.lookIdle += dt;
     if (r.driver) {
       if (G.lookIdle > 1.2) { var want = r.yaw + Math.PI, df = want - W.cam.yaw; while (df > Math.PI) df -= Math.PI * 2; while (df < -Math.PI) df += Math.PI * 2; W.cam.yaw += df * Math.min(1, dt * 2.4); }
-      Au.loop('rover', 46 + Math.abs(r.speed) * 9, 0.035 + Math.abs(r.speed) * 0.003, 'sawtooth');
+      Au.loop('rover', { f: 46 + Math.abs(r.speed) * 9, v: 0.035 + Math.abs(r.speed) * 0.003, type: 'sawtooth', rate: 0.7 + Math.abs(r.speed) * 0.045, vol: 0.45 + Math.abs(r.speed) * 0.04 });
+      if (s.m.rover.charge <= 0) tip('roverEmpty' + s.sol, 'The rover battery is empty, so it can only crawl. Plug in a fresh power cell!');
     } else if (G.lookIdle > 0.7 && !G.charge && !G.mini) W.cam.yaw -= G.input.x * 1.0 * dt;
     W.cam.dist += ((r.driver ? G.zoom * 1.45 : G.zoom) - W.cam.dist) * Math.min(1, dt * 3);
     if (!G.tut.moved && a.moved > 10 && G.tut.jumped) G.tut.moved = true;
@@ -652,6 +689,50 @@
       if (G.qPressed && a.carrying && !G.charge) { A.setDown(); Au.play('drop'); }
     }
     stormFrame(true);
+    // things BOLT points out once, when they matter
+    Au.breathe(dt, G.input.sprint && moving && !r.driver);
+    if (s.leak > 0) tip('leak' + s.sol, 'Air leak! The tanks are losing air.');
+    else if (s.stale > 1) tip('stale' + s.sol, 'The air is going stale. It is draining fast!');
+    if (s.sol < s.totalSols && s.t > s.dayLength * 0.7 && s.food < sim.dinner(s)) tip('short' + s.sol, 'There is not enough food for tonight\'s dinner!');
+    if (s.sol === 2 && s.t > 20 && !G.mini) tip('hear', s.site.id === 'moon' ? 'Hear how quiet it is? The Moon has no air to carry sound. You only hear what travels through your suit.'
+      : 'Everything sounds faint and muffled out here. The thin Mars air carries sound poorly. The Perseverance rover\'s microphones heard the same thing.');
+  }
+
+  // =====================================================================
+  //  WHAT THE OUTPOST SOUNDS LIKE RIGHT NOW
+  // =====================================================================
+  var HUMS = { air: 'loop-air-maker', food: 'loop-greenhouse', rack: 'loop-solar-rack', bag: 'loop-soil-bagger', lab: 'loop-lab', comms: 'loop-radio-dish' };
+  function soundFrame(dt, paused) {
+    var s = G.s, mode = G.mode, live = !!s && (mode === 'play' || mode === 'inside'), m = live ? s.m : null, on = {}, p = null, id;
+    if (mode !== 'intro') {                               // the landing film sets its own scene
+      var ph = live ? sim.stormPhase(s) : '';
+      Au.scene({ place: mode === 'play' || mode === 'launch' ? 'out' : mode === 'inside' ? 'in' : 'menu', site: s ? s.site.id : '', dust: W.env.dust, storm: ph === 'active' ? 2 : ph === 'warning' ? 1 : 0 });
+    }
+    Au.hush(paused && live);
+    if (live) {
+      p = me(); Au.ears(p.x, p.z, W.camera);
+      // a machine hums while it is really working, and you hear it from where it stands
+      on.air = !m.air.broken && m.air.power > 0 && m.air.queue > 0;
+      on.food = m.food.lamp > 0 && !m.food.broken;
+      on.rack = !s.rack.broken && s.rack.cells < R.rackMax && s.t <= s.dayLength * R.chargeSpan;
+      on.bag = m.bag.pending > 0 && !m.bag.broken;
+      on.lab = !m.lab.broken && m.lab.power > 0 && m.lab.queue.length > 0;
+      on.comms = m.comms.on;
+    }
+    for (id in HUMS) Au.hum(HUMS[id], !!on[id], B.pos[id]);
+    // anything broken spits sparks; a dust devil hisses as it passes
+    var devil = null;
+    if (mode === 'play' && !paused) {
+      G.sparkAt -= dt;
+      if (G.sparkAt <= 0) {
+        G.sparkAt = 0.7 + Math.random() * 1.6;
+        ['air', 'food', 'lab', 'rack'].forEach(function (k) { if ((k === 'rack' ? s.rack : m[k]).broken) Au.play('spark', { at: B.repair[k], vol: 0.7 }); });
+      }
+      var best = 45;
+      A.devils.forEach(function (d) { var dd = d2(p, d.pos); if (dd < best) { best = dd; devil = d; } });
+    }
+    if (devil) Au.loop('devil', { at: devil.pos, keep: true, fade: 0.3 }); else Au.stopLoop('devil', 0.3);
+    Au.frame(dt);
   }
 
   // =====================================================================
@@ -667,7 +748,7 @@
     U.show($('btn-sleep'), s.sol < s.totalSols);
     $('btn-fast').classList.remove('on');
     var ph = sim.stormPhase(s);
-    say(ph === 'warning' || ph === 'active' ? 'Phew — inside! The walls and the soil bags are soaking up the storm.' : 'Back inside. Take a breather — the machines keep working.', true);
+    say(ph === 'warning' || ph === 'active' ? 'Phew — inside! The walls and the soil bags are soaking up the storm.' : 'Back inside. Take a breather — the machines keep working.', true, ph === 'warning' || ph === 'active' ? 'storm-safe' : 'inside-rest', true);
   }
   function exitHab() {
     Au.play('door');
@@ -693,7 +774,7 @@
     if (s.t > s.dayLength * 0.6) { endDay({}); return; }
     U.modal('<div class="big-icon">😴</div><h2>End the day now?</h2><p>There are still ' + clockText(s.dayLength - s.t) + ' minutes of working time left. The machines will keep running, but you will not be able to do anything else today.</p>' +
       '<div class="modal-actions"><button class="btn ghost" data-act="no">Keep working</button><button class="btn primary" data-act="yes">Go to sleep</button></div>',
-      { actions: { no: function () { Au.play('tap'); U.closeModal(); }, yes: function () { Au.play('tap'); U.closeModal(); endDay({}); } } });
+      { actions: { no: function () { Au.play('tap'); U.closeModal(); }, yes: function () { Au.play('tap'); U.closeModal(); endDay({ sleep: true }); } } });
   }
 
   // =====================================================================
@@ -701,14 +782,16 @@
   // =====================================================================
   function onDayEnd() {
     var s = G.s;
-    if (s.sol >= s.totalSols) { say('Time is up — BOLT is flying you to the rocket!', true); launchHome(); return; }
-    if (G.mode === 'play') { say('The shift is over! I am towing you home. That rush used extra air.', true); endDay({ late: true }); }
+    if (s.sol >= s.totalSols) { launchHome('Time is up — BOLT is flying you to the rocket!', 'launch-time-up'); return; }
+    if (G.mode === 'play') { say('The shift is over! I am towing you home. That rush used extra air.', true, null, true); endDay({ late: true }); }
     else endDay({});
   }
   function endDay(info) {
     var s = G.s;
     if (G.mode === 'night') return;
-    G.mode = 'night'; G.mini = null; G.charge = null; hideAim(); Au.stopAll();
+    G.mode = 'night'; G.mini = null; G.charge = null; hideAim(); Au.stopAll(); G.sayQ.length = 0;
+    // the bubble is put away for the night, so these two are heard, not shown
+    if (!Au.readingOn()) Au.line(info.late ? 'hud-clock-over' : info.sleep ? 'day-sleep' : null);
     if (A.rover.driver) A.exitRover();
     if (A.astro.carrying) A.setDown();
     A.astro.mode = 'hidden';
@@ -757,10 +840,10 @@
       fc += '<h3>📈 Tomorrow: ' + esc(dw) + ' ' + (r.sol + 1) + ' · ' + r.nextDay.icon + ' ' + esc(r.nextDay.title) + '</h3>' +
         (r.harder.length ? '<ul class="harder">' + r.harder.map(function (h) { return '<li><span>' + h.icon + '</span>' + esc(h.text) + '</li>'; }).join('') + '</ul>' : '');
     }
-    Au.play(r.fail ? 'bad' : 'good');
+    Au.play(r.fail ? 'bad' : 'night'); if (!r.fail) Au.music('night');
     U.modal('<h2>🌙 Night report · ' + dw + ' ' + r.sol + '</h2><p class="sub">Here is how the day added up.</p>' + rows + chal + rep + dec + finds + fc + fact +
       '<div class="modal-actions"><button class="btn primary" data-act="next">' + (r.fail ? 'See what happened' : 'Next ' + dw.toLowerCase() + ' ▶') + '</button></div>',
-      { speak: 'Night report. ' + r.fact.text, actions: { next: function () {
+      { speak: 'Night report. ' + r.fact.text, line: r.fail || Au.voicePlaying() ? null : 'night-report', actions: { next: function () {
         Au.play('page'); U.closeModal();
         if (r.fail) { G.ending = { fail: r.fail }; startLaunchScene(); }
         else { sim.startSol(s); beginSol(); }
@@ -776,22 +859,22 @@
       ' Anything left undone stays undone!</p><div class="modal-actions"><button class="btn ghost" data-act="no">Not yet</button><button class="btn primary" data-act="yes">Launch! 🚀</button></div>',
       { actions: { no: function () { Au.play('tap'); U.closeModal(); }, yes: function () { Au.play('tap'); U.closeModal(); launchHome(); } } });
   }
-  function launchHome() {
+  function launchHome(text, vid) {
     var s = G.s;
     if (G.mode === 'launch') return;
     sim.endSol(s, {}); sim.finish(s);
     G.ending = { win: true };
-    startLaunchScene();
+    startLaunchScene(text, vid);
   }
   function failNow(reason) {
     var s = G.s;
     s.over = { type: 'fail', reason: reason };
     G.ending = { fail: reason };
-    say(reason === 'air' ? 'The air tanks are empty! Everyone to the rocket!' : 'The radiation badges are full! Everyone to the rocket!', true);
-    startLaunchScene();
+    startLaunchScene(reason === 'air' ? 'The air tanks are empty! Everyone to the rocket!' : 'The radiation badges are full! Everyone to the rocket!', reason === 'air' ? 'hud-air-empty' : 'hud-rad-full');
   }
-  function startLaunchScene() {
-    G.mode = 'launch'; G.launchT = 0; G.mini = null; G.charge = null; hideAim(); Au.stopAll();
+  // text, vid: BOLT's last words before the countdown, when there are any
+  function startLaunchScene(text, vid) {
+    G.mode = 'launch'; G.launchT = 0; G.launchN = -1; G.mini = null; G.charge = null; hideAim(); Au.stopAll(); Au.music(null); G.sayQ.length = 0;
     if (A.rover.driver) A.exitRover();
     A.astro.mode = 'hidden';
     ['goals', 'prompt', 'hands', 'rover-hud', 'mini', 'inside'].forEach(function (id) { U.show($(id), false); });
@@ -800,13 +883,17 @@
     var p = B.rocketPos(v1);
     W.cam.mode = 'fixed';
     W.cam.fixed = { pos: new T.Vector3(p.x + 34, Tn.height(p.x + 34, p.z + 30) + 4, p.z + 30), look: p.clone() };
-    B.startLaunch(); Au.play('launch');
+    U.banner(null);
+    if (text) { U.say(text, vid); if (Au.voicePlaying()) G.launchT = -3.6; }      // when the line is spoken, the countdown waits for it
   }
   function stepLaunch(dt) {
-    G.launchT += dt;
+    var t0 = G.launchT, t = G.launchT += dt;
+    if (t <= 0) return;
+    if (t0 <= 0) { B.startLaunch(); Au.play('launch'); }
     B.rocketPos(W.cam.fixed.look);
-    var t = G.launchT;
     U.banner(t < 0.8 ? '3…' : t < 1.6 ? '2…' : t < 2.4 ? '1…' : t < 6 ? '🚀 LIFTOFF!' : null, 'safe');
+    var n = t < 0.8 ? 0 : t < 1.6 ? 1 : t < 2.4 ? 2 : 3;
+    if (n !== G.launchN) { G.launchN = n; Au.line(['launch-3', 'launch-2', 'launch-1', 'launch-liftoff'][n], { plain: true }); }   // Mission Control counts with the banner
     if (t > 9.5 && G.ending) {
       var e = G.ending; G.ending = null; G.mode = 'end';
       U.fade(true);
@@ -837,9 +924,14 @@
       change: function () { Au.play('tap'); U.closeModal(); titleScene(); U.show($('title'), false); setupModal(); },
       again: function () { U.fade(false); launch(); } };
   }
+  // after the jingle: the last recorded line, then the theme
+  function endSound(vid) {
+    setTimeout(function () { if (G.mode === 'end' && !Au.readingOn()) Au.line(vid); }, 1700);
+    setTimeout(function () { if (G.mode === 'end') Au.music('title'); }, 3600);
+  }
   function winModal() {
     var s = G.s, rank = sim.rankFor(s), next = sim.nextRank(s), badges = sim.badges(s), isBest = saveBest(Math.round(s.sci));
-    hideHud(); Au.play('win');
+    hideHud(); Au.play('win'); endSound('win-home');
     var finds = s.finds.length ? '<h3>🔬 Your discoveries (' + s.finds.length + ')</h3>' + s.finds.map(U.findRow).join('') : '';
     U.modal('<div class="rank"><span class="big-icon">' + rank.icon + '</span><h2>' + esc(rank.name) + '</h2>' +
       '<p>Mission complete! The crew is on the way home after ' + s.totalSols + ' ' + dayWord().toLowerCase() + 's on ' + esc(s.site.name) + '.</p>' +
@@ -851,7 +943,7 @@
   }
   function failModal(reason) {
     var s = G.s, f = JA.FAIL[reason];
-    hideHud();
+    hideHud(); Au.play('lose'); endSound('fail-safe');
     U.modal('<div class="rank"><span class="big-icon">' + f.icon + '</span><h2>' + esc(f.title) + '</h2></div>' +
       '<p>' + esc(f.text) + ' You made it to ' + dayWord().toLowerCase() + ' ' + s.sol + ' of ' + s.totalSols + ' and earned ⭐ ' + Math.round(s.sci) + '.</p>' +
       '<div class="fact"><b>💡 BOLT\'s tip</b><p>' + esc(f.tip) + '</p><small>Real astronauts practise in simulators for years — and they fail there a lot. That is how they learn.</small></div>' +
@@ -949,9 +1041,10 @@
     'Now the Air Maker needs ice to turn into oxygen. The ice is far away — plug a cell into the back of the rover and drive there!',
     'Next: food. The Greenhouse needs light from a power cell, water from ice, and seeds in the beds.',
     'You have got the basics! Now you choose: soil bags for the shield, rock cores for science, or the instruments by the rocket. There is not enough power for everything!'];
+  var TUT_VOX = [null, 'rack-intro', 'air-intro', 'food-intro', 'act-basics-done'];
   function tutorialTalk() {
     var t = G.tut, step = !t.moved ? 0 : !t.airCell ? 1 : !t.ice ? 2 : !t.grow ? 3 : 4;
-    if (step > G.tutStep) { G.tutStep = step; if (TUT_LINES[step]) { say(TUT_LINES[step], true); Au.play('good'); } }
+    if (step > G.tutStep) { G.tutStep = step; if (TUT_LINES[step]) { say(TUT_LINES[step], true, TUT_VOX[step]); Au.play('good'); } }
   }
 
   function placeMark(list, pos, icon, label, cls, color) {
@@ -1101,9 +1194,9 @@
       var c = Math.cos(yaw), sn = Math.sin(yaw);
       W.print(p.x + c * 0.2 * side, p.z - sn * 0.2 * side, yaw, 0.24, 0.46);
       if (sprint || Math.random() < 0.5) W.dust(p.x, p.z, sprint ? 3 : 1, 0.9, 0.3);
-      Au.play('step');
+      Au.play('step', sprint ? { vol: 1.25 } : null);
     };
-    A.onBounce = function (it, hit) { if (hit > 2) Au.play('thud'); W.dust(it.pos.x, it.pos.z, 4, 1.4, 0.35); };
+    A.onBounce = function (it, hit) { if (hit > 2) Au.play('thud', { at: it.pos, vol: Math.min(1, hit / 6) }); W.dust(it.pos.x, it.pos.z, 4, 1.4, 0.35); };
     A.onEdge = function () { say('That is as far as my radio can reach. Let us turn back!'); };
     A.onDevil = function (kind) {
       if (!G.s) return;
@@ -1136,7 +1229,8 @@
     }
     B.update(dt, G.mode === 'title' ? null : G.s);
     W.update(dt);
-    if (!paused) hudFrame();
+    if (!paused) { hudFrame(); if (G.s && (G.mode === 'play' || G.mode === 'inside')) sayNext(); }
+    soundFrame(dt, paused);
     G.input.jump = false; G.ePressed = false; G.qPressed = false;
   }
   G.advance = advance;   // lets tests step the game without waiting for the screen

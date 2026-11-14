@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<base href="../../">
+<title>Astro Outpost soundboard</title>
+<style>
+  :root { --bg: #f6f7fa; --card: #fff; --ink: #1c2233; --dim: #5d667d; --line: #dfe3ec; --acc: #2f6fed; --warn: #b4690e; --ok: #1d8a4a; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #12151d; --card: #1b2030; --ink: #e9ecf5; --dim: #9aa3ba; --line: #2c3348; --acc: #7aa6ff; --warn: #f0b35c; --ok: #5fd08e; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, "Segoe UI", sans-serif; }
+  header { position: sticky; top: 0; z-index: 2; background: var(--card); border-bottom: 1px solid var(--line); padding: 12px 16px; }
+  header h1 { font-size: 18px; margin: 0 0 8px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+  .bar label { color: var(--dim); }
+  select, input[type=search] { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+  input[type=search] { min-width: 180px; }
+  main { max-width: 1100px; margin: 0 auto; padding: 8px 16px 60px; }
+  h2 { font-size: 16px; margin: 26px 0 4px; }
+  .sub { color: var(--dim); margin: 0 0 10px; }
+  .row { display: grid; grid-template-columns: 150px 190px 1fr; gap: 6px 14px; align-items: start; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; margin-bottom: 6px; }
+  .row.none { opacity: 0.72; }
+  .btns { display: flex; flex-wrap: wrap; gap: 6px; }
+  button { font: inherit; cursor: pointer; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 8px; padding: 5px 10px; }
+  button:hover { border-color: var(--acc); }
+  button.on { background: var(--acc); color: #fff; border-color: var(--acc); }
+  .id { font: 13px/1.4 ui-monospace, Consolas, monospace; word-break: break-all; }
+  .tag { display: inline-block; font-size: 12px; border-radius: 6px; padding: 0 6px; margin-top: 3px; border: 1px solid var(--line); color: var(--dim); }
+  .tag.ok { color: var(--ok); border-color: var(--ok); } .tag.no { color: var(--warn); border-color: var(--warn); }
+  .when { font-weight: 600; } .text { color: var(--dim); }
+  @media (max-width: 760px) { .row { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Astro Outpost soundboard</h1>
+  <div class="bar">
+    <label>Hear it as if you were
+      <select id="place">
+        <option value="menu">in a menu (nothing filtered)</option>
+        <option value="out,moon">outside on the Moon (muffled: no air)</option>
+        <option value="out,mars">outside on Mars (thin air)</option>
+        <option value="in,moon">inside the habitat</option>
+      </select>
+    </label>
+    <input id="find" type="search" placeholder="Find a sound…" aria-label="Find a sound">
+    <button id="stop">Stop everything</button>
+    <span id="count" class="text"></span>
+  </div>
+</header>
+<main>
+  <p class="sub">Every button plays the sound through the game's own sound engine, at the loudness it has in the game. A sound marked
+    <span class="tag no">not recorded</span> plays its synthesized stand-in, or nothing if it has none. Background beds only play in the place they belong to.</p>
+  <div id="list"></div>
+</main>
+
+<script src="tools/audio/manifest.js"></script>
+<script src="js/sfx-data.js"></script>
+<script src="js/audio-list.js"></script>
+<script src="js/audio.js"></script>
+<script>
+(function () {
+  'use strict';
+  var M = window.AUDIO_MANIFEST, Au = JA.audio, meta = Au.debug.meta, VO = JA.VOICE || {}, MU = JA.MUSIC || {};
+  var list = document.getElementById('list'), looping = {}, bedPlace = { 'amb-suit': 'out,moon', 'amb-mars-wind': 'out,mars', 'amb-mars-dust': 'out,mars', 'amb-hab': 'in,moon', 'amb-storm': 'out,moon' };
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function row(id, have, standIn, when, text, buttons) {
+    var r = el('div', 'row' + (have ? '' : ' none'));
+    var a = el('div'); a.appendChild(el('div', 'id', id));
+    a.appendChild(el('span', 'tag ' + (have ? 'ok' : 'no'), have ? 'recorded' : standIn ? 'not recorded: stand-in' : 'not recorded: silent'));
+    var b = el('div', 'btns'); buttons.forEach(function (x) { b.appendChild(x); });
+    var c = el('div'); c.appendChild(el('div', 'when', when)); c.appendChild(el('div', 'text', text));
+    r.appendChild(a); r.appendChild(b); r.appendChild(c);
+    r.setAttribute('data-find', (id + ' ' + when + ' ' + text).toLowerCase());
+    return r;
+  }
+  function btn(label, fn) { var b = el('button', '', label); b.addEventListener('click', function () { Au.unlock(); fn(b); }); return b; }
+  function section(title, sub) { list.appendChild(el('h2', '', title)); if (sub) list.appendChild(el('p', 'sub', sub)); }
+  var place = document.getElementById('place');
+  function setPlace(v, storm, dust) { place.value = v; var p = v.split(','); Au.scene({ place: p[0], site: p[1] || '', storm: storm || 0, dust: dust || 0 }); }
+
+  var groups = [['ui', 'Interface', 'Clicks and page turns. Never filtered, never turned down.'],
+    ['fx', 'Jingles, alarms and in-helmet sounds', 'Not filtered by the place. They dip a little while a voice line plays.'],
+    ['world', 'The world outside', 'Filtered by the place: choose Moon or Mars at the top to hear the difference.'],
+    ['amb', 'Background beds', 'These fade in when you are in their place. The button switches the place for you.']];
+  groups.forEach(function (g) {
+    section(g[1], g[2]);
+    M.SFX.filter(function (s) { return s.bus === g[0]; }).forEach(function (s) {
+      var have = !!meta[s.id], standIn = Au.debug.synth.indexOf(s.id) >= 0, buttons = [];
+      var prompt = s.parts ? s.parts.map(function (p) { return p.prompt; }).join(' → ') : s.prompt;
+      if (g[0] === 'amb') {
+        buttons.push(btn('▶ Go there', function () { setPlace(bedPlace[s.id], s.id === 'amb-storm' ? 2 : 0, s.id === 'amb-mars-dust' ? 1 : 0); }));
+      } else if (s.loop) {
+        buttons.push(btn('▶ Loop', function (b) {
+          if (looping[s.id]) { Au.stopLoop(s.id, 0.2); delete looping[s.id]; b.classList.remove('on'); b.textContent = '▶ Loop'; }
+          else { looping[s.id] = b; Au.loop(s.id, { keep: true }); b.classList.add('on'); b.textContent = '■ Stop'; }
+        }));
+      } else buttons.push(btn(s.n > 1 ? '▶ Play (' + (have ? meta[s.id].n || 1 : s.n) + ' takes, random)' : '▶ Play', function () { Au.play(s.id); }));
+      list.appendChild(row(s.id, have, standIn, s.when, prompt, buttons));
+    });
+  });
+
+  section('Voice lines', 'BOLT\'s lines start with a small chirp; Mission Control\'s are wrapped in the two radio beeps.');
+  M.VOICE.forEach(function (v) {
+    list.appendChild(row(v.id, !!VO[v.id], false, M.CAST[v.who].name + ' · ' + v.when, v.text, [btn('▶ Say', function () { Au.line(v.id); })]));
+  });
+  section('Music');
+  M.MUSIC.forEach(function (m) {
+    list.appendChild(row(m.id, !!MU[m.id], false, m.when, m.prompt, [btn('▶ Play', function () { Au.music(m.id); })]));
+  });
+
+  var nS = M.SFX.filter(function (s) { return meta[s.id]; }).length, nV = M.VOICE.filter(function (v) { return VO[v.id]; }).length, nM = M.MUSIC.filter(function (m) { return MU[m.id]; }).length;
+  document.getElementById('count').textContent = 'Recorded: ' + nS + ' of ' + M.SFX.length + ' sound effects · ' + nV + ' of ' + M.VOICE.length + ' voice lines · ' + nM + ' of ' + M.MUSIC.length + ' music pieces';
+
+  place.addEventListener('change', function () { Au.unlock(); setPlace(place.value); });
+  document.getElementById('stop').addEventListener('click', function () {
+    Object.keys(looping).forEach(function (id) { Au.stopLoop(id, 0.2); looping[id].classList.remove('on'); looping[id].textContent = '▶ Loop'; delete looping[id]; });
+    Au.stopAll(); Au.music(null); setPlace('menu');
+  });
+  document.getElementById('find').addEventListener('input', function () {
+    var q = this.value.trim().toLowerCase();
+    Array.prototype.forEach.call(list.querySelectorAll('.row'), function (r) { r.style.display = !q || r.getAttribute('data-find').indexOf(q) >= 0 ? '' : 'none'; });
+  });
+  var last = performance.now();
+  (function tick(now) { requestAnimationFrame(tick); Au.frame(Math.min(0.1, (now - last) / 1000 || 0)); last = now; })(last);
+  setPlace('menu');
+})();
+</script>
+</body>
+</html>

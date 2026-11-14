@@ -20,7 +20,8 @@
     });
     var first = root.querySelector('.btn.primary') || root.querySelector('button');
     if (first && !opts.noFocus) { try { first.focus({ preventScroll: true }); } catch (e) { /* older browsers */ } }
-    if (opts.speak) JA.audio.speak(opts.speak);
+    // a recorded greeting when there is one; with read-aloud on, the whole card is read instead
+    if (!(opts.line && !JA.audio.readingOn() && JA.audio.line(opts.line)) && opts.speak) JA.audio.speak(opts.speak);
     return root.firstChild;
   };
   U.closeModal = function () { root.className = ''; root.innerHTML = ''; };
@@ -30,7 +31,7 @@
   // ---------- top bar ----------
   var meters = {};
   Array.prototype.forEach.call(document.querySelectorAll('.meter'), function (m) {
-    meters[m.getAttribute('data-res')] = { el: m, val: m.querySelector('.m-val'), bar: m.querySelector('.m-bar i'), note: m.querySelector('.m-note'), last: null, w: null, n: null };
+    meters[m.getAttribute('data-res')] = { el: m, val: m.querySelector('.m-val'), bar: m.querySelector('.m-bar i'), note: m.querySelector('.m-note'), last: null, w: null, n: null, wasLow: null };
   });
   function setMeter(id, value, low, note, bad) {
     var m = meters[id], v = Math.round(value);
@@ -41,6 +42,8 @@
     var w = Math.round(Math.max(0, Math.min(100, value)));
     if (m.w !== w) { m.w = w; m.bar.style.width = w + '%'; }
     m.el.classList.toggle('low', !!low);
+    if (low && m.wasLow === false) JA.audio.play('low');          // a soft ping the moment a meter turns red
+    m.wasLow = !!low;
     if (m.n !== note) { m.n = note; m.note.textContent = note || ''; }
     m.note.classList.toggle('bad', !!bad);
   }
@@ -88,14 +91,15 @@
     bannerText = text + cls; b.className = cls || ''; b.textContent = text;
   };
   var lastSay = '';
-  U.say = function (text, quiet) {
+  // vid: the recorded voice line for these words (a list plays one after the other); without one, read-aloud speaks them
+  U.say = function (text, vid) {
     if (!text || text === lastSay) return;
     lastSay = text;
     var b = $('bolt');
     b.classList.remove('hidden');
     $('bolt-text').textContent = text;
     b.classList.remove('say'); void b.offsetWidth; b.classList.add('say');
-    if (!quiet) JA.audio.speak(text);
+    if (!JA.audio.line(vid)) JA.audio.speak(text);
   };
   var promptKey = null;
   U.prompt = function (text, key, info) {
