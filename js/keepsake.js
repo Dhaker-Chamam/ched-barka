@@ -8,7 +8,7 @@
   var CW = 1600, CH = 1131;          // certificate, A4 landscape
   var PW = 1200, PH = 800;           // postcard
   var TAU = Math.PI * 2;
-  var FONT = "'Fredoka', 'Trebuchet MS', sans-serif";
+  var FONT = "'Lexend', 'Trebuchet MS', sans-serif";   // the game's reading font (assets/fonts)
   var EMOJI = "'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif";
   var INK = '#f5f7ff', MUTED = '#b3bde0', GOLD = '#ffd23f', AIR = '#4fd8ff';
   var STORM = [MUTED, '#ffd23f', '#ffa24d', '#ff7f8e'];   // unknown · small · medium · big
@@ -510,9 +510,9 @@
     var called = false, timer = 0;
     function go() { if (called) return; called = true; clearTimeout(timer); try { done(); } catch (e) { /* ignore */ } }
     try {
-      if (document.fonts && document.fonts.load && typeof Promise !== 'undefined' && !(document.fonts.check && document.fonts.check('700 40px Fredoka') && document.fonts.check('400 40px Fredoka'))) {
+      if (document.fonts && document.fonts.load && typeof Promise !== 'undefined' && !(document.fonts.check && document.fonts.check('700 40px Lexend') && document.fonts.check('400 40px Lexend'))) {
         timer = setTimeout(go, 1500);
-        Promise.all([400, 500, 600, 700].map(function (w) { return document.fonts.load(w + ' 40px Fredoka'); })).then(go, go);
+        Promise.all([400, 500, 600, 700].map(function (w) { return document.fonts.load(w + ' 40px Lexend'); })).then(go, go);
         return;
       }
     } catch (e) { /* fall through and draw now */ }

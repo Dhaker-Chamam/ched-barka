@@ -1,5 +1,5 @@
 /* Astro Outpost — the future vision (js/colony.js): letterbox, era steps, captions, skip button. */
-.colony-vision { position: fixed; inset: 0; z-index: 36; pointer-events: none; overflow: hidden; color: #fff; font-family: var(--font, 'Fredoka', 'Trebuchet MS', sans-serif); }
+.colony-vision { position: fixed; inset: 0; z-index: 36; pointer-events: none; overflow: hidden; color: #fff; font-family: var(--font, 'Lexend', 'Trebuchet MS', sans-serif); }
 .colony-vision > * { position: absolute; }
 .colony-fade { inset: 0; background: #04060e; opacity: 1; transition: opacity 0.6s ease; }
 .colony-vision.colony-lit .colony-fade { opacity: 0; }

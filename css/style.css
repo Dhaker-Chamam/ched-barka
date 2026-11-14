@@ -1,8 +1,11 @@
+/* fonts ship with the game (assets/fonts, SIL Open Font License) so it looks the same offline */
+@font-face { font-family: 'Lexend'; font-style: normal; font-weight: 100 900; font-display: swap; src: url(../assets/fonts/lexend.woff2) format('woff2'); }
+@font-face { font-family: 'Exo 2'; font-style: normal; font-weight: 100 900; font-display: swap; src: url(../assets/fonts/exo2.woff2) format('woff2'); }
 :root {
   --ink: #f5f7ff; --muted: #b3bde0; --panel: rgba(15, 21, 46, 0.84); --panel-solid: #121a38; --line: rgba(255, 255, 255, 0.14);
   --air: #4fd8ff; --food: #7be36a; --dose: #ff6fb1; --power: #ffd23f; --sci: #ffb84d; --danger: #ff5468; --ok: #4dff9a;
-  --font: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
-  --font-display: 'Space Grotesk', 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --font: 'Lexend', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-display: 'Exo 2', 'Lexend', 'Segoe UI', system-ui, sans-serif;
   --safe-b: env(safe-area-inset-bottom, 0px); --safe-t: env(safe-area-inset-top, 0px);
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -441,10 +444,10 @@ body.cine #fx-tag { display: none; }
 body.fx-on #storm-fx.warn { opacity: 0.2; }
 body.fx-on #storm-fx.active { opacity: 0.45; }
 
-/* ---------- type: Inter for reading, Space Grotesk for titles and numbers ---------- */
-body { font-feature-settings: 'cv11', 'ss01'; -webkit-font-smoothing: antialiased; letter-spacing: -0.005em; }
+/* ---------- type: Lexend for reading (drawn for young readers), Exo 2 for titles and numbers ---------- */
+body { -webkit-font-smoothing: antialiased; }
 h1, h2, h3, h4, .kicker, .btn, .sol-chip b, .m-top b, .m-val, .stars b, #banner, #mini b, #inside b, #card-title, .pick b, .rank h2, .opt b, kbd {
-  font-family: var(--font-display); letter-spacing: -0.01em; }
+  font-family: var(--font-display); letter-spacing: 0.005em; }
 .kicker, #goals h4, #card-kicker, .tagline { letter-spacing: 0.14em; }
 .m-val, .stars b, #sol-text { font-variant-numeric: tabular-nums; }
 

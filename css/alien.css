@@ -1,6 +1,6 @@
 /* Astro Outpost — the secret space disco (js/alien.js). Every rule here starts with .alien- */
 
-.alien-party { position: fixed; inset: 0; z-index: 23; pointer-events: none; color: #fff; font-family: var(--font, 'Fredoka', 'Trebuchet MS', sans-serif); }
+.alien-party { position: fixed; inset: 0; z-index: 23; pointer-events: none; color: #fff; font-family: var(--font, 'Lexend', 'Trebuchet MS', sans-serif); }
 .alien-party button { font-family: inherit; color: inherit; border: 0; cursor: pointer; }
 
 /* while you dance, the mission panels step aside (the top bar and BOLT stay) */

@@ -50,7 +50,7 @@
   function ball(r, a, b) { return new T.SphereGeometry(r, a || 14, b || 10); }
   function ellipse(ctx, x, y, rx, ry) { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); }
   function rr(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
-  var FONT = "'Fredoka', 'Trebuchet MS', sans-serif";
+  var FONT = "'Exo 2', 'Lexend', 'Trebuchet MS', sans-serif";   // the game's title font (assets/fonts)
 
   // A round window cut out of a wall texture, with a frame around it.
   function porthole(ctx, cx, cy, rx, ry, w) {

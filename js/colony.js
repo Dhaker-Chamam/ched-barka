@@ -432,11 +432,11 @@
       ctx.fill();
       ctx.lineWidth = 6; ctx.strokeStyle = '#ffd23f'; ctx.stroke();
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#ffd23f';
-      ctx.font = '600 26px Fredoka, "Trebuchet MS", sans-serif';
+      ctx.font = '600 26px "Exo 2", Lexend, "Trebuchet MS", sans-serif';
       ctx.fillText('WELCOME TO', w / 2, 40);
-      ctx.fillStyle = '#ffffff'; ctx.font = '700 ' + (name.length > 9 ? 58 : 66) + 'px Fredoka, "Trebuchet MS", sans-serif';
+      ctx.fillStyle = '#ffffff'; ctx.font = '700 ' + (name.length > 9 ? 58 : 66) + 'px "Exo 2", Lexend, "Trebuchet MS", sans-serif';
       ctx.fillText(name, w / 2, 96);
-      ctx.fillStyle = '#9fe8ff'; ctx.font = '500 26px Fredoka, "Trebuchet MS", sans-serif';
+      ctx.fillStyle = '#9fe8ff'; ctx.font = '500 26px "Exo 2", Lexend, "Trebuchet MS", sans-serif';
       ctx.fillText('·  population 12  ·', w / 2, 152);
     });
   }
