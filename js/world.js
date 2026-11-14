@@ -535,6 +535,7 @@
     updateSky(dt);
     ambientParticles(dt);
     updateParticles(dt);
-    if (window.innerWidth && window.innerHeight) renderer.render(scene, camera);
+    if (!(window.innerWidth && window.innerHeight)) return;
+    if (!(JA.fx && JA.fx.render(renderer, scene, camera, dt))) { renderer.setRenderTarget(null); renderer.render(scene, camera); }   // js/fx.js finishes the picture
   };
 })(window.JA);

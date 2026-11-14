@@ -1,7 +1,8 @@
 :root {
   --ink: #f5f7ff; --muted: #b3bde0; --panel: rgba(15, 21, 46, 0.84); --panel-solid: #121a38; --line: rgba(255, 255, 255, 0.14);
   --air: #4fd8ff; --food: #7be36a; --dose: #ff6fb1; --power: #ffd23f; --sci: #ffb84d; --danger: #ff5468; --ok: #4dff9a;
-  --font: 'Fredoka', 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
+  --font: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-display: 'Space Grotesk', 'Inter', 'Segoe UI', system-ui, sans-serif;
   --safe-b: env(safe-area-inset-bottom, 0px); --safe-t: env(safe-area-inset-top, 0px);
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -366,3 +367,23 @@ body.cine #fade { z-index: 27; }      /* during the film, titles and subtitles s
   .modal, .rank .big-icon, #card { animation: none; }
   .crisis-head small, .crisis-head .big-icon, #cine-visor .breath { animation: none; }
 }
+
+/* glassy sheen on the HUD panels, like a visor display (js/fx.js does the 3D view) */
+.chip, .meter, #goals, #prompt, #hands, #rover-hud, #bolt, #inside, .icon-btn { background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0) 48%); }
+/* the 3D view now draws its own storm glow, so the flat overlay steps back */
+body.fx-on #storm-fx.warn { opacity: 0.2; }
+body.fx-on #storm-fx.active { opacity: 0.45; }
+
+/* ---------- type: Inter for reading, Space Grotesk for titles and numbers ---------- */
+body { font-feature-settings: 'cv11', 'ss01'; -webkit-font-smoothing: antialiased; letter-spacing: -0.005em; }
+h1, h2, h3, h4, .kicker, .btn, .sol-chip b, .m-top b, .m-val, .stars b, #banner, #mini b, #inside b, #card-title, .pick b, .rank h2, .opt b, kbd {
+  font-family: var(--font-display); letter-spacing: -0.01em; }
+.kicker, #goals h4, #card-kicker, .tagline { letter-spacing: 0.14em; }
+.m-val, .stars b, #sol-text { font-variant-numeric: tabular-nums; }
+
+/* ---------- drawn icons (js/icons.js swaps the emoji for these) ---------- */
+img.ico { width: 1.2em; height: 1.2em; vertical-align: -0.24em; display: inline-block; pointer-events: none; -webkit-user-drag: none; }
+.toast img.ico { filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.55)) drop-shadow(0 0 8px rgba(0, 0, 0, 0.5)); }
+.mark i img.ico { width: 1.35em; height: 1.35em; vertical-align: middle; }
+.big-icon img.ico { width: 1.1em; height: 1.1em; vertical-align: middle; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.45)); }
+.m-icon img.ico, #hands-icon img.ico, #card-icon img.ico { vertical-align: middle; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35)); }

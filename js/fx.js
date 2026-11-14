@@ -1,0 +1,399 @@
+/* Astro Outpost — the camera look. The 3D world is drawn into an off-screen picture, then
+   finished like real space footage before it reaches the screen:
+     - light glow and a wide lens streak on anything bright (the Sun, lamps, rocket fire)
+     - a sun flare with ghost rings that hides when a mountain covers the Sun
+     - a colour grade per world: the Moon like Apollo slide film, Mars like a rover camera
+     - film grain, soft corners and a little colour fringing
+   and it reacts to what is happening in the game:
+     - radiation storm: an aurora glow round the edges and tiny streaks of light (astronauts
+       really see these when space radiation passes through their eyes)
+     - Mars dust: moving sheets of haze
+     - low air: the view narrows and loses colour, pulsing like slow breathing
+     - cold and dark: frost creeping in from the visor edges
+     - postcard photo: the cross marks of an Apollo Hasselblad camera
+   Press V to switch between full, lite and off. It steps down by itself if the frame rate drops. */
+(function (JA) {
+  'use strict';
+  var T = window.THREE;
+  var FX = JA.fx = { level: 0, render: function () { return false; }, snap: function () {} };
+  if (!T) return;
+
+  var reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  var touch = (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || ('ontouchstart' in window);
+  var KEY = 'ja-fx', saved = null;
+  try { saved = localStorage.getItem(KEY); } catch (e) { saved = null; }
+  FX.level = saved === null ? (touch ? 1 : 2) : Math.max(0, Math.min(2, parseInt(saved, 10) || 0));
+  var userSet = saved !== null;
+  var q = /[?&]fx=([0-2])/.exec(location.search);   // ?fx=0|1|2 forces a level for this visit (handy for comparing)
+  if (q) { FX.level = +q[1]; userSet = true; }
+
+  var R = null, built = false, failed = false, checked = false, gl2 = false, fType = T.UnsignedByteType;
+  var pScene, pCam, quad, rt = {}, M = {}, msaa = -1, bw = 0, bh = 0;
+  var v1 = new T.Vector3(), v2 = new T.Vector2(), fwd = new T.Vector3();
+  var time = 0, playT = 0, snapT = 0, perfT = 0, perfN = 0, perfSum = 0;
+  // smoothed game state that drives the look
+  var S = { storm: 0, warn: 0, dust: 0, air: 0, cold: 0, kick: 0, cine: 0, title: 0, inside: 0, site: 1, sunVis: 0 };
+
+  // ---------------------------------------------------------------- shaders
+  var VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
+
+  // keep only the bright parts (soft knee), averaged over 4 taps so it does not flicker
+  var BRIGHT = [
+    'uniform sampler2D tSrc; uniform vec2 uTexel; uniform float uThresh; uniform float uKnee; uniform float uCap; varying vec2 vUv;',
+    'void main(){',
+    '  vec3 c = texture2D(tSrc, vUv + uTexel * vec2(-0.5, -0.5)).rgb + texture2D(tSrc, vUv + uTexel * vec2(0.5, -0.5)).rgb',
+    '         + texture2D(tSrc, vUv + uTexel * vec2(-0.5, 0.5)).rgb + texture2D(tSrc, vUv + uTexel * vec2(0.5, 0.5)).rgb;',
+    '  c *= 0.25;',
+    '  float l = max(c.r, max(c.g, c.b));',
+    '  float s = clamp(l - uThresh + uKnee, 0.0, 2.0 * uKnee); s = s * s / (4.0 * uKnee + 1e-4);',
+    '  c *= max(s, l - uThresh) / max(l, 1e-4);',
+    '  float lc = max(c.r, max(c.g, c.b));',
+    '  c *= min(1.0, uCap / max(lc, 1e-4));',   // a big bright sky must not wash the whole frame
+    '  gl_FragColor = vec4(c, 1.0);',
+    '}'].join('\n');
+
+  var DOWN = [
+    'uniform sampler2D tSrc; uniform vec2 uTexel; varying vec2 vUv;',
+    'void main(){',
+    '  gl_FragColor = 0.25 * (texture2D(tSrc, vUv + uTexel * vec2(-1.0, -1.0)) + texture2D(tSrc, vUv + uTexel * vec2(1.0, -1.0))',
+    '                      + texture2D(tSrc, vUv + uTexel * vec2(-1.0, 1.0)) + texture2D(tSrc, vUv + uTexel * vec2(1.0, 1.0)));',
+    '}'].join('\n');
+
+  var BLUR = [
+    'uniform sampler2D tSrc; uniform vec2 uDir; varying vec2 vUv;',
+    'void main(){',
+    '  vec3 c = texture2D(tSrc, vUv).rgb * 0.2270;',
+    '  c += (texture2D(tSrc, vUv + uDir * 1.3846).rgb + texture2D(tSrc, vUv - uDir * 1.3846).rgb) * 0.3162;',
+    '  c += (texture2D(tSrc, vUv + uDir * 3.2308).rgb + texture2D(tSrc, vUv - uDir * 3.2308).rgb) * 0.0703;',
+    '  gl_FragColor = vec4(c, 1.0);',
+    '}'].join('\n');
+
+  // a long sideways smear of the brightest light: the "anamorphic" streak of film lenses
+  var STREAK = [
+    'uniform sampler2D tSrc; uniform vec2 uTexel; varying vec2 vUv;',
+    'void main(){',
+    '  vec3 c = texture2D(tSrc, vUv).rgb; float wsum = 1.0;',
+    '  for (int i = 1; i <= 12; i++) {',
+    '    float fi = float(i), w = exp(-fi * 0.28);',
+    '    vec2 o = vec2(uTexel.x * fi * 3.0, 0.0);',
+    '    c += (texture2D(tSrc, vUv + o).rgb + texture2D(tSrc, vUv - o).rgb) * w; wsum += 2.0 * w;',
+    '  }',
+    '  c /= wsum; float l = max(c.r, max(c.g, c.b));',
+    '  gl_FragColor = vec4(c * smoothstep(0.05, 0.6, l), 1.0);',
+    '}'].join('\n');
+
+  var FINAL = [
+    'uniform sampler2D tScene; uniform sampler2D tBloomA; uniform sampler2D tBloomB; uniform sampler2D tStreak;',
+    'uniform vec2 uRes; uniform float uTime; uniform float uMotion; uniform float uFull;',
+    'uniform vec2 uSun; uniform float uSunVis; uniform float uOccLo; uniform float uSite;',
+    'uniform float uBloom; uniform float uStreakAmt; uniform vec3 uStreakTint;',
+    'uniform float uStorm; uniform float uWarn; uniform float uDust; uniform float uAir; uniform float uCold;',
+    'uniform float uKick; uniform float uCine; uniform float uTitle; uniform float uInside; uniform float uSnap;',
+    'varying vec2 vUv;',
+    'float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }',
+    'float noise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);',
+    '  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + 1.0), f.x), f.y); }',
+    'float fbm(vec2 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++) { s += a * noise(p); p = p * 2.03 + 17.1; a *= 0.5; } return s; }',
+    'float inv(float a, float b, float x){ return 1.0 - smoothstep(a, b, x); }',   // 1 below a, fading to 0 at b
+    'float seg(vec2 p, vec2 a, vec2 b, float w){ vec2 pa = p - a, ba = b - a; float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0); return inv(0.0, w, length(pa - ba * h)); }',
+    'float disc(vec2 p, vec2 c, float r, float soft){ return inv(r * (1.0 - soft), r, length(p - c)); }',
+    // highlights roll off gently instead of clipping; everything below 0.82 is untouched
+    'vec3 shoulder(vec3 x){ vec3 t = max(x - 0.82, 0.0); return min(x, vec3(0.82)) + 0.18 * (1.0 - exp(-t / 0.18)); }',
+    'void main(){',
+    '  float asp = uRes.x / uRes.y;',
+    '  vec2 uv = vUv;',
+    '  float tq = floor(uTime * 18.0);',
+    // film gate weave during the films
+    '  uv += uCine * uMotion * (vec2(noise(vec2(uTime * 7.0, 1.3)), noise(vec2(2.1, uTime * 6.0))) - 0.5) * 0.0018;',
+    // storm interference: thin bands of the picture slip sideways
+    '  float tear = step(0.992 - uStorm * 0.03, noise(vec2(uv.y * 38.0, tq)));',
+    '  uv.x += tear * uStorm * uMotion * (hash(vec2(tq, floor(uv.y * 90.0))) - 0.5) * 0.02;',
+    '  vec2 cc = uv - 0.5, ca = vec2(cc.x * asp, cc.y);',
+    '  float r2 = dot(cc, cc), rr = length(ca);',
+    // colour fringing, stronger toward the corners and when something hits hard
+    '  float ab = (0.5 + 3.0 * uKick + 1.6 * uStorm + 0.8 * uCine) * r2 * 0.018;',
+    '  vec3 c = vec3(texture2D(tScene, uv + cc * ab).r, texture2D(tScene, uv).g, texture2D(tScene, uv - cc * ab).b);',
+    // glow
+    '  vec3 bloom = texture2D(tBloomA, uv).rgb * 0.55 + texture2D(tBloomB, uv).rgb * 0.6 * uFull;',
+    '  c += bloom * uBloom;',
+    '  c += texture2D(tStreak, uv).rgb * uStreakTint * uStreakAmt * uFull;',
+    // sun flare: is the Sun really visible? read the picture right where it should be
+    '  if (uSunVis > 0.001) {',
+    '    vec2 sp = uSun; float lum = 0.0;',
+    '    if (sp.x > 0.0 && sp.x < 1.0 && sp.y > 0.0 && sp.y < 1.0) {',
+    '      vec2 o = vec2(0.006 / asp, 0.006);',
+    '      vec3 s = texture2D(tScene, sp).rgb + texture2D(tScene, sp + o).rgb + texture2D(tScene, sp - o).rgb',
+    '             + texture2D(tScene, sp + vec2(o.x, -o.y)).rgb + texture2D(tScene, sp + vec2(-o.x, o.y)).rgb;',
+    '      s *= 0.2; lum = max(s.r, max(s.g, s.b));',
+    '    }',
+    '    float occ = smoothstep(uOccLo, uOccLo + 0.35, lum) * uSunVis;',
+    '    vec2 sa = vec2((sp.x - 0.5) * asp, sp.y - 0.5), d = ca - sa;',
+    '    float dl = length(d), ang = atan(d.y, d.x);',
+    '    vec3 warm = mix(vec3(1.0, 0.97, 0.92), vec3(1.0, 0.86, 0.66), uSite);',
+    '    float rays = pow(noise(vec2(ang * 9.0, 3.0)) * noise(vec2(ang * 23.0 + 5.0, 1.0)), 2.0);',
+    '    c += warm * occ * (exp(-dl * 9.0) * 0.35 + rays * exp(-dl * 4.5) * 0.5);',
+    // ghosts: little coloured rings lined up through the middle of the lens
+    '    vec2 ax = -sa; vec3 g = vec3(0.0);',
+    '    g += vec3(0.35, 0.7, 1.0) * disc(ca, sa + ax * 0.55, 0.035, 0.6) * 0.18;',
+    '    g += vec3(0.6, 1.0, 0.55) * disc(ca, sa + ax * 1.25, 0.06, 0.3) * 0.10;',
+    '    g += vec3(1.0, 0.5, 0.85) * disc(ca, sa + ax * 1.6, 0.022, 0.8) * 0.22;',
+    '    g += mix(vec3(0.5, 0.6, 1.0), vec3(1.0, 0.55, 0.3), uSite) * disc(ca, sa + ax * 2.1, 0.13, 0.15) * 0.06;',
+    '    float halo = inv(0.0, 0.03, abs(length(ca) - 0.42 - 0.1 * length(sa))) * 0.04;',
+    '    g += vec3(1.0, 0.7, 0.9) * halo;',
+    '    c += g * occ * (1.0 - 0.6 * uInside);',
+    '  }',
+    '  c = shoulder(c);',
+    // the grade: Moon = cold Apollo slide film, Mars = warm rover camera, inside = cosy lamp light
+    '  float L = dot(c, vec3(0.2126, 0.7152, 0.0722));',
+    '  vec3 shadowT = mix(vec3(0.86, 0.95, 1.10), vec3(0.98, 0.84, 0.78), uSite);',
+    '  vec3 highT = mix(vec3(1.03, 1.00, 0.96), vec3(1.05, 0.99, 0.90), uSite);',
+    '  c *= mix(shadowT, highT, smoothstep(0.0, 0.5, L));',
+    '  c = mix(c, c * vec3(1.08, 1.0, 0.86), uInside);',
+    '  float sat = mix(0.88, 1.08, uSite) + 0.06 * uInside + 0.08 * uTitle;',
+    '  L = dot(c, vec3(0.2126, 0.7152, 0.0722));',
+    '  c = max(mix(vec3(L), c, sat), 0.0);',
+    '  float con = mix(1.10, 1.08, uSite);',
+    '  c = max((c - 0.16) * con + 0.16, 0.0) * mix(0.97, 1.0, uSite);',
+    // Mars dust: moving sheets of haze
+    '  if (uDust > 0.001) {',
+    '    float hz = fbm(vec2(uv.x * 2.4 * asp - uTime * 0.22 * uMotion, uv.y * 3.0 + uTime * 0.03));',
+    '    vec3 haze = vec3(0.86, 0.62, 0.42) * (0.55 + 0.6 * L);',
+    '    c = mix(c, haze, uDust * (0.12 + 0.38 * hz) * (0.6 + 0.4 * (1.0 - uv.y)));',
+    '  }',
+    // radiation storm: aurora at the edges and streaks of light
+    '  float edge = smoothstep(0.2, 0.75, rr);',
+    '  if (uStorm + uWarn > 0.001) {',
+    '    float a = fbm(vec2(atan(ca.y, ca.x) * 2.5 + uTime * 0.25 * uMotion, rr * 5.0 - uTime * 0.9 * uMotion));',
+    '    c += vec3(1.0, 0.22, 0.72) * edge * a * uStorm * 0.55;',
+    '    c += vec3(0.25, 1.0, 0.75) * edge * edge * (1.0 - a) * uStorm * 0.18;',
+    '    c += vec3(1.0, 0.25, 0.65) * edge * edge * uWarn * (0.10 + 0.08 * sin(uTime * 6.0));',
+    '    if (uMotion > 0.5) {',
+    '      for (int i = 0; i < 9; i++) {',
+    '        float fi = float(i), ph = uTime * 7.0 + fi * 0.37, slot = floor(ph), age = fract(ph);',
+    '        if (hash(vec2(slot, fi)) < uStorm * 0.6) {',
+    '          vec2 p = vec2((hash(vec2(slot + 1.3, fi)) - 0.5) * asp, hash(vec2(slot + 7.1, fi)) - 0.5);',
+    '          float an = hash(vec2(slot, fi + 3.0)) * 6.2832, ln = 0.01 + 0.07 * hash(vec2(fi, slot + 2.0));',
+    '          vec2 dir = vec2(cos(an), sin(an)) * ln;',
+    '          float fade = pow(1.0 - age, 4.0);',
+    '          c += vec3(1.0, 0.92, 1.0) * fade * (seg(ca, p, p + dir, 0.0022) * 1.6 + disc(ca, p, 0.012, 1.0) * 0.5);',
+    '        }',
+    '      }',
+    '    }',
+    '  }',
+    // cold and dark: frost creeps in from the visor edges
+    '  if (uCold > 0.001) {',
+    '    float fr = fbm(ca * 7.0 + 3.0), ridge = 1.0 - abs(fbm(ca * 16.0) * 2.0 - 1.0);',
+    '    float m = smoothstep(0.42, 0.85, rr + (fr - 0.5) * 0.4) * uCold;',
+    '    c = mix(c, vec3(0.72, 0.84, 0.98) * (0.35 + 0.8 * L), m * (0.25 + 0.5 * pow(ridge, 5.0)));',
+    '  }',
+    // low air: the view narrows and fades, pulsing like breathing
+    '  if (uAir > 0.001) {',
+    '    float br = 0.5 + 0.5 * sin(uTime * (1.6 + uAir * 1.4));',
+    '    float tun = smoothstep(0.18, 0.72, rr) * uAir * (0.65 + 0.35 * br * uMotion);',
+    '    L = dot(c, vec3(0.2126, 0.7152, 0.0722));',
+    '    c = mix(c, vec3(L) * vec3(0.85, 0.92, 1.05), uAir * 0.55);',
+    '    c *= 1.0 - tun * 0.9;',
+    '  }',
+    // warm light leak drifting across the title and the films
+    '  float leakAmt = max(uTitle, uCine * 0.6);',
+    '  if (leakAmt > 0.001) {',
+    '    vec2 lp = vec2(-0.75 * asp + 0.25 * sin(uTime * 0.11), 0.45 + 0.1 * sin(uTime * 0.07));',
+    '    c += mix(vec3(1.0, 0.42, 0.18), vec3(1.0, 0.6, 0.25), uSite) * inv(0.0, 1.1, length(ca - lp)) * 0.06 * leakAmt;',
+    '    vec2 lq = vec2(0.8 * asp, -0.5 + 0.1 * cos(uTime * 0.09));',
+    '    c += vec3(0.3, 0.45, 1.0) * inv(0.0, 0.9, length(ca - lq)) * 0.04 * leakAmt;',
+    '  }',
+    // soft dark corners
+    '  float vig = inv(0.28, 1.05, length(ca * vec2(0.85, 1.0)));',
+    '  c *= mix(1.0, vig, 0.5 + 0.25 * uCine + 0.2 * uSnap);',
+    // postcard photo: the black cross marks of an Apollo Hasselblad camera
+    '  if (uSnap > 0.001) {',
+    '    float sp2 = uRes.y / 5.0; vec2 px = vUv * uRes - uRes * 0.5;',
+    '    vec2 f = mod(px + sp2 * 0.5, sp2) - sp2 * 0.5;',
+    '    float arm = sp2 * 0.07, w = max(0.8, uRes.y / 900.0);',
+    '    float cr = max(step(abs(f.x), arm) * step(abs(f.y), w), step(abs(f.y), arm) * step(abs(f.x), w));',
+    '    c = mix(c, vec3(0.015), cr * min(1.0, uSnap * 1.5) * 0.85);',
+    '  }',
+    '  vec4 outC = linearToOutputTexel(vec4(c, 1.0));',
+    // film grain, after the colour is final so it looks even everywhere
+    '  float seed = uMotion > 0.5 ? fract(uTime * 7.31) * 91.0 : 0.0;',
+    '  float gr = hash(floor(vUv * uRes) + seed) - 0.5;',
+    '  float amt = 0.035 + 0.035 * uCine + 0.035 * uDust + 0.03 * uStorm + 0.02 * uTitle;',
+    '  outC.rgb += gr * amt * (1.0 - 0.5 * dot(outC.rgb, vec3(0.33)));',
+    '  gl_FragColor = outC;',
+    '}'].join('\n');
+
+  function mat(frag, uniforms) {
+    return new T.ShaderMaterial({ vertexShader: VERT, fragmentShader: frag, uniforms: uniforms, depthTest: false, depthWrite: false });
+  }
+  function target(w, h, o) {
+    var t = new T.WebGLRenderTarget(Math.max(1, w), Math.max(1, h), Object.assign({
+      type: fType, minFilter: T.LinearFilter, magFilter: T.LinearFilter, depthBuffer: false, stencilBuffer: false }, o || {}));
+    t.texture.generateMipmaps = false;
+    return t;
+  }
+
+  function build(renderer) {
+    R = renderer; built = true;
+    gl2 = !!renderer.capabilities.isWebGL2;
+    var ex = renderer.extensions;
+    fType = gl2 && (ex.has('EXT_color_buffer_float') || ex.has('EXT_color_buffer_half_float')) ? T.HalfFloatType : T.UnsignedByteType;
+    pScene = new T.Scene(); pCam = new T.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    quad = new T.Mesh(new T.PlaneGeometry(2, 2), null); quad.frustumCulled = false; pScene.add(quad);
+    var tx = function () { return { value: new T.Vector2() }; };
+    M.bright = mat(BRIGHT, { tSrc: { value: null }, uTexel: tx(), uThresh: { value: 1.05 }, uKnee: { value: 0.2 }, uCap: { value: 0.5 } });
+    M.down = mat(DOWN, { tSrc: { value: null }, uTexel: tx() });
+    M.blur = mat(BLUR, { tSrc: { value: null }, uDir: tx() });
+    M.streak = mat(STREAK, { tSrc: { value: null }, uTexel: tx() });
+    M.final = mat(FINAL, {
+      tScene: { value: null }, tBloomA: { value: null }, tBloomB: { value: null }, tStreak: { value: null },
+      uRes: tx(), uTime: { value: 0 }, uMotion: { value: reduce ? 0 : 1 }, uFull: { value: 1 },
+      uSun: tx(), uSunVis: { value: 0 }, uOccLo: { value: 0.6 }, uSite: { value: 1 },
+      uBloom: { value: 0.8 }, uStreakAmt: { value: 0.6 }, uStreakTint: { value: new T.Color(0.55, 0.75, 1.0) },
+      uStorm: { value: 0 }, uWarn: { value: 0 }, uDust: { value: 0 }, uAir: { value: 0 }, uCold: { value: 0 },
+      uKick: { value: 0 }, uCine: { value: 0 }, uTitle: { value: 0 }, uInside: { value: 0 }, uSnap: { value: 0 }
+    });
+  }
+
+  function sizeTargets(w, h) {
+    var want = FX.level >= 2 && gl2 ? 4 : 0;
+    if (w === bw && h === bh && want === msaa && rt.scene) return;
+    for (var k in rt) rt[k].dispose();
+    rt = {}; bw = w; bh = h; msaa = want;
+    rt.scene = target(w, h, { depthBuffer: true, samples: want });
+    var w2 = w >> 1, h2 = h >> 1, w4 = w >> 2, h4 = h >> 2, w8 = w >> 3, h8 = h >> 3;
+    rt.half = target(w2, h2);
+    rt.q1 = target(w4, h4); rt.q2 = target(w4, h4);
+    rt.e1 = target(w8, h8); rt.e2 = target(w8, h8);
+    rt.streak = target(w8, h4);
+  }
+
+  function pass(m, out) { quad.material = m; R.setRenderTarget(out || null); R.render(pScene, pCam); }
+  function blur2(a, b, w, h, spread) {
+    var u = M.blur.uniforms;
+    u.tSrc.value = a.texture; u.uDir.value.set(spread / w, 0); pass(M.blur, b);
+    u.tSrc.value = b.texture; u.uDir.value.set(0, spread / h); pass(M.blur, a);
+  }
+
+  function ease(key, want, dt, speed) { S[key] += (want - S[key]) * Math.min(1, dt * (speed || 3)); }
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+  function readGame(dt, camera) {
+    var W = JA.world, G = JA.game || {}, s = G.s, mode = G.mode || 'title', env = W.env;
+    var mars = W.site !== 'moon', out = mode === 'play';
+    var phase = s && JA.sim && JA.sim.stormPhase ? JA.sim.stormPhase(s) : '';
+    S.site = mars ? 1 : 0;
+    ease('storm', env.stormShown * (out ? 1 : mode === 'inside' ? 0.15 : 0.6), dt, 4);
+    ease('warn', out && phase === 'warning' ? 1 : 0, dt, 3);
+    ease('dust', mars ? env.dustShown : 0, dt, 2);
+    ease('air', s && (out || mode === 'inside') ? clamp((28 - s.air) / 24, 0, 1) : 0, dt, 1.5);
+    ease('cold', out ? clamp((env.dark - 0.55) / 0.4, 0, 1) * (mars ? 0.7 : 0.8) : 0, dt, 0.6);
+    ease('cine', W.cam.mode === 'cine' || mode === 'intro' || mode === 'launch' ? 1 : 0, dt, 2);
+    ease('title', mode === 'title' || mode === 'brief' ? 1 : 0, dt, 2);
+    ease('inside', mode === 'inside' ? 1 : 0, dt, 2.5);
+    S.kick = clamp(W.cam.shake * 2.2, 0, 1);
+    // where is the Sun on screen, and is it in front of us?
+    camera.getWorldDirection(fwd);
+    var front = fwd.dot(W.sunDir);
+    v1.copy(camera.position).addScaledVector(W.sunDir, 1000).project(camera);
+    var sx = v1.x * 0.5 + 0.5, sy = v1.y * 0.5 + 0.5;
+    var onScreen = clamp(1 - (Math.max(Math.abs(sx - 0.5), Math.abs(sy - 0.5)) - 0.5) / 0.4, 0, 1);   // fades out just past the screen edge
+    var vis = front > 0.05 ? clamp((front - 0.05) * 4, 0, 1) * onScreen : 0;
+    M.final.uniforms.uSun.value.set(sx, sy);
+    ease('sunVis', vis * (1 - S.dust * 0.85), dt, 6);
+  }
+
+  function setUniforms(w, h) {
+    var u = M.final.uniforms, moon = S.site === 0, full = FX.level >= 2;
+    u.uRes.value.set(w, h); u.uTime.value = time; u.uFull.value = full ? 1 : 0;
+    u.uSite.value = S.site; u.uSunVis.value = S.sunVis; u.uOccLo.value = moon ? 0.55 : 1.0;
+    u.uBloom.value = (moon ? 0.45 : 0.4) + 0.15 * S.title + 0.2 * S.cine;
+    u.uStreakAmt.value = (moon ? 0.9 : 0.55) + 0.5 * S.cine;
+    if (moon) u.uStreakTint.value.setRGB(0.5, 0.72, 1.0); else u.uStreakTint.value.setRGB(1.0, 0.72, 0.45);
+    u.uStorm.value = S.storm; u.uWarn.value = S.warn; u.uDust.value = S.dust; u.uAir.value = S.air; u.uCold.value = S.cold;
+    u.uKick.value = reduce ? 0 : S.kick; u.uCine.value = S.cine; u.uTitle.value = S.title; u.uInside.value = S.inside;
+    u.uSnap.value = clamp(snapT / 1.6, 0, 1);
+  }
+
+  // watch the frame rate while playing and step down if it struggles
+  function watchPerf(dt) {
+    if (userSet || FX.level === 0) return;
+    perfT += dt; perfSum += dt; perfN++;
+    if (perfT < 4) return;
+    var avg = perfSum / perfN;
+    perfT = perfSum = perfN = 0;
+    if (avg > 1 / 38) setLevel(FX.level - 1, false);
+  }
+
+  function setLevel(n, byUser) {
+    FX.level = (n + 3) % 3;
+    if (byUser) { userSet = true; try { localStorage.setItem(KEY, String(FX.level)); } catch (e) {} }
+    document.body.classList.toggle('fx-on', FX.level > 0);
+    bw = 0;   // rebuild targets (MSAA may change)
+  }
+  FX.setLevel = function (n) { setLevel(n, true); };
+
+  FX.snap = function () { snapT = 1.6; };
+  FX.state = S;   // read-only view of the live look values (for testing)
+
+  FX.render = function (renderer, scene, camera, dt) {
+    if (FX.level === 0 || failed) return false;
+    try {
+      if (!built) build(renderer);
+      renderer.getDrawingBufferSize(v2);
+      var w = v2.x | 0, h = v2.y | 0;
+      if (w < 16 || h < 16) return false;
+      sizeTargets(w, h);
+      time += dt; snapT = Math.max(0, snapT - dt);
+      readGame(dt, camera);
+      var G = JA.game;
+      if (G && G.mode === 'play') { playT += dt; if (playT > 3) watchPerf(dt); } else playT = 0;   // skip the loading hiccup when a day starts
+
+      R.setRenderTarget(rt.scene); R.render(scene, camera);
+
+      var ub = M.bright.uniforms;
+      ub.tSrc.value = rt.scene.texture; ub.uTexel.value.set(1 / w, 1 / h);
+      ub.uThresh.value = S.site === 0 ? 1.3 : 1.5; ub.uCap.value = S.site === 0 ? 1.2 : 0.3;   // only real lights glow, not bright ground
+      pass(M.bright, rt.half);
+      var ud = M.down.uniforms;
+      ud.tSrc.value = rt.half.texture; ud.uTexel.value.set(1 / (w >> 1), 1 / (h >> 1)); pass(M.down, rt.q1);
+      blur2(rt.q1, rt.q2, w >> 2, h >> 2, 1.0);
+      if (FX.level >= 2) {
+        ud.tSrc.value = rt.q1.texture; ud.uTexel.value.set(1 / (w >> 2), 1 / (h >> 2)); pass(M.down, rt.e1);
+        blur2(rt.e1, rt.e2, w >> 3, h >> 3, 1.6);
+        blur2(rt.e1, rt.e2, w >> 3, h >> 3, 2.4);
+        var us = M.streak.uniforms;
+        us.tSrc.value = rt.half.texture; us.uTexel.value.set(1 / (w >> 3), 1 / (h >> 2));
+        pass(M.streak, rt.streak);
+      }
+      var u = M.final.uniforms;
+      u.tScene.value = rt.scene.texture; u.tBloomA.value = rt.q1.texture;
+      u.tBloomB.value = FX.level >= 2 ? rt.e1.texture : rt.q1.texture;
+      u.tStreak.value = FX.level >= 2 ? rt.streak.texture : rt.q2.texture;
+      setUniforms(w, h);
+      pass(M.final, null);
+      if (!checked) {   // a shader that did not compile draws nothing: fall back to the plain picture
+        checked = true;
+        for (var k in M) { var pr = R.properties.get(M[k]).currentProgram; if (pr && pr.diagnostics && !pr.diagnostics.runnable) throw new Error('shader ' + k + ' did not compile'); }
+      }
+      return true;
+    } catch (e) {
+      failed = true;
+      if (window.console) console.warn('Visual effects turned off:', e);
+      R && R.setRenderTarget(null);
+      document.body.classList.remove('fx-on');
+      return false;
+    }
+  };
+
+  // V cycles full → lite → off
+  window.addEventListener('keydown', function (e) {
+    if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    var tag = e.target && e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    if (e.code !== 'KeyV') return;
+    setLevel(FX.level === 0 ? 2 : FX.level - 1, true);
+    var names = ['Visual effects: off', 'Visual effects: lite', 'Visual effects: full'];
+    if (JA.ui && JA.ui.toast) JA.ui.toast(names[FX.level], window.innerWidth / 2, window.innerHeight * 0.3, '#ffd23f');
+  });
+  if (document.body) document.body.classList.toggle('fx-on', FX.level > 0);
+})(window.JA);

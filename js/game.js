@@ -352,7 +352,7 @@
     offer(d2(p, sp.door), 2.4, { label: 'Go inside the habitat', run: enterHab });
     if (s.sol >= s.totalSols) offer(d2(p, sp.rocketDoor), 4, { label: 'Board the rocket and fly home', run: boardModal });
     for (i = 0; i < sp.photo.length; i++) (function (i) {
-      if (!s.photos[i]) offer(d2(p, sp.photo[i]), 2.6, { label: 'Take a postcard photo', run: function () { var f = sim.photo(s, i); if (f) { Au.play('photo'); U.fade(true); setTimeout(function () { U.fade(false); }, 140); U.card(f); } } });
+      if (!s.photos[i]) offer(d2(p, sp.photo[i]), 2.6, { label: 'Take a postcard photo', run: function () { var f = sim.photo(s, i); if (f) { Au.play('photo'); if (JA.fx) JA.fx.snap(); U.fade(true); setTimeout(function () { U.fade(false); }, 140); U.card(f); } } });
     })(i);
     return best;
   }
@@ -652,6 +652,7 @@
       G.bannerUntil = G.clock + 1;
     } else if (ph === 'active') {
       W.env.storm = 1; U.stormFx(outside ? 'active' : 'inside');
+      if (outside && JA.fx && JA.fx.level && s.t > st.start + 2) tip('flashes', 'See those tiny streaks of light? Astronauts really see flashes like that when space radiation zips through their eyes!');
       U.banner(outside ? '☢️ RADIATION STORM! Get inside!' : '☢️ Storm outside — home shield blocks ' + Math.round(sim.shield(s) * 100) + '%', outside ? 'active' : '');
       G.bannerUntil = G.clock + 1;
       G.geiger -= G.dt;
@@ -958,7 +959,7 @@
   function howInfo() {
     var keys = touch
       ? '<div class="keys"><span>🕹️</span><div>Left stick: walk (push all the way to run) · drive the rover</div><span>👆</span><div>Drag anywhere to look around</div><span>✋</span><div>Use, pick up, plug in, drill (hold)</div><span>🎯</span><div>Hold to aim a throw, let go to throw</div><span>⤴</span><div>Jump</div></div>'
-      : '<div class="keys"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><div>Walk · drive the rover (arrow keys work too)</div><span><kbd>Mouse</kbd></span><div>Drag to look around · wheel to zoom</div><span><kbd>E</kbd></span><div>Use, pick up, plug in, drill (hold)</div><span><kbd>F</kbd></span><div>Hold to aim a throw, let go to throw</div><span><kbd>Space</kbd></span><div>Jump</div><span><kbd>Shift</kbd></span><div>Run (uses more air)</div><span><kbd>Q</kbd></span><div>Put down what you are holding</div></div>';
+      : '<div class="keys"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><div>Walk · drive the rover (arrow keys work too)</div><span><kbd>Mouse</kbd></span><div>Drag to look around · wheel to zoom</div><span><kbd>E</kbd></span><div>Use, pick up, plug in, drill (hold)</div><span><kbd>F</kbd></span><div>Hold to aim a throw, let go to throw</div><span><kbd>Space</kbd></span><div>Jump</div><span><kbd>Shift</kbd></span><div>Run (uses more air)</div><span><kbd>Q</kbd></span><div>Put down what you are holding</div><span><kbd>V</kbd></span><div>Camera effects: full, lite or off</div></div>';
     openInfo('<h2>How to play</h2>' + keys +
       '<div class="info-row"><span class="ic">🔋</span><div><b>Power cells</b><p>The Solar Rack charges a few cells each day. Carry or throw each one into a machine\'s socket: Air Maker, Greenhouse, Soil Bagger, Lab, Radio Dish or Rover.</p></div></div>' +
       '<div class="info-row"><span class="ic">🧊</span><div><b>Ice = air and water</b><p>Mine ice at the far crater. Drop it in the Air Maker to make oxygen, or in the Greenhouse tank to water the plants. The rover bed carries four things.</p></div></div>' +
