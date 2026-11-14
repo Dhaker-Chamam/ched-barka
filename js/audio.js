@@ -63,7 +63,15 @@
     discovery: function () { [523, 659, 784, 1047, 1319].forEach(function (f, i) { tone(f, 0.22, 'triangle', 0.2, i * 0.1); }); },
     win: function () { [523, 659, 784, 1047, 784, 1047, 1319].forEach(function (f, i) { tone(f, 0.2, 'triangle', 0.2, i * 0.12); }); },
     launch: function () { tone(60, 6, 'sawtooth', 0.22, 0, 240); noise(6, 0.3, 0, 400); },
-    beep: function () { tone(880, 0.12, 'square', 0.12); }
+    beep: function () { tone(880, 0.12, 'square', 0.12); },
+    alarm: function () { [0, 0.3, 0.6].forEach(function (d) { tone(880, 0.2, 'square', 0.16, d); tone(660, 0.1, 'square', 0.12, d + 0.14); }); },
+    // sounds for the landing film
+    breath: function () { noise(1.5, 0.045, 0, 420); },
+    hiss: function () { noise(1.6, 0.16, 0, 3200); tone(140, 0.5, 'sine', 0.16, 0.2, 70); },
+    rumble: function () { noise(0.5, 0.2, 0, 170); },
+    touchdown: function () { noise(0.6, 0.4, 0, 150); tone(70, 0.5, 'sine', 0.3, 0, 36); noise(1.8, 0.1, 0.2, 900); },
+    radio: function () { tone(2525, 0.16, 'sine', 0.05); noise(0.12, 0.05, 0.16, 2600); },
+    pad: function () { [130.8, 196, 261.6, 329.6, 493.9].forEach(function (f, i) { tone(f, 9, 'sine', 0.06, i * 0.7); tone(f * 2.005, 9, 'sine', 0.018, i * 0.7 + 0.3); }); }
   };
 
   // Continuous sounds (drill, rover motor): start once, then steer pitch and loudness.

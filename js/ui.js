@@ -44,15 +44,18 @@
     if (m.n !== note) { m.n = note; m.note.textContent = note || ''; }
     m.note.classList.toggle('bad', !!bad);
   }
-  var lastSci = null, lastSol = '';
+  var lastSci = null, lastSol = '', lastTime = '';
   U.setHud = function (s) {
     var L = s.level, left = Math.max(0, 1 - s.t / s.dayLength), last = s.sol >= s.totalSols;
     var solText = s.site.dayWord + ' ' + s.sol + ' of ' + s.totalSols;
     if (solText !== lastSol) { lastSol = solText; $('sol-text').textContent = solText; $('site-text').textContent = s.site.short + ' · ' + L.name; }
-    var airNeed = L.airDrain * left, airBad = s.air < airNeed;
-    var dinnerBad = !last && s.food < L.dinner;
-    setMeter('air', s.air, s.air < 18 || airBad, airBad ? 'not enough for today!' : 'enough for today', airBad);
-    setMeter('food', s.food, dinnerBad, last ? 'no dinner: launch day' : (dinnerBad ? 'dinner needs ' + L.dinner + '!' : 'dinner tonight −' + L.dinner), dinnerBad);
+    var airNeed = (sim.airDrain(s) * s.stale + s.leak) * left, airBad = s.air < airNeed, dinner = sim.dinner(s);
+    var dinnerBad = !last && s.food < dinner;
+    var airNote = s.leak > 0 ? 'leaking!' : s.stale > 1 ? 'stale air: draining fast' : airBad ? 'not enough for today!' : 'enough for today';
+    setMeter('air', s.air, s.air < 18 || airBad || s.leak > 0, airNote, airBad || s.leak > 0 || s.stale > 1);
+    setMeter('food', s.food, dinnerBad, last ? 'no dinner: launch day' : (dinnerBad ? 'dinner needs ' + dinner + '!' : 'dinner tonight −' + dinner), dinnerBad);
+    var secs = Math.max(0, Math.ceil(s.dayLength - s.t)), tl = Math.floor(secs / 60) + ':' + ('0' + (secs % 60)).slice(-2) + ' left';
+    if (tl !== lastTime) { lastTime = tl; $('time-left').textContent = tl; $('time-left').classList.toggle('low', left < 0.15); }
     setMeter('dose', s.dose, s.dose >= 75, 'home shield ' + Math.round(sim.shield(s) * 100) + '%', false);
     var sci = Math.round(s.sci);
     if (lastSci !== sci) {
@@ -155,13 +158,15 @@
     if (!cardQ.length) { c.classList.add('hidden'); return; }
     var f = cardQ.shift(), src = JA.SOURCES[f.src];
     c.classList.remove('hidden'); c.style.animation = 'none'; void c.offsetWidth; c.style.animation = '';
+    c.className = f.kind === 'conseq' ? 'conseq ' + (f.tone || 'mixed') : '';
     $('card-icon').textContent = f.icon || '🧪';
-    $('card-kicker').textContent = (f.kind === 'core' ? 'Discovery at ' + f.place : f.kind === 'inst' ? 'Instrument online' : 'Postcard') + ' · +' + f.pts + ' ⭐';
+    $('card-kicker').textContent = f.kind === 'conseq' ? 'What your choice led to'
+      : (f.kind === 'core' ? 'Discovery at ' + f.place : f.kind === 'inst' ? 'Instrument online' : 'Postcard') + ' · +' + f.pts + ' ⭐';
     $('card-title').textContent = f.title;
     $('card-text').textContent = f.text + (f.perk ? ' ' + f.perk : '');
-    $('card-src').textContent = src ? 'Source: ' + src.name : '';
-    JA.audio.speak(f.title + '. ' + f.text);
-    cardTimer = setTimeout(nextCard, 11000);
+    $('card-src').textContent = src ? 'Source: ' + src.name : f.kind === 'conseq' ? 'Tap to close' : '';
+    JA.audio.speak(f.kind === 'conseq' ? f.text : f.title + '. ' + f.text);
+    cardTimer = setTimeout(nextCard, f.kind === 'conseq' ? 14000 : 11000);
   }
   U.card = function (find) { cardQ.push(find); if (!cardTimer) nextCard(); };
   U.clearCards = function () { cardQ = []; if (cardTimer) clearTimeout(cardTimer); cardTimer = null; $('card').classList.add('hidden'); };

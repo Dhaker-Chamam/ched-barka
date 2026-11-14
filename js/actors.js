@@ -337,6 +337,9 @@
   function updateRover(dt, input) {
     var r = rover, thr = 0, steer = 0;
     if (r.driver && input) { thr = -input.z; steer = input.x; }
+    var stuck = !!(A.roverStuck && A.roverStuck());
+    if (stuck) { thr = 0; r.speed *= Math.max(0, 1 - dt * 6); }
+    r.sink = lerp(r.sink || 0, stuck ? 0.5 : 0, Math.min(1, dt * 2));
     var charged = !A.roverCharge || A.roverCharge() > 0;
     var max = thr >= 0 ? (charged ? 13.5 : 3) : 5;
     if (thr !== 0 && Math.abs(r.speed) < max) r.speed += thr * 9 * dt * (r.onGround ? 1 : 0.2);
@@ -360,8 +363,8 @@
     var k = Math.min(1, dt * (r.onGround ? 8 : 1.5));
     r.pitch = lerp(r.pitch, r.onGround ? Math.atan2(hb - hf, 3.6) : r.pitch, k);
     r.roll = lerp(r.roll, r.onGround ? Math.atan2(hr - hl, 2.4) : r.roll, k);
-    r.group.position.copy(r.pos);
-    r.group.rotation.set(0, 0, 0); r.group.rotateY(r.yaw); r.group.rotateX(r.pitch); r.group.rotateZ(r.roll);
+    r.group.position.copy(r.pos); r.group.position.y -= r.sink;
+    r.group.rotation.set(0, 0, 0); r.group.rotateY(r.yaw); r.group.rotateX(r.pitch + r.sink * 0.16); r.group.rotateZ(r.roll);
     for (var i = 0; i < r.wheels.length; i++) { r.wheels[i].rotation.x += r.speed * dt / 0.62; if (i >= 4) r.wheels[i].rotation.y = -steer * 0.35; }
     var mv = Math.abs(r.speed);
     if (r.onGround && mv > 2) {

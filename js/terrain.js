@@ -10,7 +10,7 @@
   var L = Tn.L = {
     hab: [0, 0], door: [0, 8.6], rack: [-18, -3], solar: [-29, -11], air: [-15, 13], food: [20, 12],
     bag: [14, -12], lab: [28, -5], comms: [3, -28], roverPark: [-6, 22], rocket: [-48, 34], pallet: [-33, 26],
-    ice: [108, -42], hill: [-64, -54], mesa: [90, 88],
+    ice: [108, -42], hill: [-64, -54], mesa: [90, 88], seat: [34, 40],
     geo: [[74, 70], [-92, 58], [-84, -100], [115, -47]],
     inst: { seismo: [42, 52], beam: [-22, -64], rad: [64, -14] },
     photo: [[-64, -54], [80, -22]]
@@ -129,6 +129,8 @@
         boulder(p[0] + Math.cos(ca) * cd, p[1] + Math.sin(ca) * cd, rMin + rng() * (rMax - rMin));
       }
     }
+    // a low, flat rock with a view of the whole outpost: the seat in the landing film
+    B.push({ x: L.seat[0], z: L.seat[1], r: 1.25, sy: 0.42, rot: 0.6, tilt: 0.06, seat: true });
     if (moon) { cluster(L.geo[0], 13, 15, 1.1, 3.2, 5); cluster(L.geo[2], 4, 8, 1, 2, 6); }
     else { cluster(L.geo[0], 5, 8, 1, 2.2, 6); cluster(L.geo[2], 8, 11, 1.2, 3, 5); }
     tries = 0;

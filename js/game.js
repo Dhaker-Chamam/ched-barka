@@ -6,7 +6,8 @@
   var $ = U.$, esc = U.esc;
 
   var G = JA.game = {
-    opts: { site: 'mars', level: 'cadet', sun: 'live', suit: 0xff7a3d },
+    opts: { site: 'moon', level: 'cadet', sun: 'live', suit: 0xff7a3d, shift: R.dayLength },
+    introSeen: {},
     s: null, weather: null, mode: 'title',
     input: { x: 0, z: 0, jump: false, sprint: false }, keys: {}, stick: { x: 0, z: 0 },
     ePressed: false, eHeld: false, fHeld: false, charge: null, mini: null, fast: false, lookIdle: 9, zoom: 11,
@@ -30,6 +31,8 @@
   function tip(id, text) { if (G.tips[id]) return false; G.tips[id] = 1; say(text, true); return true; }
   function toastAt(pos, text, color) { var p = W.project(pos); if (!p.hidden) U.toast(text, clamp(p.x, 60, W.w - 60), clamp(p.y, 120, W.h - 120), color); }
   function me() { return A.rover.driver ? A.rover.pos : A.astro.pos; }
+  function clockText(secs) { secs = Math.max(0, Math.ceil(secs)); return Math.floor(secs / 60) + ':' + ('0' + (secs % 60)).slice(-2); }
+  function srcLine(id) { var x = JA.SOURCES[id]; return x ? '<small>Source: ' + esc(x.name) + '</small>' : ''; }
 
   // ---------- info overlay (opens on top of anything) ----------
   var infoRoot = document.createElement('div');
@@ -75,13 +78,15 @@
       return '<button class="pick' + (String(o[g]) === String(v) ? ' sel' : '') + '" data-act="pick" data-g="' + g + '" data-v="' + v + '" aria-pressed="' + (String(o[g]) === String(v)) + '">' +
         '<em>' + emoji + '</em><b>' + title + '</b><span>' + text + '</span></button>';
     }
-    var html = '<h2>Plan your mission</h2><p class="sub">Three quick choices, Commander.</p>' +
+    var lvIcon = { cadet: '🎒', commander: '🧑‍🚀', veteran: '🎖️' };
+    var html = '<h2>Plan your mission</h2><p class="sub">Four quick choices, Commander.</p>' +
       '<h3>1 · Where will you build your outpost?</h3><div class="cards">' +
       card('site', 'moon', '🌙', 'The Moon', esc(JA.SITES.moon.blurb)) + card('site', 'mars', '🔴', 'Mars', esc(JA.SITES.mars.blurb)) + '</div>' +
-      '<h3>2 · How long is the mission?</h3><div class="cards">' +
-      card('level', 'cadet', '🎒', 'Cadet · 3 days', 'Ages 7–9. ' + esc(JA.LEVELS.cadet.blurb)) +
-      card('level', 'commander', '🧑‍🚀', 'Commander · 5 days', 'Ages 10–12. ' + esc(JA.LEVELS.commander.blurb)) + '</div>' +
-      '<h3>3 · Which Sun do you want to face?</h3><div class="cards">' +
+      '<h3>2 · How long is the mission?</h3><p class="sub">Every day is harder than the one before, and teaches something new.</p><div class="cards three">' +
+      Object.keys(JA.LEVELS).map(function (k) { var L = JA.LEVELS[k]; return card('level', k, lvIcon[k], L.name + ' · ' + L.sols + ' days', L.ages + '. ' + esc(L.blurb)); }).join('') + '</div>' +
+      '<h3>3 · How much time do you want each day?</h3><p class="sub">You can change this at any moment with the ⏸ button.</p><div class="cards four">' +
+      JA.SHIFTS.map(function (sh) { return card('shift', sh.id, sh.icon, sh.name + ' · ' + (sh.id / 60) + ' min', esc(sh.text)); }).join('') + '</div>' +
+      '<h3>4 · Which Sun do you want to face?</h3><div class="cards">' +
       card('sun', 'live', '☀️', 'The real Sun, right now', 'Solar flares from the last 30 days, fetched live from NASA.') +
       card('sun', 'archive', '🌩️', 'The great storms of May 2024', 'A famous stormy month from NASA\'s records. Much harder!') + '</div>' +
       '<h3>Your spacesuit colour</h3><div class="swatches">' +
@@ -89,7 +94,7 @@
       '</div><div class="modal-actions"><button class="btn ghost" data-act="back">Back</button><button class="btn primary" data-act="go">Launch 🚀</button></div>';
     var keep = document.querySelector('#modal-root .modal'), scroll = keep ? keep.scrollTop : 0;
     var m = U.modal(html, { cls: 'wide', noFocus: !!keep, actions: {
-      pick: function (el) { o[el.getAttribute('data-g')] = el.getAttribute('data-v'); Au.play('tap'); setupModal(); },
+      pick: function (el) { var g = el.getAttribute('data-g'), v = el.getAttribute('data-v'); o[g] = g === 'shift' ? parseInt(v, 10) : v; Au.play('tap'); setupModal(); },
       suit: function (el) { o.suit = parseInt(el.getAttribute('data-v'), 10); Au.play('tap'); setupModal(); },
       back: function () { Au.play('tap'); U.closeModal(); titleScene(); },
       go: launch
@@ -108,13 +113,26 @@
   function startMission(data) {
     G.weather = data;
     W.build(G.opts.site, G.opts.suit);
-    var s = G.s = sim.newGame({ site: G.opts.site, level: G.opts.level, weather: data });
+    var s = G.s = sim.newGame({ site: G.opts.site, level: G.opts.level, weather: data, dayLength: G.opts.shift });
     G.tips = {}; G.tut = {}; G.tutStep = 0; G.mini = null; G.charge = null; G.ending = null; G.caseItem = null; G.fast = false; G.clock = 0; G.sayAt = 0;
     buildZones(); buildAim();
     JA.INSTRUMENTS[s.site.id].forEach(function (def, i) { A.spawn('inst', B.spots.pallet[i], { id: def.id, name: def.name }, 'fixed'); });
     A.roverCharge = function () { return G.s ? G.s.m.rover.charge : 1; };
-    U.show($('title'), false);
+    A.roverStuck = function () { return !!(G.s && G.s.m.rover.stuck); };
+    U.show($('title'), false); U.closeModal();
+    W.env.t = 0.1; W.env.dust = dustFor(sim.env(s).kind);
+    // the landing film plays once per place; after that it is skipped automatically
+    if (JA.intro && !G.introSeen[s.site.id]) {
+      G.introSeen[s.site.id] = true;
+      G.mode = 'intro';
+      JA.intro.play(s.site.id, welcomeModal);
+    } else welcomeModal();
+  }
+
+  function welcomeModal() {
+    var s = G.s, day = s.day;
     G.mode = 'brief'; W.cam.mode = 'title'; W.env.t = 0.1; W.env.dust = dustFor(sim.env(s).kind);
+    U.fade(false);
     var d1 = JA.weather.prettyDate(s.weather[0].date), dN = JA.weather.prettyDate(s.weather[s.weather.length - 1].date), wx;
     if (s.weatherFallback) wx = '<div class="info-row"><span class="ic">📼</span><div><b>Using saved NASA records</b><p><span class="tagline archive">NASA archive</span>We could not reach NASA just now, so the solar storms replay the real Sun from ' + d1 + ' to ' + dN + ' instead. This is not live data.</p></div></div>';
     else wx = '<div class="info-row"><span class="ic">🛰️</span><div><b>The real Sun is in this game</b><p>' + U.dataTag(s) + 'Solar storms replay the real Sun from ' + d1 + ' to ' + dN + (s.weatherSource === 'live' ? ', fetched just now from NASA\'s space-weather database.' : ' — one of the stormiest times in 20 years.') + '</p></div></div>';
@@ -123,8 +141,10 @@
       '<p class="sub">' + esc(s.site.place) + ' · I am BOLT, your robot buddy.</p>' +
       '<div class="info-row"><span class="ic">🎯</span><div><b>Your mission</b><p>Keep the crew alive for ' + n + ' ' + dw + (s.site.id === 'mars' ? ' (a sol is one Mars day)' : '') + ', do real science, then ride the rocket home. ' + esc(s.site.why) + '</p></div></div>' +
       '<div class="info-row"><span class="ic">🔋</span><div><b>You do everything by hand</b><p>The Sun charges only a few power cells a day. YOU carry each one to the machine that needs it most — air, food, shield, science or radio. There is never enough for all of them.</p></div></div>' +
+      '<div class="info-row"><span class="ic">📈</span><div><b>Every day is harder, and teaches something new</b><p>The outpost wears down the longer you stay. And ' + s.level.crisisSols.length + ' times, something will go wrong that has no checklist: you alone will choose what to do, and live with what follows.</p></div></div>' +
       wx +
       '<div class="info-row"><span class="ic">📡</span><div><b>Talking to Earth</b><p>' + esc(s.site.commText) + '</p></div></div>' +
+      '<div class="info-row good"><span class="ic">' + day.icon + '</span><div><b>' + esc(dayWord()) + ' 1 · ' + esc(day.title) + ' · ' + esc(day.topic) + '</b><p>' + esc(day.learn) + '</p>' + srcLine(day.src) + '</div></div>' +
       '<div class="modal-actions"><button class="btn ghost" data-act="how">How to play</button><button class="btn primary" data-act="ok">Step outside ▶</button></div>',
       { speak: 'Welcome to ' + s.site.name + ', Commander! I am BOLT, your robot buddy. Keep the crew alive for ' + n + ' ' + dw + ', do real science, then ride the rocket home.',
         actions: { how: howInfo, ok: function () { Au.play('door'); U.closeModal(); beginSol(); } } });
@@ -157,12 +177,30 @@
     if (last && !G.caseItem) { G.caseItem = A.spawn('case', B.spots.caseSpawn, { name: 'sample case' }, 'rest'); }
     U.show($('hud'), true); U.show($('goals'), true); U.show($('inside'), false); U.fade(false);
     if (touch) { document.body.classList.add('touch'); U.show($('stick'), true); U.show($('touch-btns'), true); }
-    U.banner(dayWord() + ' ' + s.sol + ' · ' + look.icon + ' ' + look.label + ' · about ' + Math.round(s.cellsToday) + ' power cells today', 'info');
-    G.bannerUntil = G.clock + 7;
-    var line;
-    if (s.sol === 1) line = touch ? 'Welcome outside! Use the stick to walk and drag the screen to look around.' : 'Welcome outside! Walk with W A S D, drag the mouse to look around, and press Space to jump.';
-    else line = look.label + ' today. ' + (s.forecast ? (w.level ? U.stormWords(w.level) + ' is coming today. Stay ready to run home!' : 'The Sun is quiet today.') : 'The dish was off, so there is no storm forecast. Keep an eye on me!') + (last ? ' Last day: load the sample case and board the rocket!' : '');
-    say(line, true);
+    U.setHud(s);
+    function go() {
+      U.banner(dayWord() + ' ' + s.sol + ' · ' + look.icon + ' ' + look.label + ' · about ' + Math.round(s.cellsToday) + ' power cells today', 'info');
+      G.bannerUntil = G.clock + 7;
+      var line;
+      if (s.sol === 1) line = touch ? 'Welcome outside! Use the stick to walk and drag the screen to look around.' : 'Welcome outside! Walk with W A S D, drag the mouse to look around, and press Space to jump.';
+      else line = look.label + ' today. ' + (s.forecast ? (w.level ? U.stormWords(w.level) + ' is coming today. Stay ready to run home!' : 'The Sun is quiet today.') : 'The dish was off, so there is no storm forecast. Keep an eye on me!') + (last ? ' Last day: load the sample case and board the rocket!' : '');
+      say(line, true);
+    }
+    if (s.sol === 1) go(); else dayCard(go);
+  }
+
+  // The morning briefing: one new thing to learn, today's challenge, and what got harder.
+  function dayCard(done) {
+    var s = G.s, day = s.day, env = sim.env(s), look = s.site.env[env.kind], w = sim.weather(s), hard = sim.harderList(s);
+    var goal = day.goal ? '<div class="info-row"><span class="ic">🎯</span><div><b>Today\'s challenge · +' + R.dayGoalPts + ' ⭐</b><p>' + esc(day.goal.text) + '</p></div></div>' : '';
+    U.modal('<div class="day-head"><span class="big-icon">' + day.icon + '</span><div><small>' + esc(dayWord()) + ' ' + s.sol + ' of ' + s.totalSols + '</small><h2>' + esc(day.title) + '</h2></div></div>' +
+      '<div class="info-row good"><span class="ic">💡</span><div><b>New today: ' + esc(day.topic) + '</b><p>' + esc(day.learn) + '</p>' + srcLine(day.src) + '</div></div>' + goal +
+      '<div class="info-row"><span class="ic">' + look.icon + '</span><div><b>' + esc(look.label) + ' · about ' + Math.round(s.cellsToday) + ' power cells</b><p>' + esc(look.why) + '</p></div></div>' +
+      U.weatherRow(s, w, s.forecast, 'today') +
+      (hard.length ? '<h3>📈 Harder than yesterday</h3><ul class="harder">' + hard.map(function (h) { return '<li><span>' + h.icon + '</span>' + esc(h.text) + '</li>'; }).join('') + '</ul>' : '') +
+      '<div class="modal-actions"><button class="btn primary" data-act="ok">Start the shift ▶</button></div>',
+      { speak: dayWord() + ' ' + s.sol + '. ' + day.title + '. ' + day.learn + (day.goal ? ' Today\'s challenge: ' + day.goal.text + '.' : ''),
+        actions: { ok: function () { Au.play('door'); U.closeModal(); done(); } } });
   }
 
   // =====================================================================
@@ -348,7 +386,7 @@
   function startDrill(kind, idx) {
     var ease = G.s.level.ease, ice = kind === 'ice';
     G.mini = { type: 'drill', kind: kind, idx: idx, depth: 0, heat: 0, jams: 0, lock: 0,
-      rate: ice ? 0.55 : 0.27, heatRate: (ice ? 0.5 : 0.46) / ease, cool: 0.6,
+      rate: ice ? 0.55 : 0.27, heatRate: (ice ? 0.5 : 0.46) / ease * G.s.mods.heat, cool: 0.6,
       title: ice ? 'Mining ice' : 'Drilling a rock core at ' + JA.GEO[G.s.site.id][idx].name,
       hint: touch ? 'Hold ✋ to drill. Let go before it overheats!' : 'Hold E to drill. Let go before it overheats! (Space = stop)' };
     A.astro.mode = 'busy'; A.astro.vel.set(0, 0, 0);
@@ -414,9 +452,9 @@
     }
   }
   function startRepair(advised) {
-    var s = G.s, g = s.glitch, ease = s.level.ease;
+    var s = G.s, g = s.glitch, ease = s.level.ease, wear = s.mods.dial;
     G.mini = { type: 'dial', machine: g.machine, needle: 0, dir: 1, hits: 0, need: 3, lock: 0, c: 0.3 + Math.random() * 0.4,
-      speed: advised ? 0.75 : 1.5 / Math.sqrt(ease), w: advised ? 0.34 : 0.13 * ease,
+      speed: (advised ? 0.75 : 1.5 / Math.sqrt(ease)) * wear, w: advised ? 0.34 : 0.13 * ease / Math.sqrt(wear),
       title: (advised ? '📡 Earth\'s instructions: ' : '🔧 ') + 'Fixing the ' + JA.MACHINES[g.machine].name,
       hint: (touch ? 'Tap ✋' : 'Press E') + ' when the white line is in the green zone. Three times!' };
     A.astro.mode = 'busy'; A.astro.vel.set(0, 0, 0);
@@ -472,9 +510,102 @@
         else if (e.phase === 'active') { if (!inside) say('Radiation storm! You cannot see it or feel it, but my sensor can. Get inside!', true); }
         else { Au.play('good'); say('The storm has passed. All clear!', true); }
       }
+      else if (e.type === 'daygoal') { Au.play('discovery'); U.toast('🎯 Challenge done! +' + e.pts + ' ⭐', W.w / 2, W.h * 0.3, '#ffd23f'); say('Today\'s challenge is done: ' + s.day.goal.text.toLowerCase() + '. Nice work!', true); }
+      else if (e.type === 'crisis') crisisModal();
+      else if (e.type === 'consequence') showConsequence(e);
       else if (e.type === 'fail') { failNow(e.reason); return; }
       else if (e.type === 'dayEnd') { onDayEnd(); return; }
     }
+  }
+
+  // =====================================================================
+  //  CRISIS MOMENTS: no checklist, more than one way out, consequences later
+  // =====================================================================
+  function crisisModal() {
+    var s = G.s, v = JA.crisis.view(s);
+    if (!v) return;
+    if (G.mini) { endMini(); U.dialUi(null); }
+    G.charge = null; A.astro.aim = false; hideAim(); Au.stopAll(); Au.play('alarm');
+    W.cam.shake = Math.max(W.cam.shake, 0.3);
+    var far = s.site.id === 'mars' ? ' Earth is ' + sim.commInfo(s).oneWay + ' away by radio, far too slow to ask.' : ' There is no time to ask Earth.';
+    U.modal('<div class="day-head crisis-head"><span class="big-icon">' + v.icon + '</span><div><small>⚠ ' + esc(v.alarm) + ' · YOUR CALL</small><h2>' + esc(v.title) + '</h2></div></div>' +
+      '<p>' + esc(v.text) + '</p>' +
+      '<div class="crisis-bolt"><div class="bolt-face" aria-hidden="true"><i></i><i></i></div><p>I have no checklist for this one, Commander.' + esc(far) + ' There is more than one thing you could do. You decide.</p></div>' +
+      v.options.map(function (o) { return '<button class="opt" data-act="pick" data-v="' + o.id + '"><b>' + o.icon + ' ' + esc(o.label) + '</b><span>' + esc(o.text) + '</span></button>'; }).join('') +
+      '<p class="sub crisis-foot">⏸ The clock is stopped while you think. Nobody will tell you which choice is best. You will see what yours leads to.</p>',
+      { cls: 'crisis', noFocus: true, speak: v.title + ' ' + v.text + ' You decide.', actions: { pick: function (el) { crisisPick(el.getAttribute('data-v')); } } });
+  }
+  function crisisPick(id) {
+    var s = G.s, r = JA.crisis.choose(s, id);
+    if (!r) return;
+    Au.play('plug');
+    U.modal('<div class="big-icon">' + r.d.optIcon + '</div><h2>' + esc(r.d.label) + '</h2><p>' + esc(r.d.now) + '</p>' +
+      '<p class="sub">Was it the right call? Keep going. What happens next will show you.</p>' +
+      '<div class="modal-actions"><button class="btn primary" data-act="ok">Carry on ▶</button></div>',
+      { speak: r.d.now, actions: { ok: function () {
+        Au.play('page'); U.closeModal();
+        if (r.sync) syncRack();
+        if (r.skip) skipTime(r.skip, r.home);
+      } } });
+  }
+  // A choice that takes time: the shift clock jumps forward while you work on it indoors.
+  function skipTime(frac, home) {
+    var s = G.s, secs = frac * s.dayLength, total = secs, ev = [], guard = 0;
+    if (home && G.mode === 'play') {
+      if (A.rover.driver) { A.exitRover(); Au.stopLoop('rover'); }
+      if (A.astro.carrying) A.setDown();
+      A.resetAstro(); W.cam.yaw = 0.45;
+    }
+    U.fade(true); setTimeout(function () { if (G.mode === 'play' || G.mode === 'inside') U.fade(false); }, 450);
+    while (secs > 0 && !s.dayDone && !s.over && guard++ < 4000) { var st = Math.min(0.5, secs); secs -= st; ev = ev.concat(sim.tick(s, st, { outside: false })); }
+    U.banner('⏩ ' + clockText(total) + ' of the shift went into the job', 'info'); G.bannerUntil = G.clock + 5;
+    var ended = ev.some(function (e) { return e.type === 'dayEnd'; });
+    handleEvents(ev.filter(function (e) { return e.type !== 'dayEnd'; }));
+    if (ended && (G.mode === 'play' || G.mode === 'inside')) { if (s.sol >= s.totalSols) onDayEnd(); else endDay({}); }
+  }
+  function showConsequence(e) {
+    var r = e.res, d = e.d;
+    Au.play(r.tone === 'good' ? 'good' : r.tone === 'bad' ? 'bad' : 'page');
+    U.card({ kind: 'conseq', tone: r.tone, icon: r.tone === 'good' ? '✅' : r.tone === 'bad' ? '⚠️' : '⚖️', title: 'You chose: ' + d.label, text: r.text, pts: 0 });
+    if (r.spark) {
+      [B.pos.comms, B.pos.food].forEach(function (p) { W.burst(p.x, p.y - 2, p.z, 26, 6, 0xffe36a, { life: 0.7, size: 0.26 }); });
+      Au.play('spark'); W.cam.shake = Math.max(W.cam.shake, 0.3);
+    }
+    syncRack();
+  }
+  function decisionHtml(d, more) {
+    var later = d.later.map(function (l) { return '<li class="' + l.tone + '">' + (l.tone === 'good' ? '✅' : l.tone === 'bad' ? '⚠️' : '⚖️') + ' ' + esc(l.text) + '</li>'; }).join('');
+    return '<div class="decision"><b>' + d.icon + ' ' + esc(d.title) + '</b>' +
+      '<p><span class="tagline choice">You chose</span>' + d.optIcon + ' ' + esc(d.label) + '</p>' +
+      '<ul><li>' + esc(d.now) + '</li>' + later + '</ul>' +
+      (more ? '<p class="sub">Some consequences only show up tomorrow morning.</p>' : '') +
+      '<div class="fact"><b>🛰️ What real crews did</b><p>' + esc(d.science) + '</p>' + srcLine(d.src) + '</div></div>';
+  }
+
+  // =====================================================================
+  //  PAUSE + TIME: the player decides how long a working day lasts
+  // =====================================================================
+  function pauseModal() {
+    var s = G.s;
+    if (!s || (G.mode !== 'play' && G.mode !== 'inside') || U.modalOpen()) return;
+    Au.play('tap');
+    function draw() {
+      var left = (1 - s.t / s.dayLength);
+      U.modal('<div class="big-icon">⏸</div><h2>Paused</h2><p class="sub">Nothing moves while this card is open. Take all the time you need.</p>' +
+        '<h3>⏱️ How long should a working day be?</h3><div class="cards four">' +
+        JA.SHIFTS.map(function (sh) {
+          return '<button class="pick' + (s.dayLength === sh.id ? ' sel' : '') + '" data-act="shift" data-v="' + sh.id + '" aria-pressed="' + (s.dayLength === sh.id) + '"><em>' + sh.icon + '</em><b>' + sh.name + ' · ' + (sh.id / 60) + ' min</b><span>' + esc(sh.text) + '</span></button>';
+        }).join('') + '</div>' +
+        '<p>Time left in today\'s shift: <b>' + clockText(left * s.dayLength) + '</b>. Changing the day length keeps your place in the day, so the time left stretches or shrinks with it. Air, food and power per day stay the same.</p>' +
+        '<div class="modal-actions"><button class="btn ghost" data-act="quit">Quit mission</button><button class="btn ghost" data-act="how">How to play</button><button class="btn primary" data-act="ok">Back to work ▶</button></div>',
+        { cls: 'wide', noFocus: true, actions: {
+          shift: function (el) { var v = parseInt(el.getAttribute('data-v'), 10); sim.setDayLength(s, v); G.opts.shift = v; Au.play('tap'); draw(); },
+          how: function () { Au.play('tap'); howInfo(); },
+          quit: function () { Au.play('tap'); U.closeModal(); titleScene(); },
+          ok: function () { Au.play('tap'); U.closeModal(); }
+        } });
+    }
+    draw();
   }
   function stormFrame(outside) {
     var s = G.s, st = s.storm, ph = sim.stormPhase(s);
@@ -555,12 +686,12 @@
     var left = Math.max(0, Math.ceil(s.dayLength - s.t)), ph = sim.stormPhase(s);
     $('inside-text').textContent = (ph === 'active' ? 'A solar storm is raging outside. The home shield is blocking ' + Math.round(sim.shield(s) * 100) + '% of it.'
       : ph === 'warning' ? 'A solar storm is about to hit. Stay in!' : 'Safe inside. The home shield blocks ' + Math.round(sim.shield(s) * 100) + '% of radiation.') +
-      ' Shift time left: ' + left + ' s.' + (s.sol >= s.totalSols ? ' Launch day — board the rocket before time runs out!' : '');
+      ' Shift time left: ' + clockText(left) + '.' + (s.sol >= s.totalSols ? ' Launch day — board the rocket before time runs out!' : '');
   }
   function sleepAsk() {
     var s = G.s;
     if (s.t > s.dayLength * 0.6) { endDay({}); return; }
-    U.modal('<div class="big-icon">😴</div><h2>End the day now?</h2><p>There are still ' + Math.ceil(s.dayLength - s.t) + ' seconds of working time left. The machines will keep running, but you will not be able to do anything else today.</p>' +
+    U.modal('<div class="big-icon">😴</div><h2>End the day now?</h2><p>There are still ' + clockText(s.dayLength - s.t) + ' minutes of working time left. The machines will keep running, but you will not be able to do anything else today.</p>' +
       '<div class="modal-actions"><button class="btn ghost" data-act="no">Keep working</button><button class="btn primary" data-act="yes">Go to sleep</button></div>',
       { actions: { no: function () { Au.play('tap'); U.closeModal(); }, yes: function () { Au.play('tap'); U.closeModal(); endDay({}); } } });
   }
@@ -619,8 +750,15 @@
     }
     var src = JA.SOURCES[r.fact.src];
     var fact = '<div class="fact"><b>🛰️ Real space fact</b><p>' + esc(r.fact.text) + '</p><small>Source: ' + esc(src.name) + '</small></div>';
+    var chal = r.day.goal ? '<div class="info-row' + (r.goalDone ? ' good' : '') + '"><span class="ic">🎯</span><div><b>Today\'s challenge: ' + (r.goalDone ? 'done! +' + R.dayGoalPts + ' ⭐' : 'not finished') + '</b><p>' + esc(r.day.goal.text) + '</p></div></div>' : '';
+    var decs = s.decisions.filter(function (d) { return d.sol === r.sol; });
+    var dec = decs.length ? '<h3>🧭 Your big decision today</h3>' + decs.map(function (d) { return decisionHtml(d, !r.fail && !r.last); }).join('') : '';
+    if (!r.fail && r.nextDay) {
+      fc += '<h3>📈 Tomorrow: ' + esc(dw) + ' ' + (r.sol + 1) + ' · ' + r.nextDay.icon + ' ' + esc(r.nextDay.title) + '</h3>' +
+        (r.harder.length ? '<ul class="harder">' + r.harder.map(function (h) { return '<li><span>' + h.icon + '</span>' + esc(h.text) + '</li>'; }).join('') + '</ul>' : '');
+    }
     Au.play(r.fail ? 'bad' : 'good');
-    U.modal('<h2>🌙 Night report · ' + dw + ' ' + r.sol + '</h2><p class="sub">Here is how the day added up.</p>' + rows + rep + finds + fc + fact +
+    U.modal('<h2>🌙 Night report · ' + dw + ' ' + r.sol + '</h2><p class="sub">Here is how the day added up.</p>' + rows + chal + rep + dec + finds + fc + fact +
       '<div class="modal-actions"><button class="btn primary" data-act="next">' + (r.fail ? 'See what happened' : 'Next ' + dw.toLowerCase() + ' ▶') + '</button></div>',
       { speak: 'Night report. ' + r.fact.text, actions: { next: function () {
         Au.play('page'); U.closeModal();
@@ -684,7 +822,12 @@
     out.push(s.stats.storms ? 'You lived through ' + s.stats.storms + ' solar storm' + (s.stats.storms > 1 ? 's' : '') + ' that really happened on the Sun.' : 'The real Sun stayed calm for your mission. Astronauts get lucky sometimes too!');
     out.push('Ice is treasure: with electricity it becomes oxygen to breathe, and water for plants.');
     if (s.stats.bestThrow > 7) out.push('Your longest throw flew ' + Math.round(s.stats.bestThrow) + ' m. On Earth the same throw would only go about ' + Math.max(1, Math.round(s.stats.bestThrow * s.site.gravity / 9.81)) + ' m.');
+    for (var i = 1; i <= Math.min(s.sol, s.totalSols - 1); i++) { var di = sim.dayInfo(s, i); out.push(dayWord() + ' ' + i + ', ' + di.topic.toLowerCase() + ': ' + di.learn.split('. ')[0] + '.'); }
+    if (s.decisions.length) out.push('Some problems have no checklist. You made ' + s.decisions.length + ' big decision' + (s.decisions.length > 1 ? 's' : '') + ' on your own, and saw what each one led to.');
     return '<ul class="learned">' + out.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ul>';
+  }
+  function decisionsBlock(s) {
+    return s.decisions.length ? '<h3>🧭 Your big decisions (' + s.decisions.length + ')</h3>' + s.decisions.map(function (d) { return decisionHtml(d, false); }).join('') : '';
   }
   function endButtons() {
     return '<div class="modal-actions"><button class="btn ghost" data-act="science">📚 The real science</button><button class="btn ghost" data-act="change">Change mission</button><button class="btn primary" data-act="again">Play again ▶</button></div>';
@@ -703,7 +846,7 @@
       '<p style="font-size:1.5rem;font-weight:700">⭐ ' + Math.round(s.sci) + ' mission points' + (isBest ? ' · new best!' : '') + '</p>' +
       '<p class="sub">' + s.over.bonus.map(function (b) { return esc(b.text) + ' +' + b.v; }).join(' · ') + '. ' + esc(rank.line) + (next ? ' ' + (next.need - Math.round(s.sci)) + ' more points next time for ' + esc(next.rank.name) + '.' : '') + '</p></div>' +
       (badges.length ? '<div class="badges">' + badges.map(function (b) { return '<div class="badge"><em>' + b.icon + '</em><div><b>' + esc(b.name) + '</b><span>' + esc(b.text) + '</span></div></div>'; }).join('') + '</div>' : '') +
-      '<h3>What you just practised</h3>' + learned(s) + finds + endButtons(),
+      '<h3>What you just practised</h3>' + learned(s) + decisionsBlock(s) + finds + endButtons(),
       { cls: 'wide', actions: endActions(), speak: 'Mission complete! You are a ' + rank.name + ' with ' + Math.round(s.sci) + ' mission points.' });
   }
   function failModal(reason) {
@@ -712,8 +855,9 @@
     U.modal('<div class="rank"><span class="big-icon">' + f.icon + '</span><h2>' + esc(f.title) + '</h2></div>' +
       '<p>' + esc(f.text) + ' You made it to ' + dayWord().toLowerCase() + ' ' + s.sol + ' of ' + s.totalSols + ' and earned ⭐ ' + Math.round(s.sci) + '.</p>' +
       '<div class="fact"><b>💡 BOLT\'s tip</b><p>' + esc(f.tip) + '</p><small>Real astronauts practise in simulators for years — and they fail there a lot. That is how they learn.</small></div>' +
+      decisionsBlock(s) +
       (s.finds.length ? '<h3>🔬 Your discoveries (' + s.finds.length + ')</h3>' + s.finds.map(U.findRow).join('') : '') + endButtons(),
-      { actions: endActions(), speak: f.title + '. ' + f.text + ' ' + f.tip });
+      { cls: s.decisions.length ? 'wide' : '', actions: endActions(), speak: f.title + '. ' + f.text + ' ' + f.tip });
   }
 
   // =====================================================================
@@ -727,7 +871,10 @@
       '<div class="info-row"><span class="ic">🔋</span><div><b>Power cells</b><p>The Solar Rack charges a few cells each day. Carry or throw each one into a machine\'s socket: Air Maker, Greenhouse, Soil Bagger, Lab, Radio Dish or Rover.</p></div></div>' +
       '<div class="info-row"><span class="ic">🧊</span><div><b>Ice = air and water</b><p>Mine ice at the far crater. Drop it in the Air Maker to make oxygen, or in the Greenhouse tank to water the plants. The rover bed carries four things.</p></div></div>' +
       '<div class="info-row"><span class="ic">🛡️</span><div><b>Shield and storms</b><p>Throw soil bags onto the dome to block radiation. The solar storms are real ones from NASA records — when the alarm sounds, get inside!</p></div></div>' +
-      '<div class="info-row"><span class="ic">🧪</span><div><b>Science</b><p>Drill rock cores at the glowing orange sites and study them in the Lab. Carry the instruments from the rocket pad to the blue rings. On the last day, load the sample case and board the rocket.</p></div></div>');
+      '<div class="info-row"><span class="ic">🧪</span><div><b>Science</b><p>Drill rock cores at the glowing orange sites and study them in the Lab. Carry the instruments from the rocket pad to the blue rings. On the last day, load the sample case and board the rocket.</p></div></div>' +
+      '<div class="info-row"><span class="ic">📈</span><div><b>Every day is harder</b><p>Each morning brings one new thing to learn, a challenge worth bonus points, and an outpost that is a little more worn than yesterday.</p></div></div>' +
+      '<div class="info-row"><span class="ic">🧭</span><div><b>Crisis moments</b><p>Sometimes something goes wrong that has no checklist. BOLT cannot help. You pick one of several actions, and you find out later what it led to.</p></div></div>' +
+      '<div class="info-row"><span class="ic">⏸</span><div><b>Your time</b><p>Press ⏸ (or ' + (touch ? 'tap it' : 'the P key') + ') to pause, and to make the working day longer or shorter whenever you like.</p></div></div>');
   }
   function scienceInfo() {
     var s = G.s, mission = '';
@@ -741,7 +888,9 @@
       '<li><b>Radio delay.</b> Moon: 1.3 seconds. Mars: worked out from where Earth and Mars were on the mission\'s real dates (an estimate, good to a few percent).</li>' +
       '<li><b>Discoveries and facts</b> describe real findings from NASA missions (Apollo, LCROSS, LRO, Curiosity, Opportunity, Phoenix, InSight, Perseverance) and NASA\'s Open Science Data Repository.</li></ul>' + mission +
       '<h3>What is simplified</h3><ul class="src-list">' +
-      '<li>Time is squeezed: a working day lasts three minutes, plants grow in a day, and a 20-minute radio wait becomes about half a minute.</li>' +
+      '<li>Time is squeezed: a working day lasts a few minutes (you choose how many), plants grow in a day, and a 20-minute radio wait becomes about half a minute.</li>' +
+      '<li>Each day is made a little harder than the one before (more air and food used, a little less power, tools that wear). Real outposts do wear down, but these amounts are game numbers.</li>' +
+      '<li>The crisis moments are invented for your outpost, but each one is modelled on something that really happened: the 2018 Space Station air leak, Apollo 13\'s air filter and power-down, the mould in the Station\'s garden in 2015, and the Spirit rover stuck in soft soil in 2009.</li>' +
       '<li>The radiation badge (0–100%) is a game scale, not a medical dose. Storm strength is set from the flare class. In real life only some flares send a radiation storm to the Moon or Mars, and it can arrive minutes or hours later.</li>' +
       '<li>Dust storms (Mars) and shadow days (Moon) are simulated, inspired by the 2018 global dust storm and the low Sun at the lunar south pole.</li>' +
       '<li>The rock sites are invented places. Each discovery describes what a real mission found somewhere on the Moon or Mars, not at this exact spot.</li>' +
@@ -766,12 +915,14 @@
       add('Fetch ice from the ' + s.site.iceName + ' for the Air Maker (the rover is faster!)', G.tut.ice, airT, '🧊');
       add('Greenhouse: a power cell, ice for water, then plant seeds', G.tut.grow, has('cell') ? sp.sockets.food : has('ice') ? sp.hoppers.water : sp.beds[1], '🥬');
     } else {
-      add('Air for today: feed the Air Maker ice and power', s.air >= L.airDrain * left + 3, airT, '💨');
+      var dinner = sim.dinner(s);
+      add('Air for today: feed the Air Maker ice and power', s.air >= (sim.airDrain(s) * s.stale + s.leak) * left + 3, airT, '💨');
       if (!last) {
         var ripe = -1; m.food.beds.forEach(function (b, i) { if (b.state === 'ripe' && ripe < 0) ripe = i; });
-        add('Dinner tonight needs ' + L.dinner + ' food', s.food >= L.dinner, has('crate') ? sp.hoppers.pantry : ripe >= 0 ? sp.beds[ripe] : sp.beds[1], '🥬');
+        add('Dinner tonight needs ' + dinner + ' food', s.food >= dinner, has('crate') ? sp.hoppers.pantry : ripe >= 0 ? sp.beds[ripe] : sp.beds[1], '🥬');
       }
     }
+    if (s.day.goal) add('⭐ Challenge: ' + s.day.goal.text + sim.dayGoalProgress(s), s.today.goalDone, null, '🎯', true);
     var trayBag = A.items.filter(function (it) { return it.tag === 'tray'; })[0];
     add('Shield: throw soil bags onto the dome (' + s.bags + '/' + R.shieldSlots + ')', s.bags >= R.shieldSlots, has('bag') ? sp.hoppers.dome : trayBag ? trayBag.pos : has('cell') ? sp.sockets.bag : rackOrCell, '🛡️', true);
     var studied = s.finds.filter(function (f) { return f.kind === 'core'; }).length, geoT = null, bd = 1e9;
@@ -818,7 +969,7 @@
   }
   function hudFrame() {
     var s = G.s, a = A.astro, sp = B.spots, pos = me(), i;
-    if (!s || G.mode === 'title' || G.mode === 'brief' || G.mode === 'end' || G.mode === 'night') return;
+    if (!s || G.mode === 'title' || G.mode === 'brief' || G.mode === 'end' || G.mode === 'night' || G.mode === 'intro') return;
     U.setHud(s);
     if (G.mode !== 'play') { U.tags([]); U.marks([]); return; }
     // prompt + hands
@@ -881,7 +1032,8 @@
       if (e.code === 'KeyF') { G.fHeld = true; e.preventDefault(); }
       if (e.code === 'KeyQ' && !e.repeat) G.qPressed = true;
       if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') G.keys.shift = true;
-      if (e.code === 'Escape' || e.code === 'KeyH') { if (G.mode === 'play' || G.mode === 'inside') howInfo(); }
+      if (e.code === 'KeyH') { if (G.mode === 'play' || G.mode === 'inside') howInfo(); }
+      if (e.code === 'Escape' || e.code === 'KeyP') { if (G.mode === 'intro') JA.intro.skip(); else pauseModal(); }
     });
     window.addEventListener('keyup', function (e) {
       var k = KEYMAP[e.code]; if (k) G.keys[k] = false;
@@ -931,6 +1083,8 @@
     $('btn-how').addEventListener('click', function () { Au.play('tap'); howInfo(); });
     $('btn-science').addEventListener('click', function () { Au.play('tap'); scienceInfo(); });
     $('btn-info').addEventListener('click', function () { Au.play('tap'); howInfo(); });
+    $('btn-pause').addEventListener('click', pauseModal);
+    $('cine-skip').addEventListener('click', function () { if (G.mode === 'intro') JA.intro.skip(); });
     $('btn-out').addEventListener('click', exitHab);
     $('btn-sleep').addEventListener('click', sleepAsk);
     $('btn-fast').addEventListener('click', function () { G.fast = !G.fast; this.classList.toggle('on', G.fast); Au.play('tap'); });
@@ -977,6 +1131,7 @@
       else if (G.mode === 'inside') stepInside(dt);
       else if (G.mode === 'launch') stepLaunch(dt);
       if (A.astro) A.update(dt, G.mode === 'play' && !G.mini ? G.input : null);
+      if (G.mode === 'intro') JA.intro.step(dt);
       if (G.s && (G.mode === 'play' || G.mode === 'inside')) checkZones();
     }
     B.update(dt, G.mode === 'title' ? null : G.s);

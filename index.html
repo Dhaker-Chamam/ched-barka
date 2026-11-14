@@ -22,6 +22,7 @@
     <b id="sol-text">Sol 1 of 5</b>
     <small id="site-text">Mars</small>
     <div class="clock" title="Time left in today's shift"><i id="clock-fill"></i><em id="clock-storm"></em><span id="clock-sun">☀️</span></div>
+    <small id="time-left" title="Time left in today's shift. Press ⏸ to change how long a day lasts.">5:00 left</small>
   </div>
   <div class="meters">
     <div class="meter" data-res="air" title="Air: what the crew breathes">
@@ -39,6 +40,7 @@
   </div>
   <div class="hud-right">
     <div class="chip stars" title="Mission points"><span>⭐</span><b id="sci-val">0</b></div>
+    <button id="btn-pause" class="icon-btn" aria-label="Pause and change the day length" title="Pause · day length (P)">⏸</button>
     <button id="btn-sound" class="icon-btn" aria-label="Sound on or off" title="Sound">🔊</button>
     <button id="btn-read" class="icon-btn" aria-label="Read text aloud" title="Read aloud">🗣️</button>
     <button id="btn-info" class="icon-btn" aria-label="Help and the real science" title="Help">❔</button>
@@ -108,6 +110,17 @@
   </div>
 </section>
 
+<!-- the landing film: seen through the lander window, then through your own visor -->
+<div id="cine" class="hidden" aria-live="polite">
+  <div id="cine-window" aria-hidden="true"></div>
+  <div id="cine-visor" aria-hidden="true"><i class="glint"></i><i class="breath"></i></div>
+  <div id="cine-bars" aria-hidden="true"><i></i><i></i></div>
+  <div id="cine-data" aria-hidden="true"></div>
+  <div id="cine-title" aria-hidden="true"><small></small><b></b><span></span></div>
+  <p id="cine-line"></p>
+  <button id="cine-skip" class="btn ghost">Skip ▶▶</button>
+</div>
+
 <div id="fade"></div>
 <div id="modal-root"></div>
 <div id="fatal" class="hidden"></div>
@@ -117,12 +130,15 @@
 <script src="js/archive-data.js"></script>
 <script src="js/spaceweather.js"></script>
 <script src="js/sim.js"></script>
+<script src="js/crisis.js"></script>
 <script src="js/terrain.js"></script>
+<script src="js/assets.js"></script>
 <script src="js/world.js"></script>
 <script src="js/base.js"></script>
 <script src="js/actors.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/intro.js"></script>
 <script src="js/game.js"></script>
 </body>
 </html>

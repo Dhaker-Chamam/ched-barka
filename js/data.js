@@ -58,22 +58,41 @@ window.JA = window.JA || {};
     }
   };
 
+  // ramp: how fast each day gets harder than the one before (see sim.dayMods).
+  // doseScale: GAME scale so that a longer stay still fits on the 0–100 radiation badge.
   JA.LEVELS = {
     cadet: {
-      id: 'cadet', name: 'Cadet', ages: 'Ages 7–9', sols: 3, airDrain: 30, dinner: 16, cellBonus: 1,
-      stormScale: 0.6, warnBonus: 12, ease: 1.5, glitchSols: [2], rankMins: [0, 90, 170, 260],
-      blurb: 'A 3-day mission with extra power and longer storm warnings.'
+      id: 'cadet', name: 'Cadet', ages: 'Ages 7–9', sols: 5, airDrain: 30, dinner: 14, cellBonus: 1,
+      stormScale: 0.6, warnBonus: 12, ease: 1.5, glitchSols: [2], crisisSols: [3, 4], ramp: 0.6, doseScale: 0.7,
+      storms: [1, 4], stormsArchive: [3, 7], rankMins: [0, 120, 220, 320],
+      blurb: 'A 5-day mission with extra power and longer storm warnings.'
     },
     commander: {
-      id: 'commander', name: 'Commander', ages: 'Ages 10–12', sols: 5, airDrain: 38, dinner: 20, cellBonus: 0,
-      stormScale: 1, warnBonus: 0, ease: 1, glitchSols: [2, 4], rankMins: [0, 160, 290, 420],
-      blurb: 'A 5-day mission. Every power cell matters.'
+      id: 'commander', name: 'Commander', ages: 'Ages 10–12', sols: 8, airDrain: 36, dinner: 18, cellBonus: 0,
+      stormScale: 1, warnBonus: 0, ease: 1, glitchSols: [2, 4, 6, 7], crisisSols: [3, 5, 7], ramp: 1, doseScale: 0.55,
+      storms: [3, 8], stormsArchive: [8, 14], rankMins: [0, 180, 320, 460],
+      blurb: 'An 8-day mission. Every power cell matters, and every day is tougher.'
+    },
+    veteran: {
+      id: 'veteran', name: 'Veteran', ages: 'Ages 12+', sols: 10, airDrain: 38, dinner: 19, cellBonus: 0,
+      stormScale: 1, warnBonus: -4, ease: 0.9, glitchSols: [2, 4, 6, 7, 8, 9], crisisSols: [3, 5, 7, 9], ramp: 1.15, doseScale: 0.45,
+      storms: [4, 10], stormsArchive: [8, 15], rankMins: [0, 220, 380, 520],
+      blurb: 'A 10-day expedition. Worn-out machines, thin supplies and four big decisions.'
     }
   };
 
+  // How long one working day lasts in real time. The player picks this, and can change it mid-mission.
+  JA.SHIFTS = [
+    { id: 180, name: 'Quick', icon: '⚡', text: '3 minutes a day. For players who know the outpost well.' },
+    { id: 300, name: 'Standard', icon: '⏱️', text: '5 minutes a day. Enough time for the main jobs.' },
+    { id: 480, name: 'Relaxed', icon: '🌤️', text: '8 minutes a day. Time to explore and try everything.' },
+    { id: 720, name: 'Explorer', icon: '🧭', text: '12 minutes a day. No rush at all.' }
+  ];
+
   // GAME rules, all in one place so they are easy to tune and to explain.
   JA.RULES = {
-    dayLength: 180,                // seconds of play for one working day
+    dayLength: 300,                // seconds of play for one working day (the player can change it)
+    dayGoalPts: 20,
     startAir: 65, startFood: 45,
     morningCells: 2, chargeSpan: 0.72, rackMax: 4, effMin: 0.5,
     airPerIce: 14, iceTime: 6, airCharges: 3, hopperMax: 4,
@@ -184,6 +203,41 @@ window.JA = window.JA || {};
       { name: 'Moon Spotting', src: 'mars', text: 'Mars has two tiny potato-shaped moons, Phobos and Deimos. Phobos races around Mars about three times a day.' }
     ]
   };
+
+  // ---------- One new thing to learn every day ----------
+  // A mission of N days uses the first N-1 entries, then LAUNCH_DAY. Each day has a real-science
+  // lesson and a challenge that puts the lesson to work. goal.id is checked in sim.dayGoalDone().
+  JA.DAYS = [
+    { icon: '👣', title: 'First steps', topic: 'Living off the land', src: 'artemis',
+      learn: 'Astronauts cannot bring everything from Earth. They must use what is already there: sunlight for power, and ice for air and water. Engineers call this "living off the land".' },
+    { icon: '🛡️', title: 'Shield up', topic: 'Invisible radiation', src: 'artemis',
+      learn: 'Radiation is invisible energy from the Sun and from deep space. On Earth, thick air and a magnetic field protect us. Out here only mass can stop it: thick walls, or bags of soil piled on the roof.',
+      goal: { id: 'bags', n: 5, text: 'Put 5 soil bags on the dome today' } },
+    { icon: '🧪', title: 'Rock detective', topic: 'Rocks are history books', src: { mars: 'm2020', moon: 'apollo' },
+      learn: 'A rock core is a thin tube of rock pulled out with a drill. Its layers stay in order, so scientists can read what happened long ago: lava, floods, or giant crashes.',
+      goal: { id: 'cores', n: 2, text: 'Get 2 rock cores studied in the Lab today' } },
+    { icon: '📡', title: 'Calling home', topic: 'The speed of light', src: { mars: 'mars', moon: 'moon' },
+      learn: 'Radio waves travel at the speed of light, the fastest speed there is, and it is still not instant. The farther you are from Earth, the longer every question and answer takes.',
+      goal: { id: 'dish', text: 'Power the Radio Dish before midday' } },
+    { icon: '🥬', title: 'Space farmer', topic: 'Plants in space', src: 'iss',
+      learn: 'Plants give a crew fresh food, fresh oxygen and a little piece of home. On the Space Station astronauts have grown lettuce, radishes and even chili peppers.',
+      goal: { id: 'crates', n: 2, text: 'Store 2 veggie crates today' } },
+    { icon: '☀️', title: 'Sun chaser', topic: 'Keeping the power on', src: { mars: 'insight', moon: 'artemis' },
+      learn: { mars: 'Dust slowly settles on solar panels and blocks the light. NASA\'s InSight lander lost its power this way. Clean panels mean more power cells.',
+        moon: 'At the Moon\'s south pole the Sun never climbs high. It circles low around the horizon, so solar panels must keep turning to face it.' },
+      goal: { id: 'panels', n: 3, text: 'Look after all 3 solar panels today' } },
+    { icon: '🛰️', title: 'Science station', topic: 'Machines that keep watching', src: 'apollo',
+      learn: 'Instruments keep working long after astronauts go home. Scientists still bounce lasers off the mirrors that Apollo crews left on the Moon more than 50 years ago.',
+      goal: { id: 'inst', n: 3, text: 'Have all 3 science instruments working by tonight' } },
+    { icon: '🚙', title: 'Road trip', topic: 'Going farther', src: 'apollo',
+      learn: 'A rover lets a crew carry more and explore much farther than on foot. The Apollo 17 astronauts drove their Moon buggy about 36 km.',
+      goal: { id: 'ice', n: 4, text: 'Bring 4 ice chunks to the machines today' } },
+    { icon: '🧳', title: 'Pack for home', topic: 'Samples for Earth', src: 'apollo',
+      learn: 'The Apollo crews brought home 382 kg of Moon rock, and scientists are still studying it today. Samples carried to Earth can be tested with machines far too big to fly.',
+      goal: { id: 'studied', n: 8, text: 'Finish studying all 8 rock cores' } }
+  ];
+  JA.LAUNCH_DAY = { icon: '🚀', title: 'Launch day', topic: 'The ride home', src: 'artemis',
+    learn: 'Leaving is as hard as landing. The rocket must lift off on time to meet the ship that carries the crew back to Earth, so nothing can be left for later.' };
 
   // ---------- Things that break ----------
   JA.REPAIRS = {

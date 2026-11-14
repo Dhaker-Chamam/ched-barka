@@ -7,18 +7,19 @@
   if (!T) return;
 
   var renderer, scene, camera, root = null, look = null, siteId = 'mars';
-  var sun, hemi, sunSprite, skyMesh, skyU, stars = null, earth = null, phobos = null, lamp = null;
+  var sun, hemi, sunSprite, skyMesh, skyU, stars = null, earth = null, earthGlow = null, phobos = null, lamp = null;
   var time = 0;
   var sunDir = W.sunDir = new T.Vector3(0.4, 0.5, 0.7).normalize();
   var env = W.env = { t: 0.25, dust: 0, dustShown: 0, storm: 0, stormShown: 0, dark: 0 };
   var cam = W.cam = { yaw: 0, pitch: 0.4, dist: 11, mode: 'title', pos: new T.Vector3(0, 24, 60), look: new T.Vector3(0, 3, 0),
-    target: new T.Vector3(0, 2, 8), shake: 0, focus: null, fixed: null };
+    target: new T.Vector3(0, 2, 8), shake: 0, focus: null, fixed: null,
+    cine: { pos: new T.Vector3(), look: new T.Vector3(), fov: 52, roll: 0 } };
   var v1 = new T.Vector3(), v2 = new T.Vector3(), c1 = new T.Color(), c2 = new T.Color(), c3 = new T.Color();
 
   var LOOKS = {
-    moon: { ground: 0x8b8c96, ground2: 0x5f606b, rock: 0x70717b, mountain: 0x4d4e58, sunColor: 0xffffff, sunInt: 1.65,
+    moon: { ground: 0x8b8c96, ground2: 0x5f606b, rock: 0x8a8b95, mountain: 0x4d4e58, range: 0x7d7e88, sunColor: 0xffffff, sunInt: 1.65,
       hemiSky: 0x9fb2d8, hemiGround: 0x34353f, hemiInt: 0.4, fog: null, zenith: 0x000003, horizon: 0x04050a, glow: 0xffffff, sunSize: 330 },
-    mars: { ground: 0xc8703f, ground2: 0x9a4a2a, rock: 0x8c4a30, mountain: 0x8a4526, sunColor: 0xfff1df, sunInt: 1.25,
+    mars: { ground: 0xc8703f, ground2: 0x9a4a2a, rock: 0x9c5536, mountain: 0x8a4526, range: 0xa5562f, sunColor: 0xfff1df, sunInt: 1.25,
       hemiSky: 0xf5d1a8, hemiGround: 0x7a3b22, hemiInt: 0.66, fog: 0xdcab78, zenith: 0xa8734a, horizon: 0xe6bc8c, glow: 0xfff0d0, sunSize: 210 }
   };
 
@@ -42,6 +43,33 @@
     var t = new T.CanvasTexture(c); t.encoding = T.sRGBEncoding;
     return t;
   };
+
+  // ---------- surface detail made in Blender (js/assets.js). Everything falls back to plain shapes without it. ----------
+  var AS = window.JA_ASSETS || null;
+  function b64(s, Type) {
+    var bin = atob(s), n = bin.length, u8 = new Uint8Array(n);
+    for (var i = 0; i < n; i++) u8[i] = bin.charCodeAt(i);
+    return new Type(u8.buffer);
+  }
+  // d: { p: Int16 positions * s, c: baked shade per vertex, i: triangle indices }. lo = how dark the deepest shade may get.
+  function assetGeo(d, lo) {
+    var p = b64(d.p, Int16Array), pos = new Float32Array(p.length), c8 = b64(d.c, Uint8Array), col = new Float32Array(c8.length * 3), i;
+    for (i = 0; i < p.length; i++) pos[i] = p[i] * d.s;
+    for (i = 0; i < c8.length; i++) col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = lo + (1 - lo) * c8[i] / 255;
+    var g = new T.BufferGeometry();
+    g.setAttribute('position', new T.BufferAttribute(pos, 3));
+    g.setAttribute('color', new T.BufferAttribute(col, 3));
+    g.setIndex(new T.BufferAttribute(b64(d.i, d.w === 4 ? Uint32Array : Uint16Array), 1));
+    g.computeVertexNormals();
+    return g;
+  }
+  function tileTex(url, repeat, srgb) {
+    var t = new T.TextureLoader().load(url);
+    t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(repeat, repeat);
+    t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    if (srgb) t.encoding = T.sRGBEncoding;
+    return t;
+  }
 
   // ---------- ground ----------
   function groundColor(x, z, h, out) {
@@ -91,14 +119,27 @@
       col[k * 3] = c1.r; col[k * 3 + 1] = c1.g; col[k * 3 + 2] = c1.b;
     }
     g.setAttribute('color', new T.BufferAttribute(col, 3));
-    var ground = new T.Mesh(g, new T.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, flatShading: true }));
+    var gm, tile = AS && AS.ground && AS.ground[siteId];
+    if (tile) {
+      // smooth slopes, plus a tiling patch of real regolith (grain, craterlets, pebbles) baked in Blender
+      g.computeVertexNormals();
+      gm = new T.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0,
+        normalMap: tileTex(tile.n, size / tile.tile, false), normalScale: new T.Vector2(1.5, 1.5), map: tileTex(tile.a, size / tile.tile, true) });
+    } else gm = new T.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, flatShading: true });
+    var ground = new T.Mesh(g, gm);
     ground.receiveShadow = true;
     root.add(ground);
     var skirt = W.add(root, new T.RingGeometry(392, 3400, 48, 1), new T.MeshStandardMaterial({ color: look.ground2, roughness: 1 }), 0, 23, 0, true);
     skirt.rotation.x = -Math.PI / 2;
 
     var rnd = JA.sim.rng32(siteId === 'mars' ? 99 : 11), mm = W.mat(look.mountain), i;
-    for (i = 0; i < 34; i++) {
+    if (AS && AS.mountains && AS.mountains[siteId]) {
+      // mountain ranges sculpted in Blender, with their hollows shaded
+      // (a touch of glow stands in for sunlight bouncing off the ground, so shaded slopes are not pitch black)
+      var range = new T.Mesh(assetGeo(AS.mountains[siteId], 0.35), new T.MeshStandardMaterial({ color: look.range, vertexColors: true, roughness: 1, metalness: 0,
+        flatShading: siteId === 'mars', emissive: look.range, emissiveIntensity: siteId === 'moon' ? 0.16 : 0.05 }));
+      root.add(range);
+    } else for (i = 0; i < 34; i++) {
       var a = (i / 34) * Math.PI * 2 + rnd() * 0.15, mr = 470 + rnd() * 160, mh = 45 + rnd() * 110;
       var cone = W.add(root, new T.ConeGeometry(mh * (1 + rnd() * 1.1), mh, 5 + Math.floor(rnd() * 4)), mm, Math.cos(a) * mr, 20 + mh * 0.42, Math.sin(a) * mr, true);
       cone.rotation.y = rnd() * 3;
@@ -106,22 +147,34 @@
     if (siteId === 'mars') W.add(root, new T.ConeGeometry(640, 190, 24), mm, 300, 100, -1250, true);   // a giant volcano on the horizon
 
     // pebbles and rocks
-    var count = 900, inst = new T.InstancedMesh(new T.DodecahedronGeometry(1, 0), W.mat(look.rock), count), dummy = new T.Object3D();
+    var count = 900, dummy = new T.Object3D(), rockGeos = AS && AS.rocks ? AS.rocks.map(function (d) { return assetGeo(d, 0.42); }) : null;
+    var rockMat = W.mat(look.rock, rockGeos ? { vertexColors: true } : null), rockMat2 = W.mat(siteId === 'mars' ? 0x6e3a26 : 0x9a9ba6, rockGeos ? { vertexColors: true } : null);
+    var kinds = rockGeos ? 4 : 1, per = count / kinds, insts = [];
+    for (i = 0; i < kinds; i++) {
+      var im = new T.InstancedMesh(rockGeos ? rockGeos[i * 2] : new T.DodecahedronGeometry(1, 0), rockMat, per);
+      im.castShadow = true; im.receiveShadow = true; root.add(im); insts.push(im);
+    }
     for (i = 0; i < count; i++) {
       var ra = rnd() * Math.PI * 2, rd = i < 160 ? 30 + rnd() * 34 : 60 + Math.pow(rnd(), 1.3) * 300;
       var rx = Math.cos(ra) * rd, rz = Math.sin(ra) * rd, sc = i < 160 ? 0.08 + rnd() * 0.22 : 0.15 + Math.pow(rnd(), 2.2) * 0.8;
-      dummy.position.set(rx, Tn.height(rx, rz) + sc * 0.2, rz);
-      dummy.rotation.set(rnd() * 3, rnd() * 3, rnd() * 3);
-      dummy.scale.set(sc, sc * (0.5 + rnd() * 0.6), sc);
-      dummy.updateMatrix(); inst.setMatrixAt(i, dummy.matrix);
+      var r1 = rnd(), r2 = rnd(), r3 = rnd(), r4 = rnd();
+      if (rockGeos) { dummy.position.set(rx, Tn.height(rx, rz) - sc * 0.12, rz); dummy.rotation.set((r1 - 0.5) * 0.5, r2 * 6.28, (r3 - 0.5) * 0.5); }
+      else { dummy.position.set(rx, Tn.height(rx, rz) + sc * 0.2, rz); dummy.rotation.set(r1 * 3, r2 * 3, r3 * 3); }
+      dummy.scale.set(sc, sc * (0.5 + r4 * 0.6) * (rockGeos ? 1.3 : 1), sc);
+      dummy.updateMatrix(); insts[i % kinds].setMatrixAt(Math.floor(i / kinds), dummy.matrix);
     }
-    inst.castShadow = true; inst.receiveShadow = true;
-    root.add(inst);
     // boulders (these block your way)
-    var bm = W.mat(look.rock), bm2 = W.mat(siteId === 'mars' ? 0x6e3a26 : 0x9a9ba6);
     Tn.boulders.forEach(function (b, k) {
-      var m = W.add(root, new T.DodecahedronGeometry(b.r * 1.08, 0), k % 3 ? bm : bm2, b.x, Tn.height(b.x, b.z) + b.r * b.sy * 0.45, b.z);
-      m.scale.y = b.sy; m.rotation.set(b.tilt, b.rot, b.tilt * 0.5);
+      var m, gy = Tn.height(b.x, b.z);
+      if (rockGeos) {
+        m = W.add(root, b.seat ? assetGeo(AS.seat, 0.42) : rockGeos[k % rockGeos.length], k % 3 ? rockMat : rockMat2, b.x, gy - b.r * 0.1, b.z);
+        if (b.seat) m.scale.set(b.r * 1.2, b.r * 0.88, b.r * 1.2); else m.scale.set(b.r * 1.12, b.r * b.sy * 1.35, b.r * 1.12);
+        m.rotation.set(b.seat ? 0 : b.tilt * 0.4, b.rot, 0);
+      } else {
+        m = W.add(root, new T.DodecahedronGeometry(b.r * 1.08, 0), k % 3 ? rockMat : rockMat2, b.x, gy + b.r * b.sy * 0.45, b.z);
+        m.scale.y = b.sy; m.rotation.set(b.tilt, b.rot, b.tilt * 0.5);
+      }
+      if (b.seat) { m.updateMatrixWorld(true); Tn.seatTop = new T.Box3().setFromObject(m).max.y - gy; }
     });
   }
 
@@ -171,20 +224,55 @@
     stars.frustumCulled = false; stars.renderOrder = -9;
     root.add(stars);
 
-    earth = null; phobos = null;
+    // a scattering of brighter stars, some warm and some cool, so the sky has depth
+    var bn = 150, bpos = new Float32Array(bn * 3), bcol = new Float32Array(bn * 3);
+    for (i = 0; i < bn; i++) {
+      var bu = rnd() * 0.97 + 0.03, ba = rnd() * Math.PI * 2, br = Math.sqrt(1 - bu * bu), tint = rnd();
+      bpos[i * 3] = br * Math.cos(ba) * 2290; bpos[i * 3 + 1] = bu * 2290; bpos[i * 3 + 2] = br * Math.sin(ba) * 2290;
+      bcol[i * 3] = tint < 0.3 ? 1 : 0.8; bcol[i * 3 + 1] = tint < 0.3 ? 0.86 : 0.9; bcol[i * 3 + 2] = tint < 0.3 ? 0.7 : 1;
+    }
+    var bg = new T.BufferGeometry(); bg.setAttribute('position', new T.BufferAttribute(bpos, 3)); bg.setAttribute('color', new T.BufferAttribute(bcol, 3));
+    var bright = new T.Points(bg, new T.PointsMaterial({ size: 3.4, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 1, fog: false, depthWrite: false }));
+    bright.frustumCulled = false; bright.renderOrder = -9;
+    stars.add(bright); stars.userData.bright = bright;
+
+    earth = null; earthGlow = null; phobos = null;
     if (siteId === 'moon') {
-      var et = W.canvasTex(256, function (ctx, s) {
-        ctx.fillStyle = '#2466cf'; ctx.fillRect(0, 0, s, s);
-        var rr = JA.sim.rng32(5), k;
-        ctx.fillStyle = '#3aa655';
-        for (k = 0; k < 18; k++) { ctx.beginPath(); ctx.ellipse(rr() * s, rr() * s, 12 + rr() * 34, 8 + rr() * 22, rr() * 3, 0, 7); ctx.fill(); }
-        ctx.fillStyle = '#c9a868';
-        for (k = 0; k < 5; k++) { ctx.beginPath(); ctx.ellipse(rr() * s, rr() * s, 8 + rr() * 16, 5 + rr() * 9, rr() * 3, 0, 7); ctx.fill(); }
-        ctx.fillStyle = 'rgba(255,255,255,0.88)';
-        for (k = 0; k < 34; k++) { ctx.beginPath(); ctx.ellipse(rr() * s, rr() * s, 10 + rr() * 42, 3 + rr() * 7, rr() * 0.6 - 0.3, 0, 7); ctx.fill(); }
+      // Earth: oceans, continents, ice caps and swirls of cloud, painted from noise wrapped around a globe
+      var et = W.canvasTex(512, function (ctx, s) {
+        var img = ctx.createImageData(s, s), d = img.data, nz = Tn.noise, x, y;
+        function fb(px, py, pz, f) {
+          var a = px * f + py * 3.1 * f + 11, b = pz * f - py * 2.3 * f + 5;
+          return nz(a, b) * 0.5 + nz(a * 2.1, b * 2.1) * 0.27 + nz(a * 4.3, b * 4.3) * 0.15 + nz(a * 8.7, b * 8.7) * 0.08;
+        }
+        for (y = 0; y < s; y++) {
+          var lat = (0.5 - y / s) * Math.PI, cl = Math.cos(lat), sl = Math.sin(lat);
+          for (x = 0; x < s; x++) {
+            var lon = x / s * Math.PI * 2, px = cl * Math.cos(lon), pz = cl * Math.sin(lon), k = (y * s + x) * 4;
+            var land = fb(px, sl, pz, 1.7), dry = fb(px + 4, sl, pz + 2, 2.6), cloud = fb(px + 9, sl * 1.8, pz - 6, 3.4), r, g, b;
+            if (land > 0.53) {
+              var hgt = Math.min(1, (land - 0.53) * 9);
+              r = 46 + dry * 150 + hgt * 20; g = 112 + dry * 40 - hgt * 18; b = 50 + dry * 30;
+            } else { var dp = Math.max(0, 0.53 - land) * 4; r = 22 - dp * 10; g = 84 - dp * 34; b = 190 - dp * 60; }
+            var ice = Tn.smooth(1.12, 1.3, Math.abs(lat) + (dry - 0.5) * 0.25);
+            r += (245 - r) * ice; g += (248 - g) * ice; b += (255 - b) * ice;
+            var cw = Tn.smooth(0.52, 0.68, cloud) * 0.92;
+            d[k] = r + (255 - r) * cw; d[k + 1] = g + (255 - g) * cw; d[k + 2] = b + (255 - b) * cw; d[k + 3] = 255;
+          }
+        }
+        ctx.putImageData(img, 0, 0);
       });
-      earth = W.add(root, new T.SphereGeometry(95, 36, 24), new T.MeshStandardMaterial({ map: et, roughness: 0.75, emissive: 0x12305c, emissiveIntensity: 0.5, fog: false }), 0, 0, 0, true);
+      earth = W.add(root, new T.SphereGeometry(95, 48, 32), new T.MeshStandardMaterial({ map: et, roughness: 0.8, emissive: 0x0d2a55, emissiveIntensity: 0.35, fog: false }), 0, 0, 0, true);
       earth.rotation.z = 0.41;
+      // the thin blue glow of the air around it
+      var halo = W.canvasTex(128, function (ctx, s) {
+        var gr = ctx.createRadialGradient(s / 2, s / 2, s * 0.36, s / 2, s / 2, s / 2);
+        gr.addColorStop(0, 'rgba(120,180,255,0)'); gr.addColorStop(0.12, 'rgba(120,180,255,0.55)'); gr.addColorStop(1, 'rgba(120,180,255,0)');
+        ctx.fillStyle = gr; ctx.fillRect(0, 0, s, s);
+      });
+      earthGlow = new T.Sprite(new T.SpriteMaterial({ map: halo, blending: T.AdditiveBlending, depthWrite: false, fog: false, transparent: true }));
+      earthGlow.scale.set(262, 262, 1); earthGlow.renderOrder = -8;
+      root.add(earthGlow);
     } else {
       phobos = W.add(root, new T.DodecahedronGeometry(16, 1), new T.MeshStandardMaterial({ color: 0x8d8478, roughness: 1, flatShading: true, fog: false }), 0, 0, 0, true);
       phobos.scale.set(1.3, 1, 1.05);
@@ -256,7 +344,17 @@
   var FN = 500, fMesh, fNext = 0, fDummy = new T.Object3D();
   function buildPrints() {
     var g = new T.PlaneGeometry(1, 1); g.rotateX(-Math.PI / 2);
-    fMesh = new T.InstancedMesh(g, new T.MeshBasicMaterial({ color: siteId === 'mars' ? 0x6e3418 : 0x3e3f48, transparent: true, opacity: 0.42, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }), FN);
+    // a boot sole pressed into the dust: rounded at toe and heel, with tread bars across it
+    var tread = W.canvasTex(64, function (ctx, s) {
+      ctx.clearRect(0, 0, s, s);
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.beginPath(); ctx.ellipse(s / 2, s * 0.3, s * 0.4, s * 0.28, 0, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(s / 2, s * 0.74, s * 0.33, s * 0.23, 0, 0, 7); ctx.fill();
+      ctx.fillRect(s * 0.2, s * 0.3, s * 0.6, s * 0.44);
+      ctx.globalCompositeOperation = 'source-atop'; ctx.fillStyle = 'rgba(255,255,255,1)';
+      for (var y = 4; y < s; y += 9) ctx.fillRect(0, y, s, 4.5);
+    });
+    fMesh = new T.InstancedMesh(g, new T.MeshBasicMaterial({ color: siteId === 'mars' ? 0x5a2a12 : 0x2c2d36, map: tread, transparent: true, opacity: 0.62, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }), FN);
     fDummy.position.set(0, -500, 0); fDummy.updateMatrix();
     for (var i = 0; i < FN; i++) fMesh.setMatrixAt(i, fDummy.matrix);
     fMesh.frustumCulled = false;
@@ -296,7 +394,14 @@
   };
 
   W.build = function (site, suitColor) {
-    if (root) { scene.remove(root); root.traverse(function (o) { if (o.geometry) o.geometry.dispose(); }); }
+    if (root) {
+      scene.remove(root);
+      root.traverse(function (o) {
+        if (o.geometry) o.geometry.dispose();
+        var m = o.material;
+        if (m && !Array.isArray(m)) { if (m.map) m.map.dispose(); if (m.normalMap) m.normalMap.dispose(); }
+      });
+    }
     siteId = W.site = site; look = LOOKS[site]; W.gravity = JA.SITES[site].gravity;
     Tn.setSite(site);
     root = W.root = new T.Group(); scene.add(root);
@@ -345,6 +450,7 @@
       sunSprite.material.color.set(0xffffff).lerp(c1.set(0x9fc8ff), (1 - day) * 0.8);
       sunSprite.material.opacity = 1 - d * 0.8;
       stars.material.opacity = (1 - day) * 0.7 * (1 - d);
+      stars.userData.bright.material.opacity = stars.material.opacity;
       var pt = (time * 0.006 + 0.2) % 1, pa = lerp(-1.9, 1.9, pt), pe = 0.25 + Math.sin(Math.PI * pt) * 0.7;
       phobos.position.copy(camera.position).add(v1.set(Math.sin(pa) * Math.cos(pe), Math.sin(pe), -Math.cos(pa) * Math.cos(pe) * 0.6 - 0.3).normalize().multiplyScalar(2300));
       phobos.rotation.y += dt * 0.05;
@@ -355,6 +461,7 @@
       sunSprite.material.opacity = 1 - d;
       earth.position.copy(camera.position).add(v1.set(-0.5, 0.2, -0.84).normalize().multiplyScalar(2350));
       earth.rotation.y += dt * 0.008;
+      if (earthGlow) earthGlow.position.copy(earth.position);
       var inIce = 1 - smooth(0.55, 1.0, Math.hypot(f.x - Tn.L.ice[0], f.z - Tn.L.ice[1]) / Tn.iceR);
       env.dark = clamp(d * 0.9 + inIce * 0.8 + 0.25, 0, 1);
     }
@@ -391,6 +498,10 @@
       lookAt.set(0, 3.5, 0); sp = Math.min(1, dt * 1.6);
     } else if (cam.mode === 'fixed' && cam.fixed) {
       want.copy(cam.fixed.pos); lookAt.copy(cam.fixed.look); sp = Math.min(1, dt * 2.2);
+    } else if (cam.mode === 'cine' && cam.cine) {
+      // the landing film drives the camera directly (no smoothing: the film does its own)
+      want.copy(cam.cine.pos); lookAt.copy(cam.cine.look); sp = 1;
+      cam.target.set(want.x, Tn.height(want.x, want.z) + 2, want.z);
     } else {
       if (cam.focus) cam.focus(cam.target);
       var cp = Math.cos(cam.pitch), dist = cam.dist * (camera.aspect < 1 ? 1.25 : 1);
@@ -408,6 +519,9 @@
       cam.shake *= Math.max(0, 1 - dt * 4);
     }
     camera.lookAt(cam.look);
+    var cine = cam.mode === 'cine' && cam.cine, fov = cine ? cam.cine.fov || 52 : 52;
+    if (cine && cam.cine.roll) camera.rotateZ(cam.cine.roll);
+    if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
   }
   W.snapCamera = function () { updateCamera(100); };
   W.setLamp = function (x, y, z, dx, dz) { if (!lamp) return; lamp.position.set(x, y, z); lamp.target.position.set(x + dx * 8, y - 2.4, z + dz * 8); };

@@ -95,8 +95,8 @@
   function pickWindow(data, nSols, levelId, rng) {
     var days = byDay(data);
     if (days.length < nSols) return days;
-    var target = levelId === 'cadet' ? [1, 3] : [2, 6];
-    if (data.source === 'archive') target = levelId === 'cadet' ? [2, 5] : [6, 11];
+    var lv = JA.LEVELS[levelId] || {};
+    var target = (data.source === 'archive' ? lv.stormsArchive : lv.storms) || [2, 6];
     var wins = [];
     for (var i = 0; i + nSols <= days.length; i++) {
       var score = 0;
