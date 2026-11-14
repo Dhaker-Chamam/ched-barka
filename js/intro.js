@@ -25,24 +25,28 @@
   function cls(name, on) { $('cine').classList.toggle(name, !!on); }
 
   // ---------- what is said, and when ----------
+  // vo: the recorded line in audio/landing/ (each one fits before the next line starts).
+  // Lines without a recording fall back to the read-aloud voice.
+  var VO = 'audio/landing/';
   function script(s) {
     var moon = s.site.id === 'moon', dw = s.site.dayWord.toLowerCase() + 's';
+    var home = (moon ? { 5: '13-home-5-days', 8: '14-home-8-days', 10: '15-home-10-days' } : { 5: '21-home-5-sols', 8: '22-home-8-sols', 10: '23-home-10-sols' })[s.totalSols];
     return [
-      { t: 4.6, who: 'Mission Control', text: 'Outpost One, you are GO for landing.', dur: 3.0, radio: true },
-      { t: 8.4, text: 'There it is. The robots finished building it last week.', dur: 3.4 },
-      { t: 12.6, who: 'BOLT', text: 'Sixty metres… thirty… the engine is kicking up dust!', dur: 3.6, radio: true },
-      { t: TM.land + 0.3, who: 'BOLT', text: 'Contact! Engines off.', dur: 2.3, radio: true },
-      { t: TM.land + 2.8, text: 'We made it.', dur: 1.9 },
-      { t: TM.step + 0.4, text: 'Here goes. My first step on ' + s.site.name + '.', dur: 2.6 },
+      { t: 4.6, who: 'Mission Control', text: 'Outpost One, you are GO for landing.', dur: 3.0, radio: true, vo: '01-go-for-landing' },
+      { t: 8.4, text: 'There it is. The robots finished building it last week.', dur: 3.4, vo: '05-there-it-is' },
+      { t: 12.6, who: 'BOLT', text: 'Sixty metres… thirty… the engine is kicking up dust!', dur: 3.6, radio: true, vo: '02-sixty-metres' },
+      { t: TM.land + 0.3, who: 'BOLT', text: 'Contact! Engines off.', dur: 2.3, radio: true, vo: '03-contact' },
+      { t: TM.land + 2.8, text: 'We made it.', dur: 1.9, vo: '06-we-made-it' },
+      { t: TM.step + 0.4, text: 'Here goes. My first step on ' + s.site.name + '.', dur: 2.6, vo: moon ? '09-first-step-moon' : '17-first-step-mars' },
       { t: TM.step + 3.7, text: moon ? 'My first bootprint. With no wind and no rain, it could stay here for a million years.'
-        : 'My first bootprint. One day the wind will sweep it away. But not today.', dur: 4.2 },
-      { t: TM.walk + 1.8, text: moon ? 'No air. No sound. Only my own breathing.' : 'Thin, cold air, and a sky the colour of butterscotch.', dur: 3.4 },
-      { t: TM.walk + 6.0, text: moon ? 'And gravity so gentle that every step is a little flight.' : 'And gravity so gentle that I weigh about a third of what I do on Earth.', dur: 3.8 },
-      { t: TM.walk2 + 1.2, text: 'That rock looks like a good seat.', dur: 3.0 },
-      { t: TM.sit + 2.7, text: 'Stop. Sit. Breathe.', dur: 2.3 },
-      { t: TM.vista + 2.6, text: 'That is the outpost. My home for the next ' + s.totalSols + ' ' + dw + '.', dur: 3.6 },
-      { t: TM.vista + 6.8, text: moon ? 'And that is Earth. Everyone I have ever known is on that small blue ball.' : 'Somewhere in that sky, Earth is just a pale dot of light.', dur: 3.9 },
-      { t: TM.vista + 11.0, who: 'BOLT', text: 'Ready when you are, Commander.', dur: 2.6, radio: true }
+        : 'My first bootprint. One day the wind will sweep it away. But not today.', dur: 4.2, vo: moon ? '10-bootprint-moon' : '18-bootprint-mars' },
+      { t: TM.walk + 1.8, text: moon ? 'No air. No sound. Only my own breathing.' : 'Thin, cold air, and a sky the colour of butterscotch.', dur: 3.4, vo: moon ? '11-no-air-moon' : '19-thin-air-mars' },
+      { t: TM.walk + 6.0, text: moon ? 'And gravity so gentle that every step is a little flight.' : 'And gravity so gentle that I weigh about a third of what I do on Earth.', dur: 3.8, vo: moon ? '12-gravity-moon' : '20-gravity-mars' },
+      { t: TM.walk2 + 1.2, text: 'That rock looks like a good seat.', dur: 3.0, vo: '07-good-seat' },
+      { t: TM.sit + 2.7, text: 'Stop. Sit. Breathe.', dur: 2.3, vo: '08-stop-sit-breathe' },
+      { t: TM.vista + 2.6, text: 'That is the outpost. My home for the next ' + s.totalSols + ' ' + dw + '.', dur: 3.6, vo: home },
+      { t: TM.vista + 6.8, text: moon ? 'And that is Earth. Everyone I have ever known is on that small blue ball.' : 'Somewhere in that sky, Earth is just a pale dot of light.', dur: 3.9, vo: moon ? '16-earth-moon' : '24-earth-mars' },
+      { t: TM.vista + 11.0, who: 'BOLT', text: 'Ready when you are, Commander.', dur: 2.6, radio: true, vo: '04-ready-commander' }
     ];
   }
   function say(c) {
@@ -51,7 +55,9 @@
     el.className = 'show' + (c.who ? ' radio' : '');
     st.lineOff = c.t + c.dur;
     if (c.radio) Au.play('radio');
-    Au.speak(c.text);
+    // the recorded voice plays with sound on (or with read-aloud on, in place of the browser voice)
+    if (c.vo && (Au.soundOn() || Au.readingOn())) Au.voice(VO + c.vo + '.mp3');
+    else Au.speak(c.text);
   }
   function title(small, big, sub) {
     var el = $('cine-title');
@@ -289,6 +295,7 @@
       dustCol: moon ? 0xb8b9c4 : 0xd9a070, cues: script(s), ci: 0, ev: events(s), ei: 0, breath: 2
     };
     st.rig = buildRig(JA.game.opts.suit);
+    st.cues.forEach(function (c) { if (c.vo) Au.preloadVoice(VO + c.vo + '.mp3'); });   // this film's lines, ready before they are needed
     A.astro.mode = 'hidden';
     W.env.t = moon ? 0.12 : 0.2;
     W.cam.mode = 'cine';
@@ -303,7 +310,7 @@
     var t = st.t += dt;
     while (st.ei < st.ev.length && t >= st.ev[st.ei].t) st.ev[st.ei++].fn();
     while (st.ci < st.cues.length && t >= st.cues[st.ci].t) say(st.cues[st.ci++]);
-    if (st.lineOff && t >= st.lineOff) { st.lineOff = 0; $('cine-line').className = ''; }
+    if (st.lineOff && t >= st.lineOff && !Au.voicePlaying()) { st.lineOff = 0; $('cine-line').className = ''; }   // keep the words up while they are spoken
     if (t < TM.fade1 + 0.9) shotDescent(Math.max(t, TM.descent), dt);
     else if (t < TM.step - 0.7) { /* darkness, and the hiss of the hatch */ }
     else if (t < TM.walk) shotStep(t);

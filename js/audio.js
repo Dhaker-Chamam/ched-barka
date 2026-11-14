@@ -1,5 +1,5 @@
-/* Astro Outpost — sound made with the Web Audio API (no audio files), plus optional
-   read-aloud for younger players using the browser's speech voice. */
+/* Astro Outpost — sound made with the Web Audio API, recorded voice lines for the landing film
+   (audio/landing/), plus optional read-aloud for younger players using the browser's speech voice. */
 (function (JA) {
   'use strict';
   var ctx = null, master = null, on = true, reading = false, loops = {};
@@ -92,6 +92,33 @@
     delete loops[name];
   }
 
+  // Recorded voice lines (mp3 files in audio/). A plain <audio> element, so they also play when the
+  // game is opened straight from disk. One line at a time; a new line cuts the previous one.
+  var voices = {}, voiceEl = null;
+  function preloadVoice(src) {
+    if (!voices[src]) { var a = new Audio(); a.preload = 'auto'; a.src = src; voices[src] = a; }
+    return voices[src];
+  }
+  function stopVoice() { if (voiceEl) { try { voiceEl.pause(); } catch (e) { /* not started */ } voiceEl = null; } }
+  function voice(src) {
+    stopVoice();
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    var a = preloadVoice(src);
+    try { a.currentTime = 0; } catch (e) { /* not loaded yet */ }
+    a.volume = 0.9;
+    voiceEl = a;
+    var p = a.play();
+    if (p && p.catch) p.catch(function () { if (voiceEl === a) voiceEl = null; });   // blocked or missing file: subtitles still show
+    return a;
+  }
+  function voicePlaying() { return !!(voiceEl && !voiceEl.paused && !voiceEl.ended); }
+  // the landing film stops while the tab is hidden, so the voice waits too
+  document.addEventListener('visibilitychange', function () {
+    if (!voiceEl || voiceEl.ended) return;
+    if (document.hidden) voiceEl.pause();
+    else { var p = voiceEl.play(); if (p && p.catch) p.catch(function () { /* stays paused */ }); }
+  });
+
   function speak(text) {
     if (!reading || !window.speechSynthesis) return;
     try {
@@ -105,9 +132,10 @@
   JA.audio = {
     play: function (name) { if (S[name]) S[name](); },
     loop: loop, stopLoop: stopLoop,
-    stopAll: function () { Object.keys(loops).forEach(stopLoop); },
+    stopAll: function () { Object.keys(loops).forEach(stopLoop); stopVoice(); },
     unlock: ensure,
-    setSound: function (v) { on = v; if (!v) Object.keys(loops).forEach(stopLoop); },
+    setSound: function (v) { on = v; if (!v) { Object.keys(loops).forEach(stopLoop); if (!reading) stopVoice(); } },
+    voice: voice, stopVoice: stopVoice, voicePlaying: voicePlaying, preloadVoice: preloadVoice,
     soundOn: function () { return on; },
     setReading: function (v) { reading = v; if (!v && window.speechSynthesis) window.speechSynthesis.cancel(); },
     readingOn: function () { return reading; },
