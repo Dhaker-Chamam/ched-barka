@@ -24,6 +24,8 @@
     el.draggable = false;
     return el;
   }
+  // the drawn icon's file name for an emoji ('air', 'rocket'...), or null (the mini map draws these on its canvas)
+  JA.iconName = function (emoji) { return MAP[String(emoji).replace(/️/g, '')] || null; };
   JA.iconHTML = function (emoji) {
     var n = MAP[String(emoji).replace(/️/g, '')];
     return n ? '<img class="ico" src="assets/icons/' + n + '.svg" alt="' + (NAMES[n] || n) + '" draggable="false">' : emoji;

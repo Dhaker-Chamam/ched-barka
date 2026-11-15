@@ -561,7 +561,7 @@
       }
       aim.mat.color.set(ok ? 0x4dff9a : 0xffffff);
       for (i = 0; i < aim.dots.length; i++) { aim.dots[i].visible = i < n; if (i < n) aim.dots[i].position.copy(PTS[i]); }
-      aim.ring.visible = true; aim.ring.position.set(A.landing.x, Tn.height(A.landing.x, A.landing.z) + 0.15, A.landing.z);
+      aim.ring.visible = true; aim.ring.position.set(A.landing.x, A.groundAt(A.landing.x, A.landing.z) + 0.15, A.landing.z);
       Au.loop('aim', { f: 200 + ch.power * 500, v: 0.03, type: 'sine' });
     } else {
       Au.stopLoop('aim'); hideAim();
@@ -572,14 +572,22 @@
   }
 
   // =====================================================================
-  //  MINI-GAMES: drilling (heat) and repairs (timing)
+  //  MINI-GAMES: drilling (steer + heat) and repairs (timing)
   // =====================================================================
+  // Drilling: hold E (✋) to drill, and keep the drill bit in the green zone, the layer of good ice or rock.
+  // The spinning drill keeps kicking the bit sideways, mostly away from the zone; steer it back with A / D,
+  // the arrow keys or the stick. The drill only goes deeper inside the zone. Grinding outside fills the red
+  // Slip bar, and when it is full the sample breaks and you get nothing. A hot drill kicks harder, so short
+  // bursts (let go, it cools and calms down) are the way, just like real space drills.
   function startDrill(kind, idx) {
-    var ease = G.s.level.ease, ice = kind === 'ice';
+    var ease = G.s.level.ease, ice = kind === 'ice', zc = (Math.random() * 2 - 1) * 0.42;
     G.mini = { type: 'drill', kind: kind, idx: idx, depth: 0, heat: 0, jams: 0, lock: 0,
-      rate: ice ? 0.55 : 0.27, heatRate: (ice ? 0.5 : 0.46) / ease * G.s.mods.heat * (1 + G.s.wear.drill), cool: 0.6,
-      title: ice ? 'Mining ice' : 'Drilling a rock core at ' + JA.GEO[G.s.site.id][idx].name,
-      hint: touch ? 'Hold ✋ to drill. Let go before it overheats! (⤴ = stop)' : 'Hold E to drill. Let go before it overheats! (Space = stop)' };
+      rate: ice ? 0.42 : 0.24, heatRate: (ice ? 0.36 : 0.38) / ease * G.s.mods.heat * (1 + G.s.wear.drill), cool: 0.65,
+      x: zc, v: 0, zc: zc, zw: Math.min(0.46, (ice ? 0.33 : 0.32) * Math.sqrt(ease)),      // bit position and the zone, on a -1..1 track
+      kick: (ice ? 1.8 : 2.0) / Math.sqrt(ease), push: 0, pushT: 0.5,
+      slip: 0, slipTime: (ice ? 2.2 : 2.6) * Math.sqrt(ease), out: 0, inside: true, on: false,
+      bumpT: 1.5 + Math.random() * 2, bumpWarn: 0, bumpDir: 0, flash: 0,
+      icon: ice ? '🧊' : '🧪', title: ice ? 'Mining ice' : 'Drilling a rock core at ' + JA.GEO[G.s.site.id][idx].name, hint: '' };
     A.astro.mode = 'busy'; A.astro.vel.set(0, 0, 0);
     var t = ice ? B.spots.ice[idx] : B.spots.drill[idx];
     A.astro.yaw = Math.atan2(t.x - A.astro.pos.x, t.z - A.astro.pos.z);
@@ -594,23 +602,69 @@
     var m = G.mini, s = G.s, a = A.astro;
     if (m.type === 'drill') {
       if (G.input.jump) { endMini(); return; }
-      var hp = A.handPos(v1);
-      m.lock = Math.max(0, m.lock - dt);
-      if (G.eHeld && m.lock <= 0) {
-        m.depth += m.rate * dt; m.heat += m.heatRate * dt;
-        Au.loop('drill', { f: 90 + m.heat * 160, v: 0.07, rate: 0.9 + m.heat * 0.35 });
-        if (Math.random() < dt * 30) W.emit(hp.x, a.pos.y + 0.3, hp.z, { vx: (Math.random() - 0.5) * 4, vy: 1 + Math.random() * 3, vz: (Math.random() - 0.5) * 4, life: 0.6, size: 0.2, grow: 1.5, color: m.kind === 'ice' ? 0xbff4ff : (s.site.id === 'mars' ? 0xd9a070 : 0xc8c9d4), alpha: 0.8, grav: W.gravity * 0.5 });
-        W.cam.shake = Math.max(W.cam.shake, 0.03 + m.heat * 0.05);
-      } else { m.heat = Math.max(0, m.heat - m.cool * dt); Au.stopLoop('drill'); }
+      var hp = A.handPos(v1), ice = m.kind === 'ice', spot = ice ? B.spots.ice[m.idx] : B.spots.drill[m.idx];
+      var dust = ice ? 0xbff4ff : (s.site.id === 'mars' ? 0xd9a070 : 0xc8c9d4);
+      m.lock = Math.max(0, m.lock - dt); m.flash = Math.max(0, m.flash - dt);
+      var on = m.on = G.eHeld && m.lock <= 0;
+      m.v += clamp(G.input.x, -1, 1) * 7 * dt;                        // steering: A / D, the arrow keys or the stick
+      if (on) {
+        // the bit bites and kicks sideways, more often away from the good layer; a hot drill kicks harder
+        if ((m.pushT -= dt) <= 0) {
+          var away = m.x >= m.zc ? 1 : -1;
+          m.push = (Math.random() < 0.7 ? away : -away) * m.kick * (0.6 + Math.random() * 0.6);
+          m.pushT = 0.35 + Math.random() * 0.55;
+        }
+        m.v += m.push * (1 + 0.9 * m.heat) * (1 + 0.35 * m.depth) * dt;
+        // now and then a hard pebble jolts the drill; a ⚡ shows which way, a moment before
+        if (m.bumpWarn > 0) {
+          if ((m.bumpWarn -= dt) <= 0) {
+            m.v += m.bumpDir * 2.3; m.flash = 0.25; W.cam.shake = Math.max(W.cam.shake, 0.18); Au.play('thud');
+            W.burst(hp.x, a.pos.y + 0.3, hp.z, 8, 3, dust, { life: 0.4, size: 0.18 });
+          }
+        } else if ((m.bumpT -= dt) <= 0) { m.bumpWarn = 0.45; m.bumpDir = Math.random() < 0.5 ? -1 : 1; m.bumpT = (ice ? 3 : 2) + Math.random() * 2.5; }
+        m.heat += m.heatRate * dt;
+      } else { m.heat = Math.max(0, m.heat - m.cool * dt); m.bumpWarn = 0; }
+      m.v *= Math.exp(-(on ? 2.6 : 5) * dt);
+      m.x += m.v * dt;
+      if (m.x < -1) { m.x = -1; m.v = Math.max(0, m.v); } else if (m.x > 1) { m.x = 1; m.v = Math.min(0, m.v); }
+      var inside = Math.abs(m.x - m.zc) <= m.zw;
+      if (inside) m.slip = Math.max(0, m.slip - 0.8 * dt);
+      if (on) {
+        if (inside) m.depth += m.rate * dt;
+        else { m.slip += dt / m.slipTime; m.out += dt; }               // grinding the wrong rock: the sample starts to break
+        Au.loop('drill', inside ? { f: 90 + m.heat * 160, v: 0.07, rate: 0.9 + m.heat * 0.35 } : { f: 60 + m.heat * 90, v: 0.08, rate: 0.62 + m.heat * 0.2 });
+        if (Math.random() < dt * (inside ? 30 : 14)) W.emit(hp.x, a.pos.y + 0.3, hp.z, { vx: (Math.random() - 0.5) * 4, vy: 1 + Math.random() * 3, vz: (Math.random() - 0.5) * 4, life: 0.6, size: 0.2, grow: 1.5, color: inside ? dust : 0x8a8f9c, alpha: 0.8, grav: W.gravity * 0.5 });
+        W.cam.shake = Math.max(W.cam.shake, 0.03 + m.heat * 0.05 + (inside ? 0 : 0.04));
+        if (!inside && m.inside) tip('drill-steer', 'The drill kicks the bit out of the good layer! Steer it back into the green zone, or the sample breaks.');
+      } else Au.stopLoop('drill');
+      m.inside = inside;
       if (m.heat >= 1) {
-        m.jams++; m.heat = 0.4; m.depth = Math.max(0, m.depth - 0.25); m.lock = 0.9;
+        m.jams++; m.heat = 0.4; m.depth = Math.max(0, m.depth - 0.15); m.lock = 0.9;
+        m.v += (Math.random() < 0.5 ? -1 : 1) * 2;                     // the jammed drill jerks the bit
         Au.stopLoop('drill'); Au.play('jam'); Au.play('bad'); W.cam.shake = 0.35;
         W.burst(hp.x, a.pos.y + 0.5, hp.z, 14, 4, 0xff7a4d, { life: 0.5, size: 0.22 });
         var worn = s.wear.drill; sim.jam(s); m.heatRate *= (1 + s.wear.drill) / (1 + worn);      // the bit is a little more worn now
         say('Too hot — the drill jammed! Let it cool between bursts.', true, 'act-drill-jam', true, 'drill');
       }
+      if (m.slip >= 1) {                                                // out of the zone too long: the sample is lost
+        endMini();
+        Au.play('bad'); W.cam.shake = 0.3;
+        W.burst(hp.x, a.pos.y + 0.4, hp.z, 18, 4, dust, { life: 0.7, size: 0.26 });
+        toastAt(spot, ice ? 'The ice shattered!' : 'The core crumbled!', '#ff5468');
+        say(ice ? 'The drill slipped out of the ice and smashed it to powder. Try again, and keep the bit in the green!'
+          : 'The drill slipped out of the rock layer and the core crumbled. Try again, and keep the bit in the green!', true);
+        sim.note(s, 'crumble');
+        return;
+      }
+      var keys = touch ? 'the stick' : 'A / D';
+      m.hint = !inside ? (m.x < m.zc ? 'Steer right ▶ back into the green!' : '◀ Steer left, back into the green!')
+        : m.lock > 0 ? 'Jammed! Wait for it to cool…'
+        : m.heat > 0.75 ? 'Too hot, it is shaking! Let go to cool it.'
+        : on ? 'Keep the bit in the green! Steer with ' + keys + '.'
+        : (touch ? 'Hold ✋ to drill · steer with the stick (⤴ = stop)' : 'Hold E to drill · steer with A / D (Space = stop)');
       if (m.depth >= 1) {
-        var q = m.jams === 0 ? 2 : m.jams === 1 ? 1 : 0, kind = m.kind, idx = m.idx;
+        // a clean core: no jams and hardly any time outside the layer
+        var q = m.jams === 0 && m.out < 1 ? 2 : m.jams <= 1 && m.out < 3 ? 1 : 0, kind = m.kind, idx = m.idx;
         endMini();
         if (kind === 'ice') { A.pick(A.spawn('ice', A.handPos(v1), null, 'rest')); Au.play('ice'); tip('ice', 'A chunk of ice! The Air Maker can split it into oxygen. The rover bed carries four at a time.'); }
         else {
@@ -1059,7 +1113,7 @@
     var a = A.astro;
     if (id === 'rocket') {
       var d = B.spots.rocketDoor, pr = B.P.rocket.base;
-      a.pos.set(d.x, Tn.height(d.x, d.z), d.z); a.vel.set(0, 0, 0); a.vy = 0; a.onGround = true; a.mode = 'walk';
+      a.pos.set(d.x, A.groundAt(d.x, d.z), d.z); a.vel.set(0, 0, 0); a.vy = 0; a.onGround = true; a.mode = 'walk';
       a.yaw = Math.atan2(d.x - pr.x, d.z - pr.z); W.cam.yaw = a.yaw + Math.PI;
     } else { A.resetAstro(); W.cam.yaw = 0.45; }
     G.mode = 'play'; G.fast = false; W.cam.mode = 'play'; W.cam.pitch = 0.36;
@@ -1373,7 +1427,7 @@
   function howInfo() {
     var keys = touch
       ? '<div class="keys"><span>🕹️</span><div>Left stick: walk (push all the way to run) · drive the rover</div><span>⏸</span><div>Pause · change how long a day lasts</div><span>👆</span><div>Drag anywhere to look around</div><span>✋</span><div>Use, pick up, plug in, drill (hold)</div><span>🎯</span><div>Hold to aim a throw, let go to throw</div><span>⤴</span><div>Jump</div><span>👁</span><div>Helmet view: see through your own visor</div><span>💡</span><div>Tap a meter, a blue card or the round radio badge: your wrist tablet projects a hologram that shows why</div><span>📓</span><div>Field Journal: every piece of science you have found</div></div>'
-      : '<div class="keys"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><div>Walk · drive the rover (arrow keys work too)</div><span><kbd>Mouse</kbd></span><div>Drag to look around · wheel to zoom</div><span><kbd>E</kbd></span><div>Use, pick up, plug in, drill (hold)</div><span><kbd>F</kbd></span><div>Hold to aim a throw, let go to throw</div><span><kbd>Space</kbd></span><div>Jump</div><span><kbd>Shift</kbd></span><div>Run (uses more air)</div><span><kbd>Q</kbd></span><div>Put down what you are holding</div><span><kbd>V</kbd></span><div>Helmet view: see through your own visor (A and D turn you)</div><span><kbd>C</kbd></span><div>Save a postcard picture</div><span><kbd>L</kbd></span><div>Camera filter: see like a real space camera</div><span><kbd>X</kbd></span><div>Camera effects: full, lite or off</div><span><kbd>T</kbd></span><div>Wrist tablet: a hologram that shows why, about what just happened or the machine next to you</div><span><kbd>J</kbd></span><div>Field Journal: every piece of science you have found</div></div>';
+      : '<div class="keys"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><div>Walk · drive the rover (arrow keys work too)</div><span><kbd>Mouse</kbd></span><div>Drag to look around · wheel to zoom</div><span><kbd>E</kbd></span><div>Use, pick up, plug in, drill (hold)</div><span><kbd>F</kbd></span><div>Hold to aim a throw, let go to throw</div><span><kbd>Space</kbd></span><div>Jump</div><span><kbd>Shift</kbd></span><div>Run (uses more air)</div><span><kbd>Q</kbd></span><div>Put down what you are holding</div><span><kbd>V</kbd></span><div>Helmet view: see through your own visor (A and D turn you)</div><span><kbd>C</kbd></span><div>Save a postcard picture</div><span><kbd>L</kbd></span><div>Camera filter: see like a real space camera</div><span><kbd>X</kbd></span><div>Camera effects: full, lite or off</div><span><kbd>T</kbd></span><div>Wrist tablet: a hologram that shows why, about what just happened or the machine next to you</div><span><kbd>J</kbd></span><div>Field Journal: every piece of science you have found</div><span><kbd>M</kbd></span><div>Mini map: the buildings, your jobs and where you are</div><span><kbd>N</kbd></span><div>Music on or off</div></div>';
     openInfo('<h2>How to play</h2>' + keys +
       '<div class="info-row"><span class="ic">🔋</span><div><b>Power cells</b><p>The Solar Rack charges a few cells each day. Carry or throw each one into a machine\'s socket: Air Maker, Greenhouse, Soil Bagger, Lab, Radio Dish or Rover.</p></div></div>' +
       '<div class="info-row"><span class="ic">🧊</span><div><b>Ice = air and water</b><p>Mine ice at the far crater. Drop it in the Air Maker to make oxygen, or in the Greenhouse tank to water the plants. The rover bed carries four things.</p></div></div>' +
@@ -1496,7 +1550,38 @@
     }
     list.push({ x: x, y: y, icon: icon, label: label, cls: cls, color: color });
   }
+  // ---------- the mini map (M or the 🗺️ button) ----------
+  // Open only while you are out on the surface; what it draws comes from here each frame.
+  function toggleMap(on) {
+    G.mapOpen = on === undefined ? !G.mapOpen : !!on;
+    try { localStorage.setItem('ja-map-open', G.mapOpen ? '1' : '0'); } catch (e) { /* private mode */ }
+    var b = $('btn-map');
+    if (b) { b.classList.toggle('on', G.mapOpen); b.setAttribute('aria-pressed', String(G.mapOpen)); b.title = G.mapOpen ? 'Hide the map (M)' : 'Map (M)'; }
+  }
+  var MAP_BUILD = ['hab', 'scrub', 'rack', 'air', 'food', 'bag', 'lab', 'comms', 'rocket'];
+  function mapFrame() {
+    if (!JA.minimap) return;
+    var on = !!(G.mapOpen && G.s && G.mode === 'play' && !G.room);
+    JA.minimap.show(on);
+    if (!on) return;
+    var s = G.s, sp = B.spots, drive = A.rover.driver, i;
+    W.forward(v1);
+    var goals = [], spots = [];
+    (G.goalList || []).forEach(function (gl) { if (!gl.done && gl.target) goals.push({ x: gl.target.x, z: gl.target.z, icon: gl.icon, now: !!gl.now }); });
+    for (i = 0; i < sp.drill.length; i++) if (sim.coresLeft(s, i) > 0) spots.push({ x: sp.drill[i].x, z: sp.drill[i].z, icon: JA.GEO[s.site.id][i].icon, color: '#ffb84d' });
+    Object.keys(sp.inst).forEach(function (id) { if (!s.inst[id]) spots.push({ x: sp.inst[id].x, z: sp.inst[id].z, icon: '📍', color: '#5cf0ff' }); });
+    for (i = 0; i < sp.photo.length; i++) if (!s.photos[i]) spots.push({ x: sp.photo[i].x, z: sp.photo[i].z, icon: '📸', color: '#ffd23f' });
+    var rk = B.P && B.P.rocket && B.P.rocket.base;
+    JA.minimap.draw({
+      me: me(), yaw: drive ? A.rover.yaw : A.astro.yaw, fx: v1.x, fz: v1.z, t: G.clock,
+      buildings: MAP_BUILD.filter(function (k) { return B.pos[k]; }).map(function (k) { return { key: k, x: B.pos[k].x, z: B.pos[k].z }; }),
+      goals: goals, spots: spots, rover: drive ? null : A.rover.pos,
+      ice: { x: Tn.L.ice[0], z: Tn.L.ice[1], r: Tn.iceR }, pad: rk ? { x: rk.x, z: rk.z, r: 12 } : null,
+      craters: Tn.craters, playR: Tn.PLAY_R
+    });
+  }
   function hudFrame() {
+    mapFrame();
     var s = G.s, a = A.astro, sp = B.spots, pos = me(), i;
     var live = Au.voicePlaying();       // the radio waves pulse while Mission Control is talking
     if (live !== G.radioLive) { G.radioLive = live; $('radio').classList.toggle('live', live); }
@@ -1516,7 +1601,7 @@
       G.goalAt = G.clock + 0.3;
       document.documentElement.style.setProperty('--hud-b', Math.round($('hud').getBoundingClientRect().bottom) + 'px');   // lets the CSS stack things under the top bar
       var gl = goalsFor(s);
-      G.goal = gl.now;
+      G.goal = gl.now; G.goalList = gl.list;
       U.setGoals(s.sol === 1 ? 'First day' : s.sol >= s.totalSols ? 'Launch day' : 'Today', gl.list);
       if (s.sol === 1) { if (!G.tut.grow) checkGrow(); tutorialTalk(); }
       // Mission Control's advice now comes with its reason, and with a hologram when the tablet has one
@@ -1584,7 +1669,8 @@
       if (e.code === 'KeyJ' && !e.repeat && (G.mode === 'play' || G.mode === 'inside')) openJournal();
       if (e.code === 'KeyL' && !e.repeat && (G.mode === 'play' || G.mode === 'inside')) nextFilter();
       if (e.code === 'KeyX' && !e.repeat && JA.fx && JA.fx.available()) { nextFx(); U.toast('Camera effects: ' + JA.fx.LEVELS[JA.fx.level].toLowerCase(), W.w / 2, W.h * 0.3, '#ffd23f'); }
-      if (e.code === 'KeyM' && !e.repeat && JA.music) { setMusic(!musicOn()); if (G.mode === 'play') say(musicOn() ? 'Music on.' : 'Music off.', true); }
+      if (e.code === 'KeyM' && !e.repeat && (G.mode === 'play' || G.mode === 'inside')) { Au.play('tap'); toggleMap(); }
+      if (e.code === 'KeyN' && !e.repeat && JA.music) { setMusic(!musicOn()); if (G.mode === 'play') say(musicOn() ? 'Music on.' : 'Music off.', true); }
       if (e.code === 'Escape' || e.code === 'KeyP') { if (G.mode === 'intro') JA.intro.skip(); else pauseModal(); }
     });
     window.addEventListener('keyup', function (e) {
@@ -1648,6 +1734,12 @@
     $('btn-how').addEventListener('click', function () { Au.play('tap'); howInfo(); });
     $('btn-science').addEventListener('click', function () { Au.play('tap'); scienceInfo(); });
     $('btn-info').addEventListener('click', function () { Au.play('tap'); howInfo(); });
+    if (JA.minimap && $('btn-map')) {
+      JA.minimap.init();
+      var mapSaved = null; try { mapSaved = localStorage.getItem('ja-map-open'); } catch (err) { mapSaved = null; }
+      toggleMap(mapSaved === '1');
+      $('btn-map').addEventListener('click', function () { Au.play('tap'); toggleMap(); });
+    }
     $('btn-pause').addEventListener('click', pauseModal);
     // the Settings button opens a small menu with the helmet view, pause, sound, read aloud and help
     $('btn-settings').addEventListener('click', function (e) { e.stopPropagation(); Au.play('tap'); settingsMenu($('settings-menu').classList.contains('hidden')); });

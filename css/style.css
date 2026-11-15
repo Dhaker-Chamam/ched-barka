@@ -133,6 +133,30 @@ kbd { display: inline-grid; place-items: center; min-width: 30px; height: 30px; 
 .pips { display: flex; gap: 8px; justify-content: center; margin-top: 10px; }
 .pips i { width: 18px; height: 18px; border-radius: 50%; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.4); }
 .pips i.on { background: var(--ok); box-shadow: 0 0 10px var(--ok); }
+/* drilling: keep the bit (the shaft, white when cool, red when hot) inside the good layer (the green zone) */
+.drill-gauge { position: relative; height: 56px; margin-top: 12px; border-radius: 12px; overflow: hidden;
+  background: repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0 6px, rgba(0, 0, 0, 0.14) 6px 13px), linear-gradient(180deg, rgba(130, 118, 104, 0.4), rgba(40, 36, 50, 0.6));
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.14); }
+.drill-gauge.bite { animation: strata 0.45s linear infinite; }
+.drill-gauge.out { box-shadow: inset 0 0 0 2px var(--danger), inset 0 0 18px rgba(255, 84, 104, 0.55); }
+.drill-gauge.out.bite { animation: strata 0.45s linear infinite, grind 0.16s infinite alternate; }
+.drill-gauge.jolt { filter: brightness(1.6); }
+@keyframes strata { to { background-position: 0 -13px, 0 0; } }
+@keyframes grind { to { box-shadow: inset 0 0 0 3px var(--danger), inset 0 0 28px rgba(255, 84, 104, 0.85); } }
+#drill-zone { position: absolute; top: 0; bottom: 0; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 3px;
+  background: linear-gradient(180deg, rgba(77, 255, 154, 0.42), rgba(77, 255, 154, 0.2)); box-shadow: inset 2px 0 0 var(--ok), inset -2px 0 0 var(--ok), 0 0 14px rgba(77, 255, 154, 0.35); }
+.drill-gauge.out #drill-zone { animation: zonecall 0.4s ease-in-out infinite alternate; }
+@keyframes zonecall { to { background: rgba(77, 255, 154, 0.62); box-shadow: inset 2px 0 0 var(--ok), inset -2px 0 0 var(--ok), 0 0 26px rgba(77, 255, 154, 0.8); } }
+#drill-ic { font-size: 1rem; line-height: 1; opacity: 0.95; }
+#drill-bit { --bit: #fff; position: absolute; top: -2px; bottom: 23px; width: 8px; margin-left: -4px; border-radius: 2px 2px 0 0; z-index: 2;
+  background: repeating-linear-gradient(150deg, transparent 0 5px, rgba(0, 0, 0, 0.32) 5px 7px), var(--bit); box-shadow: 0 0 10px var(--bit); }
+#drill-bit::after { content: ''; position: absolute; left: -3px; bottom: -10px; border-left: 7px solid transparent; border-right: 7px solid transparent; border-top: 10px solid var(--bit); }
+.drill-gauge.bite #drill-bit { animation: flutes 0.12s linear infinite; }
+@keyframes flutes { to { background-position: 0 8px, 0 0; } }
+.drill-gauge #drill-bump { position: absolute; top: 4px; transform: translateX(-50%); z-index: 3; font-size: 0.95rem; color: #ffd23f; text-shadow: 0 0 8px #ffd23f; white-space: nowrap; animation: flash 0.12s infinite alternate; }
+.bar.slip i { background: linear-gradient(90deg, #ff9a5a, #ff5468); }
+.bar.slip.hot { box-shadow: 0 0 0 2px var(--danger); animation: flash 0.25s infinite alternate; }
+#mini.drill-out small { color: #ff8e9c; font-weight: 700; }
 
 /* ---------- inside the habitat ---------- */
 #inside { position: fixed; left: 50%; bottom: calc(22px + var(--safe-b)); transform: translateX(-50%); width: min(560px, 94vw); background: var(--panel); border-radius: 24px; padding: 14px 18px 16px; box-shadow: inset 0 0 0 1.5px var(--line), 0 16px 40px rgba(0, 0, 0, 0.5); z-index: 22; text-align: center; }

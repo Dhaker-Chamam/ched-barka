@@ -15,6 +15,7 @@
 <link rel="stylesheet" href="css/learn.css">
 <link rel="stylesheet" href="css/holo.css">
 <link rel="stylesheet" href="css/windows.css">
+<link rel="stylesheet" href="css/map.css">
 </head>
 <body>
 <canvas id="scene" aria-label="3D view of your outpost"></canvas>
@@ -74,6 +75,7 @@
   </div>
   <div class="hud-right">
     <!-- one Settings button; the menu under it holds the helmet view, pause, sound, read aloud and help -->
+    <button id="btn-map" class="icon-btn" aria-label="Map" aria-pressed="false" aria-controls="minimap" title="Map (M)">🗺️</button>
     <button id="btn-settings" class="icon-btn" aria-label="Settings" aria-haspopup="true" aria-expanded="false" aria-controls="settings-menu" title="Settings">⚙️</button>
     <div id="settings-menu" class="hidden" role="menu" aria-label="Settings">
       <button id="btn-view" class="set-item" role="menuitemcheckbox" aria-pressed="false" aria-label="Helmet view: see through your own visor"><span class="set-ic" aria-hidden="true">👁️</span><span class="set-name">Helmet view</span><kbd>V</kbd><span class="sw" aria-hidden="true"></span></button>
@@ -96,6 +98,12 @@
 </aside>
 <div id="banner" class="hidden"></div>
 
+<!-- the mini map (M or the 🗺️ button): js/minimap.js draws it, up is the way the camera looks -->
+<div id="minimap" class="hidden" role="region" aria-label="Mini map: the buildings, your jobs and where you are">
+  <div class="mm-disc"><canvas width="220" height="220" aria-hidden="true"></canvas><button class="mm-zoom" type="button">+</button></div>
+  <div class="mm-foot off"><span class="mm-ic"></span><span class="mm-tx"></span></div>
+</div>
+
 <!-- Mission Control on Earth, over the radio. The badge and the "Why?" chip open the wrist tablet's hologram. -->
 <div id="radio" class="hidden">
   <button id="radio-ask" class="radio-badge" aria-label="Wrist tablet: show a hologram that explains" title="Wrist tablet: show me why (T)">📡<i></i><i></i></button>
@@ -112,8 +120,10 @@
 <!-- skill mini-games -->
 <div id="mini" class="hidden">
   <b id="mini-title">Drilling</b>
+  <div class="drill-gauge hidden" id="drill-gauge"><em id="drill-zone"><span id="drill-ic"></span></em><i id="drill-bit"></i><b id="drill-bump" class="hidden">⚡</b></div>
   <div class="mini-row"><span>Depth</span><div class="bar depth"><i id="mini-depth"></i></div></div>
   <div class="mini-row" id="mini-heat-row"><span>Heat</span><div class="bar heat"><i id="mini-heat"></i></div></div>
+  <div class="mini-row hidden" id="mini-slip-row"><span>Slip</span><div class="bar slip"><i id="mini-slip"></i></div></div>
   <div class="dial hidden" id="mini-dial"><em id="dial-zone"></em><i id="dial-needle"></i></div>
   <div class="pips hidden" id="mini-pips"></div>
   <small id="mini-hint">Hold E to drill. Let go before it overheats!</small>
@@ -205,6 +215,7 @@
 <script src="js/journal.js"></script>
 <script src="js/holo.js"></script>
 <script src="js/icons.js"></script>
+<script src="js/minimap.js"></script>
 <script src="js/game.js"></script>
 </body>
 </html>

@@ -178,7 +178,7 @@
         m = W.add(root, new T.DodecahedronGeometry(b.r * 1.08, 0), k % 3 ? rockMat : rockMat2, b.x, gy + b.r * b.sy * 0.45, b.z);
         m.scale.y = b.sy; m.rotation.set(b.tilt, b.rot, b.tilt * 0.5);
       }
-      if (b.seat) { m.updateMatrixWorld(true); Tn.seatTop = new T.Box3().setFromObject(m).max.y - gy; }
+      if (b.seat) { m.updateMatrixWorld(true); Tn.seatTop = new T.Box3().setFromObject(m).max.y - gy; Tn.seatRock = m; }   // the landing film measures this rock to sit on its edge
     });
   }
 
@@ -351,7 +351,7 @@
   // ---------- bootprints and wheel tracks ----------
   var FN = 500, fMesh, fNext = 0, fDummy = new T.Object3D();
   function buildPrints() {
-    var g = new T.PlaneGeometry(1, 1); g.rotateX(-Math.PI / 2);
+    var g = new T.PlaneGeometry(1, 1); g.rotateX(-Math.PI / 2); g.rotateY(Math.PI);     // the toe (the wide end) points the way you face
     // a boot sole pressed into the dust: rounded at toe and heel, with tread bars across it
     var tread = W.canvasTex(64, function (ctx, s) {
       ctx.clearRect(0, 0, s, s);

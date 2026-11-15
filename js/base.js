@@ -4,7 +4,7 @@
 (function (JA) {
   'use strict';
   var T = window.THREE, W = JA.world, Tn = JA.terrain, R = JA.RULES, MD = JA.models;
-  var B = JA.base = { colliders: [], spots: null, pos: {} };
+  var B = JA.base = { colliders: [], floors: [], spots: null, pos: {} };
   if (!T) return;
   // a copy of a model made in Blender (js/models.js), or null so the plain shapes below are drawn instead
   function model(name) { return MD && MD.has(name) ? MD.make(name) : null; }
@@ -14,6 +14,10 @@
   function group(p) { var g = new T.Group(); g.position.set(p[0], Tn.height(p[0], p[1]), p[1]); root.add(g); return g; }
   function wp(g, x, y, z) { return new T.Vector3(g.position.x + x, g.position.y + y, g.position.z + z); }
   function collide(g, x, z, r) { B.colliders.push({ x: g.position.x + x, z: g.position.z + z, r: r }); }
+  // A raised floor you can walk on (actors.js stands the astronaut, the rover and dropped things on top of it).
+  // A disc: flat 'top' metres high out to r0, then a bevel down to 'edge' at r1. A box: half sizes hw, hd, flat top.
+  function floorDisc(g, top, r0, r1, edge) { B.floors.push({ x: g.position.x, z: g.position.z, y: g.position.y, top: top, r0: r0, r1: r1, edge: edge }); }
+  function floorBox(g, top, hw, hd) { B.floors.push({ x: g.position.x, z: g.position.z, y: g.position.y, top: top, hw: hw, hd: hd }); }
   function cyl(rt, rb, h, seg) { return new T.CylinderGeometry(rt, rb, h, seg || 14); }
   function box(w, h, d) { return new T.BoxGeometry(w, h, d); }
   function ball(r, a, b) { return new T.SphereGeometry(r, a || 12, b || 10); }
@@ -403,9 +407,11 @@
     B.spots.rocketDoor = wp(pad, dir.x * 6.8 + dir.z * 2, 0, dir.z * 6.8 - dir.x * 2);
     B.pos.rocket = wp(pad, 0, 23.5, 0);
     collide(pad, 0, 0, 4.2); collide(pad, dir.x * 4.9, dir.z * 4.9, 1.1); collide(pad, twX, twZ, 1.1);
+    floorDisc(pad, 0.3, 11.6, 12.05, -0.15);          // the concrete launch pad: 0.3 m high, its rim bevels down into the ground
 
     var pal = group(L.pallet);
     add(pal, box(5.0, 0.35, 2.6), soft(0x8a8fa0), 0, 0.18, 0);
+    floorBox(pal, 0.35, 2.5, 1.3);
     add(pal, box(5.2, 0.1, 0.2), glow(0xffd23f, 0.5), 0, 0.38, 1.3, true);
     for (i = 0; i < 3; i++) B.spots.pallet.push(wp(pal, -1.6 + i * 1.6, 0.8, 0));
   }
@@ -506,7 +512,7 @@
     root = rootGroup; site = siteId; L = Tn.L;
     add = W.add; mat = W.mat; soft = W.soft; glow = W.glow;
     P = { cables: {} }; B.P = P;
-    B.colliders = []; B.pos = {}; B.repair = {};
+    B.colliders = []; B.floors = []; B.pos = {}; B.repair = {};
     B.spots = { sockets: {}, hoppers: {}, rackSlots: [], bagTray: [], beds: [], panels: [], drill: [], ice: [], inst: {}, photo: [], pallet: [] };
     Tn.boulders.forEach(function (b) { B.colliders.push({ x: b.x, z: b.z, r: b.r * 0.92 }); });
     hab(); solar(); airMaker(); greenhouse(); bagger(); lab(); comms(); rocket(); scienceSites();

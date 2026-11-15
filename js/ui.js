@@ -231,21 +231,46 @@
   };
 
   // ---------- mini-games ----------
+  // Drilling: a gauge with the good layer (green zone) and the drill bit, which the player steers.
+  // Texts are only written when they change, so the emoji-to-icon swapper is not run every frame.
+  var drillK = {};
+  function drillText(id, t) { if (drillK[id] !== t) { drillK[id] = t; $(id).textContent = t; } }
+  function heatColour(h) {                               // white -> yellow -> red as the drill heats up
+    var a = [255, 255, 255], b = [255, 210, 63], c = [255, 84, 104], t = Math.min(1, Math.max(0, h)), p, q, k;
+    if (t < 0.5) { p = a; q = b; k = t * 2; } else { p = b; q = c; k = (t - 0.5) * 2; }
+    return 'rgb(' + [0, 1, 2].map(function (i) { return Math.round(p[i] + (q[i] - p[i]) * k); }).join(',') + ')';
+  }
   U.drillUi = function (m) {
     var el = $('mini');
-    if (!m) { el.classList.add('hidden'); return; }
+    if (!m) { el.classList.add('hidden'); el.classList.remove('drill-out'); drillK = {}; return; }
     el.classList.remove('hidden');
     show($('mini-heat-row'), true); show($('mini-dial'), false); show($('mini-pips'), false);
+    show($('drill-gauge'), true); show($('mini-slip-row'), true);
     $('mini-depth').parentNode.parentNode.classList.remove('hidden');
-    $('mini-title').textContent = m.title; $('mini-hint').textContent = m.hint;
-    $('mini-depth').style.width = Math.round(m.depth * 100) + '%';
+    drillText('mini-title', m.title); drillText('mini-hint', m.hint);
+    if (drillK.icon !== m.icon) { drillK.icon = m.icon; $('drill-ic').innerHTML = JA.iconHTML ? JA.iconHTML(m.icon) : m.icon; }
+    // the track (-1..1) maps to 3..97% of the gauge, so the bit stays in sight against either wall
+    var g = $('drill-gauge'), out = !m.inside, bit = $('drill-bit'), bx = 3 + (m.x + 1) * 47;
+    $('drill-zone').style.left = (3 + (m.zc - m.zw + 1) * 47) + '%'; $('drill-zone').style.width = (m.zw * 94) + '%';
+    bit.style.left = bx + '%';
+    bit.style.transform = m.on ? 'translateX(' + ((Math.random() - 0.5) * (2 + m.heat * 5)).toFixed(1) + 'px)' : '';   // the bit shakes while it spins
+    bit.style.setProperty('--bit', heatColour(m.heat));
+    g.classList.toggle('out', out); g.classList.toggle('bite', m.on); g.classList.toggle('jolt', m.flash > 0);
+    el.classList.toggle('drill-out', out);
+    var bump = $('drill-bump');                          // a hard pebble is about to jolt the bit this way
+    show(bump, m.bumpWarn > 0);
+    if (m.bumpWarn > 0) { bump.style.left = Math.min(92, Math.max(8, bx + m.bumpDir * 10)) + '%'; drillText('drill-bump', m.bumpDir > 0 ? '⚡▶' : '◀⚡'); }
+    $('mini-depth').style.width = Math.round(Math.min(1, m.depth) * 100) + '%';
     $('mini-heat').style.width = Math.round(Math.min(1, m.heat) * 100) + '%';
     $('mini-heat').parentNode.classList.toggle('hot', m.heat > 0.75);
+    $('mini-slip').style.width = Math.round(Math.min(1, m.slip) * 100) + '%';
+    $('mini-slip').parentNode.classList.toggle('hot', m.slip > 0.6);
   };
   U.dialUi = function (m) {
     var el = $('mini');
     if (!m) { el.classList.add('hidden'); return; }
-    el.classList.remove('hidden');
+    el.classList.remove('hidden', 'drill-out');
+    show($('drill-gauge'), false); show($('mini-slip-row'), false);
     show($('mini-heat-row'), false); $('mini-depth').parentNode.parentNode.classList.add('hidden');
     show($('mini-dial'), true); show($('mini-pips'), true);
     $('mini-title').textContent = m.title; $('mini-hint').textContent = m.hint;

@@ -7,6 +7,23 @@
   if (!T) return;
   // models made in Blender (js/models.js); without them the plain shapes below are drawn
   function hasModel(name) { return !!(MD && MD.has(name)); }
+  // The ground you stand on: the terrain, or the top of a raised floor such as the rocket's concrete pad
+  // (base.js lists them in B.floors). Feet, wheels and dropped things all use it, so nothing sinks into the pad.
+  function groundAt(x, z) {
+    var h = Tn.height(x, z), F = B && B.floors, i, f, dx, dz, d, top;
+    if (!F) return h;
+    for (i = 0; i < F.length; i++) {
+      f = F[i]; dx = x - f.x; dz = z - f.z;
+      if (f.hw) { if (Math.abs(dx) < f.hw && Math.abs(dz) < f.hd && f.y + f.top > h) h = f.y + f.top; continue; }
+      d = dx * dx + dz * dz;
+      if (d >= f.r1 * f.r1) continue;
+      d = Math.sqrt(d);
+      top = f.y + (d <= f.r0 ? f.top : f.top + (f.edge - f.top) * (d - f.r0) / (f.r1 - f.r0));
+      if (top > h) h = top;
+    }
+    return h;
+  }
+  A.groundAt = groundAt;
   var root, site, grav = 3.71, add, mat, soft, glow;
   var astro, rover;
   var v1 = new T.Vector3(), v2 = new T.Vector3(), v3 = new T.Vector3(), UP = new T.Vector3(0, 1, 0), q1 = new T.Quaternion();
@@ -240,7 +257,7 @@
     for (var i = 0; i < 110 && n < pts.length; i++) {
       x += v3.x * dt; z += v3.z * dt; vy -= grav * dt; y += vy * dt;
       if (i % 2 === 0) pts[n++].set(x, y, z);
-      if (y <= Tn.height(x, z) + 0.2) break;
+      if (y <= groundAt(x, z) + 0.2) break;
     }
     A.landing = v2.set(x, y, z);
     return n;
@@ -292,7 +309,7 @@
   };
   A.resetAstro = function () {
     var d = B.spots.door;
-    astro.pos.set(d.x, Tn.height(d.x, d.z + 2.4), d.z + 2.4); astro.vel.set(0, 0, 0); astro.vy = 0; astro.onGround = true; astro.yaw = 0; astro.mode = 'walk';
+    astro.pos.set(d.x, groundAt(d.x, d.z + 2.4), d.z + 2.4); astro.vel.set(0, 0, 0); astro.vy = 0; astro.onGround = true; astro.yaw = 0; astro.mode = 'walk';
   };
 
   // ---------- movement ----------
@@ -348,7 +365,7 @@
       if (!inBounds(a.pos) && A.onEdge) A.onEdge();
       if (collideCircle(a.pos, 0.5)) collideCircle(a.pos, 0.5);
     }
-    var ground = room ? room.floor : Tn.height(a.pos.x, a.pos.z), landed = false;
+    var ground = room ? room.floor : groundAt(a.pos.x, a.pos.z), landed = false;
     if (a.onGround) {
       if (a.pos.y - ground > 0.35) a.onGround = false; else a.pos.y = ground;
       if (jump) {
@@ -473,7 +490,7 @@
       f.z = lerp(iz, f.z, a.move); f.y = lerp(ANK, f.y, a.move); f.p = lerp(0, f.p, a.move); f.down = f.down || a.move < 0.6;
       // follow the ground under each foot
       var side = (i ? 1 : -1) * RIG.hipX * S, fx = a.pos.x + sy * f.z * S + cy * side, fz = a.pos.z + cy * f.z * S - sy * side;
-      f.g = room || !a.onGround ? 0 : clamp((Tn.height(fx, fz) - a.pos.y) / S, -0.3, 0.3);
+      f.g = room || !a.onGround ? 0 : clamp((groundAt(fx, fz) - a.pos.y) / S, -0.3, 0.3);
       if (f.down && a.onGround) hipH = Math.min(hipH, f.y + f.g + Math.sqrt(Math.max(0, 0.7 * 0.7 - f.z * f.z)));      // a planted foot must stay reachable
       // a footstep the moment a foot comes down
       var ph = (a.cyc + i * 0.5) % 1;
@@ -566,7 +583,7 @@
     r.pos.x += s * r.speed * dt; r.pos.z += c * r.speed * dt;
     if (!inBounds(r.pos)) r.speed *= 0.5;
     if (collideCircle(r.pos, 1.9)) r.speed *= 0.86;
-    var gnd = Tn.height(r.pos.x, r.pos.z);
+    var gnd = groundAt(r.pos.x, r.pos.z);
     r.vy -= grav * dt; r.pos.y += r.vy * dt;
     if (r.pos.y <= gnd) {
       if (!r.onGround && r.vy < -3) { W.dust(r.pos.x, r.pos.z, 14, 3.5, 0.8); if (A.onLand) A.onLand(true); }
@@ -574,8 +591,8 @@
       r.pos.y = gnd; r.onGround = true;
     } else r.onGround = r.pos.y - gnd < 0.12;
     r.lastGnd = gnd;
-    var hf = Tn.height(r.pos.x + s * 1.8, r.pos.z + c * 1.8), hb = Tn.height(r.pos.x - s * 1.8, r.pos.z - c * 1.8);
-    var hl = Tn.height(r.pos.x - c * 1.2, r.pos.z + s * 1.2), hr = Tn.height(r.pos.x + c * 1.2, r.pos.z - s * 1.2);
+    var hf = groundAt(r.pos.x + s * 1.8, r.pos.z + c * 1.8), hb = groundAt(r.pos.x - s * 1.8, r.pos.z - c * 1.8);
+    var hl = groundAt(r.pos.x - c * 1.2, r.pos.z + s * 1.2), hr = groundAt(r.pos.x + c * 1.2, r.pos.z - s * 1.2);
     var k = Math.min(1, dt * (r.onGround ? 8 : 1.5));
     r.pitch = lerp(r.pitch, r.onGround ? Math.atan2(hb - hf, 3.6) : r.pitch, k);
     r.roll = lerp(r.roll, r.onGround ? Math.atan2(hr - hl, 2.4) : r.roll, k);
@@ -608,7 +625,7 @@
         it.vel.y -= grav * dt;
         it.pos.addScaledVector(it.vel, dt);
         it.mesh.rotation.x += it.spin * dt; it.mesh.rotation.z += it.spin * 0.6 * dt;
-        var gnd = Tn.height(it.pos.x, it.pos.z) + it.r;
+        var gnd = groundAt(it.pos.x, it.pos.z) + it.r;
         if (it.pos.y - gnd < 3.4) {
           var c = collideCircle(it.pos, it.r);
           if (c) { var nx = (it.pos.x - c.x), nz = (it.pos.z - c.z), nl = Math.hypot(nx, nz) || 1; nx /= nl; nz /= nl; var vn = it.vel.x * nx + it.vel.z * nz; if (vn < 0) { it.vel.x -= 1.5 * vn * nx; it.vel.z -= 1.5 * vn * nz; } }
@@ -646,7 +663,7 @@
   A.enterRover = function () { rover.driver = true; astro.mode = 'drive'; astro.vel.set(0, 0, 0); };
   A.exitRover = function () {
     rover.driver = false; astro.mode = 'walk';
-    A.roverSpot('door', astro.pos); astro.pos.y = Tn.height(astro.pos.x, astro.pos.z); astro.vy = 0; astro.onGround = true;
+    A.roverSpot('door', astro.pos); astro.pos.y = groundAt(astro.pos.x, astro.pos.z); astro.vy = 0; astro.onGround = true;
   };
   // ---------- first-person view ----------
   A.eye = function (out) {

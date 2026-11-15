@@ -16,7 +16,9 @@
 
   // when each shot starts (seconds)
   var TM = { descent: 3.4, land: 17.4, fade1: 20.6, step: 23.8, walk: 33.0, cut: 44.2, walk2: 45.4, sit: 52.0, vista: 57.4, title: 69.2, fade2: 72.6, end: 73.8 };
-  var EYE = 1.72, SEAT_EYE = 0.72, STEP = 0.75;
+  var EYE = 1.72, STEP = 0.75;
+  var SEAT_HIP = 0.15;          // sitting, your hips are this far above the rock's top (the suit is padded)
+  var PRINT_AHEAD = 0.67;       // the first print, this far ahead of where the boot stood: past the pad's sloping rim
 
   function $(id) { return document.getElementById(id); }
   function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
@@ -69,21 +71,68 @@
   }
 
   // ---------- your own body, seen when you look down ----------
+  // The legs are a real chain (hip, knee, ankle). Each frame every boot is given a spot on the ground and the leg
+  // bends to put its sole flat on it, so the boots stand on the pad, step down onto the dust and rest in front
+  // of the rock instead of sinking into them.
+  var HIP = -0.72, HIP_SIT = -0.72, THIGH = 0.42, SHIN = 0.38;  // the hips, below your eyes; the bones of the leg (standing, nearly straight)
+  var SOLE_Y = 0.15, SOLE_Z = 0.085;                          // the middle of the boot's sole, below and ahead of the ankle
+  var SIDE = [0.17, -0.17];                                   // [your left leg, your right leg], across the body
+  // the outline of the sole seen from above, toe ahead: as long and wide as the print it leaves (k makes it smaller)
+  function soleShape(k) {
+    var s = new T.Shape();
+    s.moveTo(-0.098 * k, -0.115 * k);
+    s.absarc(0, -0.115 * k, 0.098 * k, Math.PI, Math.PI * 2, false);    // the heel
+    s.lineTo(0.12 * k, 0.11 * k);
+    s.absarc(0, 0.11 * k, 0.12 * k, 0, Math.PI, false);                // the wider toe
+    s.lineTo(-0.098 * k, -0.115 * k);
+    return s;
+  }
+  // that outline made solid and laid flat, its underside at height y (in the ankle's frame), its middle at z
+  function slab(shape, depth, bevel, y, z, round) {
+    var g = new T.ExtrudeGeometry(shape, { depth: depth, bevelEnabled: true, bevelThickness: round || bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 14 });
+    g.rotateX(Math.PI / 2);                  // the outline's "ahead" becomes +z, its thickness goes down
+    g.computeBoundingBox();
+    var bb = g.boundingBox;
+    g.translate(0, y - bb.min.y, z - (bb.min.z + bb.max.z) / 2);
+    return g;
+  }
   function buildRig(color) {
-    var g = new T.Group(), white = W.soft(0xf5f6fa), accent = W.soft(color), dark = W.soft(0x2b3147), grey = W.soft(0xcfd3de);
+    var g = new T.Group(), white = W.soft(0xf5f6fa), accent = W.soft(color), grey = W.soft(0xcfd3de);
+    var bootM = W.soft(0x4f545c), soleM = W.soft(0x262b3d), capM = W.soft(0xc2c7d2);     // the same grey boots the astronaut wears in the game
     function part(parent, geo, m, x, y, z) { var o = W.add(parent, geo, m, x, y, z, true); o.receiveShadow = true; return o; }
-    function leg(x) {
-      var hip = new T.Group(); hip.position.set(x, -0.8, 0.06); g.add(hip);
-      part(hip, new T.CapsuleGeometry(0.125, 0.22, 4, 10), white, 0, -0.22, 0);
-      var knee = new T.Group(); knee.position.set(0, -0.44, 0); hip.add(knee);
-      part(knee, new T.SphereGeometry(0.135, 12, 10), grey, 0, 0, 0);
-      part(knee, new T.CapsuleGeometry(0.115, 0.2, 4, 10), white, 0, -0.2, 0);
-      part(knee, new T.BoxGeometry(0.25, 0.17, 0.42), accent, 0, -0.43, 0.08);
-      part(knee, new T.BoxGeometry(0.27, 0.05, 0.44), dark, 0, -0.52, 0.08);
-      return { hip: hip, knee: knee };
+    // a chunky moon boot, built round the ankle: a thick tread sole that shows all round, a padded upper,
+    // a rubber toe cap, a strap over the instep and a padded cuff in the suit's colour
+    function boot(ankle) {
+      part(ankle, slab(soleShape(1), 0.03, 0.012, -SOLE_Y, SOLE_Z), soleM, 0, 0, 0);
+      part(ankle, slab(soleShape(0.8), 0.02, 0.022, -SOLE_Y + 0.05, SOLE_Z + 0.006, 0.03), bootM, 0, 0, 0);
+      part(ankle, new T.SphereGeometry(1, 18, 12), bootM, 0, -0.045, 0.035).scale.set(0.1, 0.08, 0.135);       // the instep
+      part(ankle, new T.SphereGeometry(1, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2), capM, 0, -0.097, 0.2).scale.set(0.112, 0.072, 0.115);   // toe cap
+      part(ankle, new T.CylinderGeometry(0.122, 0.132, 0.2, 18), bootM, 0, 0, -0.02);                            // the shaft round your ankle
+      part(ankle, new T.TorusGeometry(0.124, 0.028, 8, 24), accent, 0, 0.1, -0.02).rotation.x = Math.PI / 2;     // the padded cuff
+      part(ankle, new T.TorusGeometry(0.125, 0.018, 6, 20, Math.PI), accent, 0, -0.125, 0.15);                   // the strap over the forefoot
+      part(ankle, new T.BoxGeometry(0.035, 0.03, 0.05), capM, 0.105, -0.06, 0.15).rotation.z = 0.5;              // its buckle
     }
+    function leg(x) {
+      var hip = new T.Group(); hip.position.set(x, HIP, 0.06); g.add(hip);
+      part(hip, new T.CapsuleGeometry(0.125, 0.2, 4, 12), white, 0, -THIGH / 2, 0);
+      var knee = new T.Group(); knee.position.set(0, -THIGH, 0); hip.add(knee);
+      part(knee, new T.SphereGeometry(0.135, 14, 10), grey, 0, 0, 0);
+      part(knee, new T.CapsuleGeometry(0.115, 0.18, 4, 12), white, 0, -SHIN / 2, 0);
+      var ankle = new T.Group(); ankle.position.set(0, -SHIN, 0); knee.add(ankle);
+      boot(ankle);
+      return { hip: hip, knee: knee, ankle: ankle, a: 0 };
+    }
+    // sitting, your gloved hands rest on your thighs, the forearms coming back from them to your elbows
     var hands = new T.Group(); g.add(hands);
-    [-0.17, 0.17].forEach(function (x) { var h = part(hands, new T.SphereGeometry(0.085, 12, 10), accent, x, -0.6, 0.47); h.scale.set(1, 0.7, 1.25); });
+    var hand = SIDE.map(function (x) {
+      var h = new T.Group(); hands.add(h);
+      part(h, new T.SphereGeometry(1, 14, 10), accent, 0, 0, 0).scale.set(0.068, 0.045, 0.085);             // the glove
+      part(h, new T.CapsuleGeometry(0.022, 0.05, 4, 8), accent, -Math.sign(x) * 0.06, 0.005, 0.01).rotation.set(1.3, 0, Math.sign(x) * 0.5);   // its thumb
+      part(h, new T.TorusGeometry(0.066, 0.016, 6, 16), grey, 0, 0.004, -0.075);                           // the cuff ring
+      var arm = part(h, new T.CapsuleGeometry(0.07, 0.26, 4, 10), white, 0, 0, -0.22); arm.rotation.x = Math.PI / 2;   // the forearm
+      h.userData.arm = arm;
+      return h;
+    });
     W.root.add(g);
     // an unseen body that still throws your shadow across the ground
     var ghost = new T.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
@@ -92,21 +141,55 @@
       var m = new T.Mesh(p[0], ghost); m.position.set(p[1], p[2], p[3]); m.castShadow = true; sh.add(m);
     });
     W.root.add(sh);
-    return { group: g, L: leg(-0.17), R: leg(0.17), hands: hands, shadow: sh };
+    return { group: g, legs: SIDE.map(leg), hands: hands, hand: hand, shadow: sh };
+  }
+  // where boot i stands when the body is at (x, z) facing yaw: under its hip, plus `ahead` metres; on the ground
+  // (the launch pad counts as ground: A.groundAt knows its height)
+  function spot(i, x, z, yaw, ahead) {
+    var s = SIDE[i], f = 0.06 + SOLE_Z + (ahead || 0), c = Math.cos(yaw), n = Math.sin(yaw);
+    var px = x + c * s + n * f, pz = z - n * s + c * f;
+    return { x: px, z: pz, y: A.groundAt(px, pz), toe: 0 };
+  }
+  // a boot swinging from spot a to spot b (u: 0 → 1): it lifts first, travels, and comes down last, clearing edges
+  function swing(a, b, u, lift) {
+    var h = ease(seg(u, 0.12, 0.92)), v = ease(seg(u, 0.4, 1)), arc = Math.sin(Math.PI * clamp(u, 0, 1));
+    return { x: lerp(a.x, b.x, h), z: lerp(a.z, b.z, h), y: lerp(a.y, b.y, v) + (lift || 0.12) * arc, toe: 0.28 * arc * (b.y < a.y ? 1 : -0.4) };
+  }
+  var ARM_UP = new T.Vector3(0, 1, 0), armDir = new T.Vector3(), qInv = new T.Quaternion();
+  // bend leg l so the sole of its boot lies flat on point p (in the world): two bones, the knee bending forward
+  var tmp = { x: 0, y: 0, z: 0 };
+  function reach(l, p) {
+    var g = st.rig.group.position, c = Math.cos(st.bodyYaw), n = Math.sin(st.bodyYaw), wx = p.x - g.x, wz = p.z - g.z;
+    tmp.z = wx * n + wz * c; tmp.y = p.y - g.y;                      // the point in the body's own frame (z ahead)
+    var dy = tmp.y + SOLE_Y - l.hip.position.y, dz = tmp.z - SOLE_Z - l.hip.position.z;
+    var d = clamp(Math.hypot(dy, dz), 0.12, THIGH + SHIN - 0.002);
+    var a = Math.atan2(dz, -dy) + Math.acos(clamp((THIGH * THIGH + d * d - SHIN * SHIN) / (2 * THIGH * d), -1, 1));
+    var bend = Math.PI - Math.acos(clamp((THIGH * THIGH + SHIN * SHIN - d * d) / (2 * THIGH * SHIN), -1, 1));
+    l.hip.rotation.x = -a; l.knee.rotation.x = bend;
+    l.ankle.rotation.x = a - bend + (p.toe || 0);                    // keep the boot level (or tip its toe)
+    l.a = a;
   }
   function poseRig(dt) {
     var r = st.rig, e = st.eye, q = st.sitQ;
     r.group.visible = r.shadow.visible = st.body;
     if (!st.body) return;
-    // when you bend to look at your feet, your eyes move ahead of your body
-    r.group.position.set(e.x - Math.sin(st.bodyYaw) * st.lean, e.y, e.z - Math.cos(st.bodyYaw) * st.lean); r.group.rotation.y = st.bodyYaw;
+    // when you bend to look at your feet, your eyes move ahead of your body (and to one side, to see past a leg)
+    var fs = Math.sin(st.bodyYaw), fc = Math.cos(st.bodyYaw);
+    r.group.position.set(e.x - fs * st.lean - fc * st.headSide, e.y + st.duck, e.z - fc * st.lean + fs * st.headSide); r.group.rotation.y = st.bodyYaw;
     r.shadow.position.copy(r.group.position); r.shadow.rotation.y = st.bodyYaw;
     r.shadow.scale.y = lerp(1, 0.72, q);
-    [r.L, r.R].forEach(function (l, i) {
-      var a = i ? st.legR : st.legL;
-      l.hip.position.y = lerp(-0.8, -0.7, q) + a.y;
-      l.hip.rotation.x = lerp(a.rot, -1.42, q);
-      l.knee.rotation.x = lerp(0, 1.38, q);
+    r.legs.forEach(function (l, i) {
+      l.hip.position.y = lerp(HIP, HIP_SIT, q);
+      reach(l, st.feet[i]);
+      // sitting, your hands rest on the outside of your thighs, not over the knees, so the boots still show past them
+      var h = r.hand[i], k = 0.55, hy = l.hip.position.y - Math.cos(l.a) * THIGH * k + 0.12, hz = l.hip.position.z + Math.sin(l.a) * THIGH * k;
+      h.position.set(SIDE[i] * 1.55, hy, hz);
+      h.rotation.set(Math.PI / 2 - l.a, 0, -Math.sign(SIDE[i]) * 0.35);       // lying along the thigh, turned a little inward
+      // the forearm points back toward the elbow, beside your body
+      var ex = SIDE[i] * 1.95 - h.position.x, ey = -0.56 - hy, ez = -0.1 - hz, el = Math.hypot(ex, ey, ez);
+      h.userData.arm.position.set(0, 0, 0);
+      h.userData.arm.quaternion.setFromUnitVectors(ARM_UP, armDir.set(ex / el, ey / el, ez / el).applyQuaternion(qInv.copy(h.quaternion).invert()));
+      h.userData.arm.position.copy(armDir).multiplyScalar(0.22);
     });
     r.hands.visible = q > 0.55;
   }
@@ -162,23 +245,30 @@
   }
 
   // ---------- shot 2: off the landing pad, the first bootprint ----------
+  // You stand at the edge of the launch pad (0.3 m above the dust, with a sloping rim). To touch the dust you
+  // bend your left knee and lean out, and your right boot reaches past the rim; then you pull it back to look
+  // at the print, and step down for real.
+  var REACH = { fwd: 0.26, drop: 0.43 };      // how far the body leans out and sinks while the boot reaches down
   function shotStep(t) {
-    var e = st.eye, tau = t - TM.step, S = st.S, f = st.e;
-    // test the ground with one boot, pull it back to look at the print, then step out for real
-    var a = ease(seg(tau, 1.3, 2.3)) * (1 - ease(seg(tau, 3.2, 4.1))) + ease(seg(tau, 6.0, 6.9)), b = ease(seg(tau, 6.9, 8.0));
+    var e = st.eye, tau = t - TM.step, S = st.S, f = st.e, yaw = st.yawE;
+    var r = ease(seg(tau, 1.3, 2.3)) * (1 - ease(seg(tau, 3.2, 4.1))) + ease(seg(tau, 6.0, 6.9)), b = ease(seg(tau, 6.9, 8.0));
     var up = ease(seg(tau, 7.6, 9.2));
-    st.lean = 0.27 * (1 - up);
-    e.x = S.x + f.x * (STEP * b + st.lean); e.z = S.z + f.z * (STEP * b + st.lean);
-    e.y = lerp(st.pad.y + 0.3, Tn.height(S.x + f.x * STEP, S.z + f.z * STEP), b) + EYE - 0.06 * (1 - up) + Math.sin(t * 1.3) * 0.006;
-    e.yaw = st.yawE + Math.sin(t * 0.6) * 0.02; st.bodyYaw = st.yawE;
+    var go = lerp(REACH.fwd * r, STEP, b), drop = REACH.drop * r * (1 - b);
+    st.lean = 0.34 * (1 - up);                 // bending over to see your boots: your head goes out ahead of them
+    // and while the right boot goes out, you lean over to its outer side to watch it (your own leg would hide it)
+    st.headSide = -0.2 * ease(seg(tau, 0.8, 1.8)) * (1 - ease(seg(tau, 6.6, 8.2)));
+    var lx = Math.cos(yaw), lz = -Math.sin(yaw);                   // your left
+    e.x = S.x + f.x * (go + st.lean) + lx * st.headSide; e.z = S.z + f.z * (go + st.lean) + lz * st.headSide;
+    e.y = lerp(st.padTop, st.groundP1, b) - drop + EYE - 0.06 * (1 - up) + Math.sin(t * 1.3) * 0.006;
+    e.yaw = yaw + Math.sin(t * 0.6) * 0.02; st.bodyYaw = yaw;
     e.pitch = lerp(-1.34, -0.05, up);
     e.roll = 0; e.fov = 54;
-    st.legR.rot = -0.45 * a * (1 - b); st.legR.y = -0.46 * a * (1 - b);
-    st.legL.rot = 0.36 * Math.sin(Math.PI * b); st.legL.y = 0.14 * Math.sin(Math.PI * b);
-    var fwd = STEP + 0.08;
-    if (!st.fx.r && tau >= 2.3) { st.fx.r = 1; footfall(S.x + f.x * fwd + Math.cos(st.yawE) * 0.17, S.z + f.z * fwd - Math.sin(st.yawE) * 0.17, st.yawE, true); W.cam.shake = 0.07; }
+    // the right boot goes out to the print and back (and out again); the left one follows it down at the end
+    st.feet[1] = swing(st.home[1], st.print[1], r, 0.14);
+    st.feet[0] = swing(st.home[0], st.print[0], b, 0.14);
+    if (!st.fx.r && tau >= 2.3) { st.fx.r = 1; footfall(st.print[1].x, st.print[1].z, yaw, true); W.cam.shake = 0.07; }
     if (!st.fx.r2 && tau >= 6.9) { st.fx.r2 = 1; Au.play('land'); W.cam.shake = 0.05; }
-    if (!st.fx.l && tau >= 8.0) { st.fx.l = 1; footfall(S.x + f.x * fwd - Math.cos(st.yawE) * 0.17, S.z + f.z * fwd + Math.sin(st.yawE) * 0.17, st.yawE, true); W.cam.shake = 0.05; }
+    if (!st.fx.l && tau >= 8.0) { st.fx.l = 1; footfall(st.print[0].x, st.print[0].z, yaw, true); W.cam.shake = 0.05; }
   }
 
   // ---------- shots 3 and 4: walking, with a head that bobs and a little hop ----------
@@ -189,17 +279,24 @@
       if (w.hop <= 0) { w.hop = 0; w.air = false; footfall(e.x, e.z, st.yawE, true); W.cam.shake = 0.16; }
     }
     w.dist += speed * dt * (w.air ? 1.25 : 1);
+    var m = clamp(speed / 2.2, 0, 1) * (w.air ? 0 : 1), sway = Math.sin(w.phase * 0.5), stride = Math.PI / 4.2 / 2;
     if (!w.air) {
       w.phase += speed * dt * 4.2;
       var step = Math.floor(w.phase / Math.PI);
-      if (step !== w.step) { w.step = step; w.sideSign = -w.sideSign; footfall(e.x - f.x * 0.4 + Math.cos(st.yawE) * 0.17 * w.sideSign, e.z - f.z * 0.4 - Math.sin(st.yawE) * 0.17 * w.sideSign, st.yawE, false); }
+      // each half-turn of the phase one boot comes down (the left on odd ones): the print goes where it lands
+      if (step !== w.step) { w.step = step; var land = spot(step % 2 ? 0 : 1, e.x, e.z, st.yawE, stride * m); footfall(land.x, land.z, st.yawE, false); }
     }
-    var m = clamp(speed / 2.2, 0, 1) * (w.air ? 0 : 1), sway = Math.sin(w.phase * 0.5);
     e.x = x0 + f.x * w.dist + Math.cos(st.yawE) * sway * 0.035 * m;
     e.z = z0 + f.z * w.dist - Math.sin(st.yawE) * sway * 0.035 * m;
     e.y = Tn.height(e.x, e.z) + EYE + Math.abs(Math.sin(w.phase)) * 0.055 * m + w.hop;
     e.roll = sway * 0.012 * m;
     st.bodyYaw = st.yawE;
+    // the boots: each swings ahead while lifted and slides back under you while planted; in a hop both tuck up
+    for (var i = 0; i < 2; i++) {
+      var p = w.phase + i * Math.PI, ft = spot(i, e.x, e.z, st.yawE, -Math.cos(p) * stride * m);
+      ft.y += Math.max(0, Math.sin(p)) * 0.13 * m + (w.air ? Math.min(0.16, w.hop * 0.5) : 0);
+      st.feet[i] = ft;
+    }
   }
   function shotWalk(t, dt) {
     var e = st.eye, tau = t - TM.walk, speed = 2.3 * ease(seg(tau, 0, 1.4));
@@ -226,27 +323,69 @@
   }
 
   // ---------- shot 5: turn around and sit down ----------
+  // You stop just short of the rock, turn round in two small steps so your boots end up where they will rest,
+  // then lower yourself back onto the rock's front edge: the boots stay planted, the knees bend over the edge.
   function shotSit(t) {
-    var e = st.eye, tau = t - TM.sit, C = st.C;
-    if (!st.fx.q) { st.fx.q = 1; st.Q = { x: e.x, z: e.z }; }      // start the turn from exactly where the walk ended
-    var Q = st.Q, turn = ease(seg(tau, 0, 2.5)), back = ease(seg(tau, 1.6, 3.2)), down = ease(seg(tau, 2.2, 3.5));
-    e.x = lerp(Q.x, C.x, back); e.z = lerp(Q.z, C.z, back);
-    e.y = lerp(Tn.height(Q.x, Q.z) + EYE, st.seatY, down) + (tau > 3.5 ? Math.exp(-(tau - 3.5) * 5) * -0.05 * Math.cos((tau - 3.5) * 14) : 0);
+    var e = st.eye, tau = t - TM.sit, C = st.C, Q2 = st.Q2;
+    if (!st.fx.q) { st.fx.q = 1; st.Q = { x: e.x, z: e.z }; st.ft0 = st.feet.slice(); }   // start from exactly where the walk ended
+    var Q = st.Q, turn = ease(seg(tau, 0, 2.5)), shuffle = ease(seg(tau, 0.2, 2.0)), back = ease(seg(tau, 1.9, 3.3)), down = ease(seg(tau, 2.2, 3.5));
+    var bx = lerp(lerp(Q.x, Q2.x, shuffle), C.x, back), bz = lerp(lerp(Q.z, Q2.z, shuffle), C.z, back);
     e.yaw = lerp(st.yawE, st.yawSit, turn); st.bodyYaw = e.yaw;
+    bendOver(ease(seg(tau, 2.6, 3.9)));            // seated, you bend forward a little to look down past your knees
+    e.x = bx + Math.sin(e.yaw) * st.lean; e.z = bz + Math.cos(e.yaw) * st.lean;
+    e.y = lerp(Tn.height(bx, bz) + EYE, st.seatY, down) - st.duck + (tau > 3.5 ? Math.exp(-(tau - 3.5) * 5) * -0.05 * Math.cos((tau - 3.5) * 14) : 0);
     e.pitch = lerp(-0.18, 0.02, ease(seg(tau, 0, 1.6))) + lerp(0, -0.84, ease(seg(tau, 2.5, 3.8)));
     e.roll = Math.sin(turn * Math.PI) * -0.03; e.fov = 54;
     st.sitQ = down;
+    st.feet[0] = swing(st.ft0[0], st.F[0], seg(tau, 0.25, 1.15), 0.1);
+    st.feet[1] = swing(st.ft0[1], st.F[1], seg(tau, 1.05, 1.95), 0.1);
     if (!st.fx.sit && tau >= 3.4) { st.fx.sit = 1; Au.play('land'); W.cam.shake = 0.08; W.dust(C.x, C.z, 6, 1, 0.35); }
   }
+
+  function bendOver(u) { st.lean = 0.16 * u; st.duck = 0.1 * u; }
 
   // ---------- shot 6: the view ----------
   function shotVista(t) {
     var e = st.eye, tau = t - TM.vista, C = st.C;
-    e.x = C.x; e.z = C.z; e.y = st.seatY + Math.sin(t * 1.1) * 0.006;
+    bendOver(1 - ease(seg(tau, 0.2, 3.0)));        // and sit back up as you raise your eyes to the view
+    e.x = C.x + Math.sin(st.yawSit) * st.lean; e.z = C.z + Math.cos(st.yawSit) * st.lean;
+    e.y = st.seatY - st.duck + Math.sin(t * 1.1) * 0.006;
     e.pitch = lerp(-0.82, st.pitchEnd, ease(seg(tau, 0.3, 3.2)));
     e.yaw = lerp(st.yawSit, st.yawEnd, ease(seg(tau, 1.8, 10.6)));
     e.fov = lerp(54, 44, ease(seg(tau, 2, 14))); e.roll = 0;
     st.bodyYaw = st.yawSit; st.sitQ = 1;
+    st.feet[0] = st.F[0]; st.feet[1] = st.F[1];
+  }
+
+  // The seat rock as it really is (its model, not a guess): along the way you will face when sitting, how high its
+  // top is, where its front edge drops away, and where its foot meets the ground. Looks a little to each side too,
+  // so both boots and both legs clear it.
+  function measureSeat(R, dir) {
+    var rock = Tn.seatRock, gy = Tn.height(R.x, R.z), out = { top: gy + (Tn.seatTop || 0.6), edge: 1.25, clear: 1.45 };
+    if (!rock) return out;
+    var rc = new T.Raycaster(), o = new T.Vector3(), down = new T.Vector3(0, -1, 0), sx = dir.z, sz = -dir.x;
+    rock.updateMatrixWorld(true);
+    function h(s, side) {
+      o.set(R.x + dir.x * s + sx * side, gy + 6, R.z + dir.z * s + sz * side); rc.set(o, down);
+      var hit = rc.intersectObject(rock, false);
+      return hit.length ? hit[0].point.y : -1e9;
+    }
+    function ground(s, side) { return Tn.height(R.x + dir.x * s + sx * side, R.z + dir.z * s + sz * side); }
+    var top = -1e9, s;
+    for (s = 0; s <= 1; s += 0.05) top = Math.max(top, h(s, 0));
+    if (top < gy) return out;
+    out.top = top; out.edge = 0; out.clear = 0;
+    [-0.3, 0, 0.3].forEach(function (side) {
+      var se = 0, sc = 0, y;
+      for (s = 0.5; s < 4; s += 0.02) {
+        y = h(s, side);
+        if (!se && y < top - 0.06) se = s;
+        if (y < ground(s, side) + 0.03) { sc = s; break; }
+      }
+      out.edge = Math.max(out.edge, se || s); out.clear = Math.max(out.clear, sc || s);
+    });
+    out.top = Math.max(h(out.edge - 0.1, 0), h(out.edge - 0.25, 0), gy + 0.3);   // the top where you actually sit
+    return out;
   }
 
   // ---------- the running order ----------
@@ -273,20 +412,35 @@
     var el = Math.hypot(R.x - pad.x, R.z - pad.z), e = { x: (R.x - pad.x) / el, z: (R.z - pad.z) / el };   // the way you walk
     var yawE = Math.atan2(e.x, e.z);
     var S = { x: pad.x + e.x * 11.35, z: pad.z + e.z * 11.35 };                     // standing at the very edge of the landing pad
-    var C = { x: R.x - e.x * 0.6, z: R.z - e.z * 0.6 };
+    // sitting: hips just behind the rock's front edge, boots planted on the ground in front of it
+    var seat = measureSeat(R, { x: -e.x, z: -e.z });
+    // the boots go as far out as the legs comfortably reach from that seat (knees still a little bent), so the
+    // toes show past your knees when you look down; never closer than the rock's foot allows
+    var sC = seat.edge - 0.11, gF = Tn.height(R.x - e.x * (sC + 0.7), R.z - e.z * (sC + 0.7));
+    var drop = seat.top + SEAT_HIP - gF - SOLE_Y, out = Math.sqrt(Math.max(0.04, Math.pow(0.95 * (THIGH + SHIN), 2) - drop * drop));
+    var sF = Math.max(sC + 0.06 + Math.min(out, 0.62) + SOLE_Z, seat.clear + 0.27), sQ = Math.max(seat.edge, seat.clear) + 0.44;
+    var C = { x: R.x - e.x * sC, z: R.z - e.z * sC };
     var yawRocket = Math.atan2(pad.x - C.x, pad.z - C.z), yawSit = near(yawRocket, yawE + Math.PI);
     var yawHab = near(Math.atan2(-C.x, -C.z), yawSit), moon = site === 'moon';
     var yawEarth = near(Math.atan2(-0.5, -0.84), yawSit);
     st = {
       t: 0, done: done, moon: moon, pad: pad, dir: dir, dirYaw: Math.atan2(dir.x, dir.z), e: e, yawE: yawE, S: S, R: R, C: C,
-      P1: { x: S.x + e.x * STEP, z: S.z + e.z * STEP }, P2: { x: R.x - e.x * (1.75 + walk2Length()), z: R.z - e.z * (1.75 + walk2Length()) }, Q: null,
-      seatY: Tn.height(R.x, R.z) + (Tn.seatTop || 0.65) + SEAT_EYE,
+      P1: { x: S.x + e.x * STEP, z: S.z + e.z * STEP }, P2: { x: R.x - e.x * (sQ + walk2Length()), z: R.z - e.z * (sQ + walk2Length()) }, Q: null,
+      Q2: { x: R.x - e.x * (sF - 0.06 - SOLE_Z), z: R.z - e.z * (sF - 0.06 - SOLE_Z) },
+      seatY: seat.top + SEAT_HIP - HIP_SIT, seat: seat,
+      padTop: A.groundAt(S.x, S.z), groundP1: Tn.height(S.x + e.x * STEP, S.z + e.z * STEP),
       yawSit: yawSit, yawEnd: moon ? yawHab * 0.45 + yawEarth * 0.55 : yawHab - 0.42, pitchEnd: moon ? 0.1 : 0.07,
       eye: { x: pad.x, y: pad.y + 260, z: pad.z, yaw: 0, pitch: -1, roll: 0, fov: 58 },
-      w: { phase: 0, step: 0, sideSign: 1, dist: 0, hop: 0, vy: 0, air: false },
-      legL: { rot: 0, y: 0 }, legR: { rot: 0, y: 0 }, sitQ: 0, lean: 0, body: false, bodyYaw: yawE, fx: {}, rum: 0, lineOff: 0,
+      w: { phase: 0, step: 0, dist: 0, hop: 0, vy: 0, air: false },
+      sitQ: 0, lean: 0, headSide: 0, duck: 0, body: false, bodyYaw: yawE, fx: {}, rum: 0, lineOff: 0,
       dustCol: moon ? 0xb8b9c4 : 0xd9a070, cues: script(s), ci: 0, ev: events(s), ei: 0, breath: 2
     };
+    // the boots: standing on the pad, the prints out on the dust past its sloping rim, and resting by the rock
+    st.home = [spot(0, S.x, S.z, yawE), spot(1, S.x, S.z, yawE)];
+    st.print = [spot(0, S.x, S.z, yawE, PRINT_AHEAD), spot(1, S.x, S.z, yawE, PRINT_AHEAD)];
+    st.feet = st.home.slice();
+    st.F = [spot(0, C.x, C.z, yawSit, sF - sC - 0.06 - SOLE_Z), spot(1, C.x, C.z, yawSit, sF - sC - 0.06 - SOLE_Z)];
+    st.F.forEach(function (p) { p.y = Tn.height(p.x, p.z); });
     st.rig = buildRig(JA.game.opts.suit);
     Au.music(null); Au.scene({ place: 'cabin', site: site });
     st.cues.forEach(function (c) { if (c.vo) Au.preloadVoice(VO + c.vo + '.mp3'); });   // this film's lines, ready before they are needed
@@ -332,6 +486,7 @@
     done();
   }
   I.time = function () { return st ? st.t : -1; };      // lets tests step through the film
+  I.peek = function () { return st ? { C: st.C, F: st.F, feet: st.feet, seatY: st.seatY, print: st.print, home: st.home, seat: st.seat, rig: st.rig } : null; };   // and look at where the boots go
   I.skip = function () {
     if (!st || st.skipping) return;
     st.skipping = true; U.fade(true);

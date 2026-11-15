@@ -1,0 +1,33 @@
+/* Astro Outpost — the mini map (js/minimap.js draws it; M or the 🗺️ button opens it).
+   A round map in the bottom-right corner, in the same see-through dark blue as every panel. */
+#minimap { position: fixed; right: calc(16px + var(--safe-r, 0px)); bottom: calc(16px + var(--safe-b, 0px)); z-index: 18;
+  display: grid; justify-items: center; gap: 6px; pointer-events: none; }
+#minimap .mm-disc { position: relative; width: 224px; height: 224px; border-radius: 50%;
+  background: var(--panel-fill, rgba(6, 20, 60, 0.68)); box-shadow: var(--panel-drop, 0 8px 22px rgba(2, 4, 14, 0.3)), inset 0 0 0 1px rgba(170, 195, 255, 0.12); }
+#minimap canvas { display: block; width: 100%; height: 100%; border-radius: 50%; }
+/* zoom: the outpost up close, or the whole area */
+#minimap .mm-zoom { pointer-events: auto; position: absolute; right: 2px; bottom: 2px; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+  font: 600 1.25rem/1 'Sora', var(--font-display, sans-serif); color: #ffe58a;
+  background: rgba(10, 22, 58, 0.95); box-shadow: inset 0 0 0 1.5px rgba(255, 210, 63, 0.55), 0 3px 10px rgba(0, 0, 0, 0.35); transition: background-color 0.15s, transform 0.12s; }
+#minimap .mm-zoom:hover { background: rgba(40, 46, 70, 0.98); }
+#minimap .mm-zoom:active { transform: scale(0.9); }
+#minimap .mm-zoom:focus-visible { outline: 2px solid #ffd23f; outline-offset: 2px; }
+/* under the map: the job to do now and how far away it is */
+#minimap .mm-foot { display: flex; align-items: center; gap: 6px; padding: 3px 12px 3px 8px; border-radius: 999px;
+  font: 600 0.86rem/1.2 'Sora', var(--font-display, sans-serif); font-variant-numeric: tabular-nums; color: #fff3c4;
+  background: var(--panel-fill, rgba(6, 20, 60, 0.68)); box-shadow: inset 0 0 0 1.5px rgba(255, 210, 63, 0.7), var(--panel-drop, 0 8px 22px rgba(2, 4, 14, 0.3)); }
+#minimap .mm-foot.off { visibility: hidden; }          /* keeps its place, so the map does not jump when it appears */
+#minimap .mm-ic { font-size: 1rem; line-height: 1; }
+#minimap .mm-ic img.ico { width: 1.15em; height: 1.15em; vertical-align: -0.2em; }
+
+/* smaller screens: a smaller map */
+@media (max-width: 900px), (max-height: 640px) { #minimap .mm-disc { width: 176px; height: 176px; } }
+/* touch screens: the round buttons fill the bottom-right corner (206px tall), so the map sits just above them
+   (the top corners have Mission Control's messages and the job list) */
+body.touch #minimap { bottom: calc(242px + var(--safe-b, 0px)); right: calc(18px + var(--safe-r, 0px)); }
+body.touch #minimap .mm-disc { width: 150px; height: 150px; }
+/* a phone on its side is too short for that: the map sits at the bottom, just left of the buttons (158px wide) */
+@media (max-height: 520px) {
+  body.touch #minimap { bottom: calc(16px + var(--safe-b, 0px)); right: calc(190px + var(--safe-r, 0px)); }
+  body.touch #minimap .mm-disc { width: 124px; height: 124px; }
+}
