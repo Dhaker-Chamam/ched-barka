@@ -316,3 +316,8 @@ body.touch #goal-list li.now::after, body.touch #goal-list li.now .g-now { displ
   #goal-list .g-ic::after { transform: none; transition: opacity 0.2s; }
   #hud .m-bar i, #goals .g-prog i { transition: none; }
 }
+
+/* inside the rocket: the cabin is small, so the goal list steps aside and the room card shrinks */
+body.in-rocket #goals { display: none; }
+body.in-rocket #inside { width: min(270px, 36vw); }
+body.in-rocket #inside p { font-size: 0.8rem; }

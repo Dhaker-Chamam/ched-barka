@@ -378,6 +378,7 @@
   // ---------- set-up ----------
   W.init = function (canvas) {
     try { renderer = new T.WebGLRenderer({ canvas: canvas, antialias: true, powerPreference: 'high-performance' }); } catch (e) { return false; }
+    W.renderer = renderer;
     W.lite = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);      // phones and tablets
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, W.lite ? 1.5 : 2));
     renderer.outputEncoding = T.sRGBEncoding;
@@ -553,6 +554,8 @@
     var cine = cam.mode === 'cine' && cam.cine, fov = cine ? cam.cine.fov || 52 : (cam.mode === 'play' && cam.fp && cam.eye ? 66 : 52);
     if (cine && cam.cine.roll) camera.rotateZ(cam.cine.roll);
     if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
+    var near = cam.room ? (cam.fp ? 0.25 : 0.06) : 0.4;    // in a small room close things must not be cut off (helmet view still hides your own shoulders)
+    if (camera.near !== near) { camera.near = near; camera.updateProjectionMatrix(); }
   }
   // Inside a room the camera must not go through the walls: slide it toward the astronaut until it fits.
   function keepInRoom(want, from, R) {

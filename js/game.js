@@ -511,8 +511,11 @@
     A.roverSpot('door', v1); var dr = Math.min(d2(p, v1), d2(p, A.rover.pos) - 1.4);
     offer(dr, 2.6, { label: 'Drive the rover', run: function () { A.enterRover(); if (G.pov) W.cam.fpPitch = 0.2; Au.play('rover-start'); tip('drive', 'Buckle up! The battery only drains while the rover is moving. ' + (touch ? 'Push the stick up to drive and sideways to steer. Tap ✋ to get out.' : 'W drives forward, S brakes, A and D steer. Press E to get out.'), 'rover-drive'); } });
     offer(d2(p, sp.door), 2.4, { label: 'Go inside the habitat', run: enterHab });
-    if (s.sol >= s.totalSols) offer(d2(p, sp.rocketDoor), 4, { label: 'Board the rocket and fly home', run: JA.interior ? function () { goInside('rocket'); } : boardModal });
-    else if (JA.interior) offer(d2(p, sp.rocketDoor), 3.4, { label: 'Climb into the rocket', run: function () { goInside('rocket'); } });
+    // the rocket can be entered from anywhere close to it: its body keeps you about 4.7 m from its centre,
+    // so measuring only to the door spot (7 m out, to one side) left most of the rocket with no prompt
+    var rd = Math.min(d2(p, sp.rocketDoor), d2(p, B.P.rocket.base) - 4.2);
+    if (s.sol >= s.totalSols) offer(rd, 4, { label: 'Board the rocket and fly home', run: JA.interior ? function () { goInside('rocket'); } : boardModal });
+    else if (JA.interior) offer(rd, 3.4, { label: 'Climb into the rocket', run: function () { goInside('rocket'); } });
     for (i = 0; i < sp.photo.length; i++) (function (i) {
       if (!s.photos[i]) offer(d2(p, sp.photo[i]), 2.6, { label: 'Take a postcard photo', run: function () { var f = sim.photo(s, i); if (f) { Au.play('photo'); if (JA.fx) JA.fx.snap(); U.fade(true); setTimeout(function () { U.fade(false); }, 140); findCard(f); } } });
     })(i);
@@ -1024,7 +1027,7 @@
     U.show($('inside'), true); U.show($('prompt'), false); U.hands(null); U.roverHud(0, false); U.drillUi(null);
     $('btn-fast').classList.remove('on');
     if (r) {
-      G.room = id; document.body.classList.add('in-room');
+      G.room = id; document.body.classList.add('in-room'); document.body.classList.toggle('in-rocket', id === 'rocket');
       A.room = r.walk; W.cam.room = r.cam;
       var a = A.astro;
       a.mode = 'walk'; a.pos.copy(r.spawn); a.vel.set(0, 0, 0); a.vy = 0; a.onGround = true; a.yaw = r.yaw;
@@ -1042,13 +1045,14 @@
     var ph = sim.stormPhase(s);
     if (id === 'rocket') say(s.sol >= s.totalSols ? 'Welcome aboard! Take the commander\'s seat when you are ready to fly home.' : 'This is the cockpit that will fly you home. Have a look around!', true);
     else say(ph === 'warning' || ph === 'active' ? 'Phew — inside! The walls and the soil bags are soaking up the storm.' : 'Back inside. Take a breather — the machines keep working.', true, ph === 'warning' || ph === 'active' ? 'storm-safe' : 'inside-rest', true);
-    tip('inside', touch ? 'Drag the screen to look around, even up at the skylight!' : 'Look around with the mouse — drag down to look up at the skylight!');
+    if (id === 'rocket') tip('inside-rocket', (touch ? 'Drag the screen to look around the cabin.' : 'Look around the cabin with the mouse.') + ' The couches, the screens, the life support and the lockers each have something to tell you.');
+    else tip('inside', touch ? 'Drag the screen to look around, even up at the skylight!' : 'Look around with the mouse — drag down to look up at the skylight!');
   }
   // Back outside (or, with quiet, just forget the room: the day ended, the rocket launched...)
   function leaveRoom(quiet) {
     var id = G.room;
     ext('interior', 'leave');
-    A.room = null; W.cam.room = null; G.room = null; document.body.classList.remove('in-room');
+    A.room = null; W.cam.room = null; G.room = null; document.body.classList.remove('in-room', 'in-rocket');
     if (G.povAuto) { G.povAuto = false; setPov(false, true); }
     U.show($('inside'), false);
     if (quiet) return;
