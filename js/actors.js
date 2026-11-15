@@ -17,51 +17,69 @@
   function angLerp(a, b, t) { var d = b - a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return a + d * t; }
 
   // ---------- astronaut ----------
+  // His skeleton: the same pivots as assets/blender/scripts/build_astronaut.py, in the model's own units (the game draws
+  // him at 0.84 scale). toe: the ball of the foot in front of the ankle; heel: the back of the heel.
+  var RIG = { scale: 0.84, hipX: 0.2, hipY: 0.86, kneeY: 0.5, ankleY: 0.15, waistY: 0.98, shX: 0.58, shY: 1.48, elbowY: 1.2, wristY: 0.97, toe: 0.26, heel: -0.13 };
+  var L1 = RIG.hipY - RIG.kneeY, L2 = RIG.kneeY - RIG.ankleY, ANK = RIG.ankleY;
   function buildAstronaut(color) {
-    var a = hasModel('astronaut') ? astronautModel(color) : astronautShapes(color);
-    a.group.scale.setScalar(0.84);
+    var a = (hasModel('astronaut') && astronautModel(color)) || astronautShapes(color);
+    a.group.scale.setScalar(RIG.scale);
     root.add(a.group);
     return Object.assign(a, { pos: new T.Vector3(0, 0, 13), vel: new T.Vector3(), vy: 0, yaw: Math.PI, onGround: true, mode: 'walk', carrying: null,
-      aim: false, phase: 0, moving: 0, squash: 0, throwT: 0, spin: 0, stepSide: 1, moved: 0, lastStep: 0 });
+      aim: false, throwT: 0, spin: 0, moved: 0,
+      // for poseAstro(): stride cycle, gait (0 walk .. 2 sprint), speed, how much he is moving, in the air, landing, leaning
+      cyc: 0, gait: 0, spd: 0, move: 0, accel: 0, bank: 0, lastYaw: Math.PI, airT: 0, air: 0, runJump: 0, lead: 1, landT: 9, landK: 0, headY: 0, legPh: [0, 0.5] });
   }
-  // the Blender astronaut: same pivots (shoulders, hips, drill) as the plain one; cuffs take the chosen suit colour
+  // the Blender astronaut; cuffs, bands, knee pads and gauntlets take the chosen suit colour
   function astronautModel(color) {
-    var g = MD.make('astronaut'), accent = MD.mat(g, 'SuitAccent'), drill = g.getObjectByName('astro_drill');
+    var g = MD.make('astronaut'), accent = MD.mat(g, 'SuitAccent');
+    function n(s) { return g.getObjectByName('astro_' + s); }
+    if (!n('hips') || !n('shinL')) return null;             // an older model without knees: use the plain one
     if (accent) accent.color.setHex(color).convertSRGBToLinear();
-    drill.visible = false;
-    return { group: g, body: g.getObjectByName('astro_body'), armL: g.getObjectByName('astro_armL'), armR: g.getObjectByName('astro_armR'),
-      legL: g.getObjectByName('astro_legL'), legR: g.getObjectByName('astro_legR'), tip: g.getObjectByName('astro_antennaTip'),
-      drill: drill, bit: g.getObjectByName('astro_drillBit') };
+    var a = { group: g, hips: n('hips'), body: n('body'), armL: n('armL'), armR: n('armR'), foreL: n('foreL'), foreR: n('foreR'), handL: n('handL'), handR: n('handR'),
+      legL: n('legL'), legR: n('legR'), shinL: n('shinL'), shinR: n('shinR'), footL: n('footL'), footR: n('footR'), tip: n('antennaTip'), drill: n('drill'), bit: n('drillBit') };
+    a.drill.visible = false;
+    return a;
   }
+  // the plain astronaut (when models-data.js is missing): the same joints, drawn with simple shapes
   function astronautShapes(color) {
-    var g = new T.Group(), body = new T.Group(); g.add(body);
-    var white = soft(0xf5f6fa), accent = soft(color), grey = soft(0xcfd3de);
-    add(body, new T.CapsuleGeometry(0.44, 0.46, 6, 14), white, 0, 1.08, 0);
-    add(body, new T.BoxGeometry(0.7, 0.9, 0.38), grey, 0, 1.22, -0.46);
-    add(body, new T.BoxGeometry(0.2, 0.14, 0.06), glow(0x4dff9a, 1.5), 0.18, 1.5, -0.66, true);
-    add(body, new T.BoxGeometry(0.42, 0.26, 0.12), accent, 0, 1.22, 0.41);
-    add(body, new T.TorusGeometry(0.4, 0.08, 8, 20), accent, 0, 1.6, 0).rotation.x = Math.PI / 2;
-    add(body, new T.SphereGeometry(0.52, 22, 18), white, 0, 2.02, 0);
-    var visor = add(body, new T.SphereGeometry(0.42, 22, 18), new T.MeshStandardMaterial({ color: 0xffc64a, metalness: 0.95, roughness: 0.12, emissive: 0x6b4a08, emissiveIntensity: 0.35 }), 0, 2.02, 0.21);
-    visor.scale.set(1, 0.78, 0.92);
-    add(body, new T.BoxGeometry(0.16, 0.12, 0.2), glow(0xdfeeff, 2), 0.36, 2.36, 0.26, true);       // helmet lamp
-    add(body, new T.CylinderGeometry(0.02, 0.02, 0.5, 5), grey, 0.26, 1.9, -0.5);
-    var tip = add(body, new T.SphereGeometry(0.06, 8, 8), glow(0xff5a5a, 2), 0.26, 2.17, -0.5, true);
-    function limb(x, y, len, rad, endGeo, endY, endZ) {
-      var p = new T.Group(); p.position.set(x, y, 0); body.add(p);
-      add(p, new T.CapsuleGeometry(rad, len, 4, 10), white, 0, -len / 2 - rad * 0.4, 0);
-      add(p, endGeo, accent, 0, endY, endZ);
-      return p;
-    }
-    var armL = limb(-0.58, 1.48, 0.36, 0.13, new T.SphereGeometry(0.16, 10, 10), -0.58, 0);
-    var armR = limb(0.58, 1.48, 0.36, 0.13, new T.SphereGeometry(0.16, 10, 10), -0.58, 0);
-    var legL = limb(-0.22, 0.74, 0.3, 0.17, new T.BoxGeometry(0.32, 0.2, 0.46), -0.62, 0.06);
-    var legR = limb(0.22, 0.74, 0.3, 0.17, new T.BoxGeometry(0.32, 0.2, 0.46), -0.62, 0.06);
+    var g = new T.Group(), white = soft(0xf5f6fa), accent = soft(color), grey = soft(0xcfd3de), boot = soft(0x4f545c);
+    g.userData.o = [0, 0, 0];
+    // a joint at model position (x, y, z) inside parent, and a shape at a model position inside a joint
+    function joint(parent, x, y, z) { var j = new T.Group(), o = parent.userData.o; j.position.set(x - o[0], y - o[1], z - o[2]); j.userData.o = [x, y, z]; parent.add(j); return j; }
+    function put(j, geo, m, x, y, z, noShadow) { var o = j.userData.o; return add(j, geo, m, x - o[0], y - o[1], z - o[2], noShadow); }
+    var hips = joint(g, 0, RIG.hipY, 0), body = joint(hips, 0, RIG.waistY, 0);
+    put(hips, new T.SphereGeometry(0.45, 16, 12), white, 0, 0.82, 0).scale.set(1, 0.5, 0.86);
+    put(hips, new T.TorusGeometry(0.45, 0.05, 6, 20), grey, 0, 0.86, 0).rotation.x = Math.PI / 2;
+    put(body, new T.CapsuleGeometry(0.44, 0.36, 6, 14), white, 0, 1.28, 0);
+    put(body, new T.BoxGeometry(0.7, 0.9, 0.38), grey, 0, 1.22, -0.46);
+    put(body, new T.BoxGeometry(0.2, 0.14, 0.06), glow(0x4dff9a, 1.5), 0.18, 1.5, -0.66, true);
+    put(body, new T.BoxGeometry(0.42, 0.26, 0.12), accent, 0, 1.22, 0.41);
+    put(body, new T.TorusGeometry(0.4, 0.08, 8, 20), accent, 0, 1.6, 0).rotation.x = Math.PI / 2;
+    put(body, new T.SphereGeometry(0.52, 22, 18), white, 0, 2.02, 0);
+    put(body, new T.SphereGeometry(0.47, 22, 18), new T.MeshStandardMaterial({ color: 0xffc64a, metalness: 0.95, roughness: 0.12, emissive: 0x6b4a08, emissiveIntensity: 0.35 }), 0, 2.05, 0.15).scale.set(1, 0.72, 0.88);
+    [-1, 1].forEach(function (sx) { put(body, new T.BoxGeometry(0.12, 0.1, 0.16), glow(0xdfeeff, 2), sx * 0.37, 2.34, 0.22, true); });      // helmet lamps
+    put(body, new T.CylinderGeometry(0.02, 0.02, 0.5, 5), grey, 0.26, 1.9, -0.5);
+    var tip = put(body, new T.SphereGeometry(0.06, 8, 8), glow(0xff5a5a, 2), 0.26, 2.17, -0.5, true);
+    var a = { group: g, hips: hips, body: body, tip: tip };
+    [-1, 1].forEach(function (sx) {
+      var s = sx < 0 ? 'L' : 'R', x = sx * RIG.shX, lx = sx * RIG.hipX;
+      var arm = joint(body, x, RIG.shY, 0), fore = joint(arm, x, RIG.elbowY, 0), hand = joint(fore, x, RIG.wristY, 0);
+      put(arm, new T.CapsuleGeometry(0.15, 0.16, 4, 10), white, x, 1.34, 0);
+      put(fore, new T.CapsuleGeometry(0.135, 0.12, 4, 10), white, x, 1.09, 0);
+      put(hand, new T.SphereGeometry(0.15, 10, 10), accent, x, 0.88, 0);
+      var leg = joint(hips, lx, RIG.hipY, 0), shin = joint(leg, lx, RIG.kneeY, 0), foot = joint(shin, lx, RIG.ankleY, 0);
+      put(leg, new T.CapsuleGeometry(0.18, 0.2, 4, 10), white, lx, 0.68, 0);
+      put(shin, new T.CapsuleGeometry(0.15, 0.2, 4, 10), white, lx, 0.33, 0);
+      put(foot, new T.BoxGeometry(0.32, 0.18, 0.48), boot, lx, 0.09, 0.08);
+      a['arm' + s] = arm; a['fore' + s] = fore; a['hand' + s] = hand; a['leg' + s] = leg; a['shin' + s] = shin; a['foot' + s] = foot;
+    });
     // the drill (only shown while drilling)
-    var drill = new T.Group(); drill.position.set(0, 0.95, 0.7); body.add(drill); drill.visible = false;
-    add(drill, new T.BoxGeometry(0.3, 0.5, 0.3), soft(0xffc533), 0, 0.2, 0);
-    var bit = add(drill, new T.ConeGeometry(0.09, 0.9, 6), new T.MeshStandardMaterial({ color: 0xb8bcc8, metalness: 0.8, roughness: 0.3 }), 0, -0.45, 0); bit.rotation.x = Math.PI;
-    return { group: g, body: body, armL: armL, armR: armR, legL: legL, legR: legR, tip: tip, drill: drill, bit: bit };
+    var drill = joint(body, 0, 0.95, 0.7); drill.visible = false;
+    put(drill, new T.BoxGeometry(0.3, 0.5, 0.3), soft(0xffc533), 0, 1.15, 0.7);
+    var bit = put(drill, new T.ConeGeometry(0.09, 0.9, 6), new T.MeshStandardMaterial({ color: 0xb8bcc8, metalness: 0.8, roughness: 0.3 }), 0, 0.5, 0.7); bit.rotation.x = Math.PI;
+    a.drill = drill; a.bit = bit;
+    return a;
   }
 
   // ---------- rover ----------
@@ -308,10 +326,10 @@
     a.group.visible = a.mode !== 'hidden';
     if (a.mode === 'hidden') return;
     if (a.mode === 'drive') {
-      roverLocal(0, 1.3, 0.25, a.pos); a.yaw = rover.yaw;
-      a.group.position.copy(a.pos); a.group.rotation.y = a.yaw;
-      a.legL.rotation.x = a.legR.rotation.x = -1.45; a.armL.rotation.x = a.armR.rotation.x = -1.2;
-      a.body.rotation.x = 0; a.drill.visible = false;
+      roverLocal(0, 1.3, 0.25, a.pos); a.yaw = a.lastYaw = rover.yaw;
+      a.group.position.copy(a.pos); a.group.rotation.set(0, a.yaw, 0);
+      a.drill.visible = false;
+      poseSeated(a);
       return;
     }
     if (a.mode === 'walk' && input) { ix = input.x; iz = input.z; jump = input.jump; sprint = input.sprint; }
@@ -333,46 +351,203 @@
     var ground = room ? room.floor : Tn.height(a.pos.x, a.pos.z), landed = false;
     if (a.onGround) {
       if (a.pos.y - ground > 0.35) a.onGround = false; else a.pos.y = ground;
-      if (jump) { a.vy = 3.7; a.onGround = false; if (A.onJump) A.onJump(); }
+      if (jump) {
+        a.vy = 3.7; a.onGround = false; a.airT = 0;
+        a.runJump = Math.hypot(a.vel.x, a.vel.z) > 2.5 ? 1 : 0;
+        a.lead = (a.cyc % 1) >= 0.5 ? -1 : 1;            // the leg that was swinging forward leads the leap
+        if (A.onJump) A.onJump();
+      }
     }
     if (!a.onGround) {
       a.vy -= grav * dt; a.pos.y += a.vy * dt;
-      if (a.pos.y <= ground) { landed = a.vy < -1.2; a.pos.y = ground; a.vy = 0; a.onGround = true; if (landed) a.squash = 1; }
+      if (a.pos.y <= ground) {
+        var hit = -a.vy; landed = hit > 1.2; a.pos.y = ground; a.vy = 0; a.onGround = true;
+        if (landed) { a.landT = 0; a.landK = clamp(hit / 4.5, 0.3, 1) * (a.runJump ? 0.7 : 1); }
+      }
       if (room && room.ceil) {                  // a low-gravity jump indoors ends at the ceiling
         var top = room.ceil(a.pos.x, a.pos.z);
         if (a.pos.y > top) { a.pos.y = top; if (a.vy > 0) { a.vy = -0.4; if (A.onBonk) A.onBonk(); } }
       }
     }
     if (landed && A.onLand) A.onLand();
-    a.moving = lerp(a.moving, len, Math.min(1, dt * 10));
     if (a.aim || a.fp) a.yaw = angLerp(a.yaw, Math.atan2(v1.x, v1.z), Math.min(1, dt * 14));      // in first person the body faces where you look
     else if (len > 0.1) a.yaw = angLerp(a.yaw, Math.atan2(mx, mz), Math.min(1, dt * 12));
     if (a.spin > 0) { a.spin -= dt; a.yaw += dt * 9; }
-    if (len > 0.1 && a.onGround) {
-      a.phase += dt * (sprint ? 13 : 10);
-      var step = Math.floor(a.phase / Math.PI);
-      if (step !== a.lastStep) { a.lastStep = step; a.stepSide = -a.stepSide; if (A.onStep) A.onStep(a.pos, a.yaw, a.stepSide, sprint); }
-    }
-    a.squash = Math.max(0, a.squash - dt * 5); a.throwT = Math.max(0, a.throwT - dt);
-    var sw = Math.sin(a.phase) * 0.85 * a.moving, air = a.onGround ? 0 : 1;
-    a.legL.rotation.x = lerp(sw, 0.5, air); a.legR.rotation.x = lerp(-sw, -0.3, air);
+    a.throwT = Math.max(0, a.throwT - dt);
     a.drill.visible = a.mode === 'busy';
-    if (a.mode === 'busy') {
-      a.armL.rotation.x = a.armR.rotation.x = -0.75 + Math.sin(W.time * 40) * 0.04;
-      a.body.rotation.x = 0.16; a.bit.rotation.y += dt * 30;
-    } else if (a.throwT > 0) {
-      a.armL.rotation.x = a.armR.rotation.x = -2.6 * (a.throwT / 0.35); a.body.rotation.x = 0.2 * (a.throwT / 0.35);
-    } else if (a.carrying) {
-      a.armL.rotation.x = a.armR.rotation.x = a.aim ? -2.1 : -1.25; a.body.rotation.x = a.aim ? -0.18 : 0;
-    } else {
-      a.armL.rotation.x = lerp(-sw, -2.4, air); a.armR.rotation.x = lerp(sw, -2.4, air); a.body.rotation.x = sprint && len > 0.1 ? 0.14 : 0;
-    }
-    a.armL.rotation.z = a.carrying || a.mode === 'busy' ? 0.3 : -0.18; a.armR.rotation.z = a.carrying || a.mode === 'busy' ? -0.3 : 0.18;
-    var bob = a.onGround ? Math.abs(Math.sin(a.phase)) * 0.1 * a.moving : 0;
-    a.group.position.set(a.pos.x, a.pos.y + bob, a.pos.z);
-    a.group.rotation.y = a.yaw;
-    a.group.scale.set(0.84 * (1 + a.squash * 0.12), 0.84 * (1 - a.squash * 0.16), 0.84 * (1 + a.squash * 0.12));
+    if (a.mode === 'busy') a.bit.rotation.y += dt * 30;
+    poseAstro(a, dt, len > 0.1 && a.mode === 'walk', sprint, room);
+    a.group.position.copy(a.pos);
     a.tip.material.emissiveIntensity = 1.2 + Math.sin(W.time * 6);
+  }
+
+  // ---------- how the astronaut moves his body ----------
+  // All in the model's own units. Each foot has a target: planted on the ground while it carries him (it rolls from heel
+  // or forefoot to toes), or lifted on an arc while it swings forward. The hip and knee angles that reach the target come
+  // from two-bone IK, so the feet do not skate, the knees bend by themselves and the hips rise and fall like a real
+  // walker's. How long a foot stays down follows from his speed and how far a leg can reach; the rest of each step is a
+  // free flight that lasts as long as the real Moon or Mars gravity makes it. The arms swing against the legs, the
+  // shoulders turn against the hips, and the body leans into speed, into turns and after a landing.
+  var GAIT = [      // 0: walk, 1: lope (his normal pace on the Moon and Mars), 2: sprint
+    { cad: 0, duty: 0.62, crouch: 0.015, bob: 0.022, lift: 0.07, kick: 0, reach: 0.02, strike: -0.28, roll: 0.55, push: 0.75, zOff: 0, lean: 0.035,
+      arm: 0.3, elbow: -0.3, pump: 0.1, yaw: 0.07, sway: 0.022, tilt: 0.035 },
+    { cad: 1.7, duty: 0.36, crouch: 0.05, bob: 0, lift: 0.15, kick: 0.12, reach: 0.06, strike: -0.06, roll: 0.35, push: 0.95, zOff: -0.03, lean: 0.09,
+      arm: 0.5, elbow: -0.95, pump: 0.25, yaw: 0.09, sway: 0.012, tilt: 0.02 },
+    { cad: 1.55, duty: 0.3, crouch: 0.085, bob: 0, lift: 0.24, kick: 0.26, reach: 0.1, strike: 0.08, roll: 0.3, push: 1.05, zOff: -0.05, lean: 0.24,
+      arm: 0.95, elbow: -1.45, pump: 0.3, yaw: 0.12, sway: 0.008, tilt: 0.015 }
+  ];
+  var G = {}, f0 = {}, f1 = {}, ik = {}, vF = new T.Vector3(), FT = [{}, {}];
+  function gaitAt(s) {
+    var i = s >= 1 ? 1 : 0, t = clamp(s - i, 0, 1), A0 = GAIT[i], A1 = GAIT[i + 1];
+    for (var k in A0) G[k] = lerp(A0[k], A1[k], t);
+    return G;
+  }
+  function smooth(t) { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); }
+  // a planted foot at roll stage u (0 = touch-down, 1 = push-off) whose ankle would be at z when flat:
+  // out.z, out.y = the ankle (forward of the hip, above the ground), out.p = foot pitch (+ = toes down)
+  function plantedFoot(z, u, out) {
+    var p = u < 0.15 ? G.strike * (1 - u / 0.15) : u > G.roll ? G.push * Math.pow((u - G.roll) / (1 - G.roll), 1.6) : 0;
+    var px = p < 0 ? RIG.heel : RIG.toe, c = Math.cos(p), s = Math.sin(p), dz = -px;      // it rocks on the heel or on the toes
+    out.z = z + px + ANK * s + dz * c; out.y = ANK * c - dz * s; out.p = p;
+    return out;
+  }
+  // one foot at leg phase ph of the stride cycle (stance first, then swing); D = how far the foot travels while planted
+  function footAt(ph, D, duty, out) {
+    if (ph < duty) { var u = ph / duty; plantedFoot(D * (0.5 - u) + G.zOff, u, out); out.down = true; return out; }
+    var s = (ph - duty) / (1 - duty), e = smooth(s), kickT = Math.sin(Math.PI * Math.min(1, s / 0.6));
+    plantedFoot(-D * 0.5 + G.zOff, 1, f0); plantedFoot(D * 0.5 + G.zOff, 0, f1);
+    out.z = lerp(f0.z, f1.z, e) - G.kick * 0.5 * kickT + G.reach * Math.sin(Math.PI * clamp((s - 0.35) / 0.65, 0, 1));
+    out.y = lerp(f0.y, f1.y, s) + G.lift * Math.pow(Math.sin(Math.PI * s), 0.8) + G.kick * kickT;      // the heel kicks up behind, then the knee drives forward
+    out.p = lerp(f0.p, f1.p, e) + G.kick * 1.4 * Math.sin(Math.PI * Math.min(1, s / 0.5));
+    out.down = false;
+    return out;
+  }
+  // two-bone IK in the leg's side plane: the ankle target (z forward, y up) seen from the hip joint.
+  // Angles are rotation.x values: 0 = straight down, negative = forward. The knee always bends forward.
+  function legIK(z, y, out) {
+    var d = Math.hypot(z, y), max = (L1 + L2) * 0.999, min = 0.2;
+    if (d > max) { z *= max / d; y *= max / d; d = max; } else if (d < min) { z *= min / d; y *= min / d; d = min; }
+    var phi = Math.atan2(-z, -y);
+    var a = Math.acos(clamp((L1 * L1 + d * d - L2 * L2) / (2 * L1 * d), -1, 1)), b = Math.acos(clamp((L2 * L2 + d * d - L1 * L1) / (2 * L2 * d), -1, 1));
+    out.hip = phi - a; out.knee = a + b;
+    return out;
+  }
+  function poseAstro(a, dt, moving, sprint, room) {
+    var S = RIG.scale, t = W.time, gm = grav / S, k6 = Math.min(1, dt * 6), i, f;
+    var busy = a.mode === 'busy', v = Math.hypot(a.vel.x, a.vel.z) / S;
+    if (dt > 0) a.accel = lerp(a.accel, (v - a.spd) / dt, k6);
+    a.spd = v;
+    // which gait: walk when slow, a light low-gravity lope at the normal pace, a long bounding run when sprinting
+    var want = clamp((v - 1.2) / 5.7, 0, 1) * 0.6;
+    if (sprint && moving) want = Math.max(want, 0.6 + clamp((v - 6.9) / 3.6, 0, 1) * 1.4);
+    a.gait = lerp(a.gait, want, Math.min(1, dt * 4));
+    gaitAt(a.gait);
+    var mv = smooth((v - 0.12) / 0.9);
+    if (mv > 0.02 && a.move <= 0.02 && a.onGround) a.cyc = G.duty + 0.02;       // set off with the left foot
+    a.move = busy ? 0 : mv;
+    var gf = clamp(Math.sqrt(grav / 3.71), 0.62, 1.2);                          // lower gravity: slower, floatier strides
+    var cad = (1 - Math.min(a.gait, 1)) * clamp(v / 0.95, 0.6, 1.6) + G.cad * gf;
+    var D = Math.min(0.62, v * G.duty / cad), duty = v > 0.05 ? clamp(D * cad / v, 0.12, G.duty) : G.duty;
+    if (a.onGround && a.move > 0.01) a.cyc = (a.cyc + cad * dt) % 1;
+    // ---- in the air
+    if (!a.onGround) a.airT += dt; else a.airT = 0;
+    a.air = lerp(a.air, !a.onGround && (a.vy > 0 || a.airT > 0.08) ? 1 : 0, Math.min(1, dt * 14));
+    var kv = clamp(a.vy / 3.7, -1.2, 1), up = clamp(kv, 0, 1), down = clamp(-kv / 0.7, 0, 1);
+    var tuck = clamp(1 - Math.abs(kv - 0.25) / 0.85, 0, 1), push = clamp((kv - 0.8) / 0.2, 0, 1);
+    // ---- the hips: height above the ground
+    var cyc2 = Math.PI * 2 * a.cyc, mw = a.move * (1 - a.air);
+    var bobW = G.bob * Math.cos(2 * cyc2 - Math.PI * duty);                      // walking: highest over the planted foot
+    var sig = Math.min(0.98, 2 * duty), Ts = 0.5 / cad, psi = (2 * a.cyc) % 1, Tf = (1 - sig) * Ts, vz = gm * Tf / 2, bobR;
+    if (psi < sig) bobR = -Math.max(vz * sig * Ts / Math.PI, 0.012 + 0.02 * a.gait) * Math.sin(Math.PI * psi / sig);   // running: a spring...
+    else { var tt = (psi - sig) * Ts; bobR = vz * tt - gm * tt * tt / 2; }                                              // ...then a free flight
+    var hipH = lerp(RIG.hipY - 0.018 + 0.004 * Math.sin(t * 1.7), RIG.hipY - G.crouch + lerp(bobW, bobR, clamp((0.55 - duty) / 0.13, 0, 1)), a.move);
+    if (busy) hipH = RIG.hipY - 0.07;
+    a.landT += dt;
+    var dip = a.landT < 1 ? a.landK * 0.17 * (a.landT < 0.1 ? Math.sin(a.landT / 0.1 * Math.PI / 2) : Math.exp(-(a.landT - 0.1) * 7)) : 0;
+    hipH -= dip;
+    // ---- the feet on the ground (standing feet sit a little apart; a drilling stance is wider and staggered)
+    var sy = Math.sin(a.yaw), cy = Math.cos(a.yaw);
+    for (i = 0; i < 2; i++) {
+      f = footAt((a.cyc + i * 0.5) % 1, D, duty, FT[i]);
+      var iz = busy ? (i ? -0.12 : 0.1) : (i ? -0.02 : 0.02);
+      f.z = lerp(iz, f.z, a.move); f.y = lerp(ANK, f.y, a.move); f.p = lerp(0, f.p, a.move); f.down = f.down || a.move < 0.6;
+      // follow the ground under each foot
+      var side = (i ? 1 : -1) * RIG.hipX * S, fx = a.pos.x + sy * f.z * S + cy * side, fz = a.pos.z + cy * f.z * S - sy * side;
+      f.g = room || !a.onGround ? 0 : clamp((Tn.height(fx, fz) - a.pos.y) / S, -0.3, 0.3);
+      if (f.down && a.onGround) hipH = Math.min(hipH, f.y + f.g + Math.sqrt(Math.max(0, 0.7 * 0.7 - f.z * f.z)));      // a planted foot must stay reachable
+      // a footstep the moment a foot comes down
+      var ph = (a.cyc + i * 0.5) % 1;
+      if (ph < a.legPh[i] && a.onGround && a.move > 0.4 && A.onStep) {
+        var fs = (D * 0.5 + G.zOff) * S;
+        A.onStep(vF.set(a.pos.x + sy * fs, a.pos.y, a.pos.z + cy * fs), a.yaw, i ? 1 : -1, sprint);
+      }
+      a.legPh[i] = ph;
+    }
+    hipH = lerp(hipH, RIG.hipY - 0.03, a.air);
+    // ---- hips and body: twist, sway, tilt, lean, bank into turns
+    var pYaw = G.yaw * Math.cos(cyc2) * mw;
+    var sway = -G.sway * Math.cos(cyc2 - Math.PI * duty) * mw + 0.01 * Math.sin(t * 0.45) * (1 - a.move);
+    var tilt = -G.tilt * Math.cos(cyc2 - Math.PI * duty) * mw;
+    a.hips.position.set(sway, hipH, 0); a.hips.rotation.set(0, pYaw, tilt);
+    a.headY = (hipH - RIG.hipY) * S;
+    var turn = dt > 0 ? angLerp(0, a.yaw - a.lastYaw, 1) / dt : 0; a.lastYaw = a.yaw;
+    a.bank = lerp(a.bank, a.spin > 0 || a.fp ? 0 : clamp(-turn * v * S * 0.03, -0.22, 0.22) * (1 - a.air), k6);
+    a.group.rotation.set(0, a.yaw, a.bank);
+    var lean = lerp(0.015 + 0.01 * Math.sin(t * 1.7), G.lean, a.move) + clamp(a.accel * 0.012, -0.1, 0.14) * (1 - a.air) + dip * 1.1;
+    lean += a.air * (a.runJump ? 0.12 - 0.1 * up : -0.06 * up + 0.1 * down);
+    // ---- the legs: planted/swinging targets, or the shapes of a jump, then IK
+    var legs = [[a.legL, a.shinL, a.footL], [a.legR, a.shinR, a.footR]];
+    for (i = 0; i < 2; i++) {
+      f = FT[i];
+      var sx = i ? 1 : -1, hx = sx * RIG.hipX;
+      var pz = f.z + hx * Math.sin(pYaw), py = f.y + f.g - hipH, pp = f.p;
+      if (a.air > 0.001) {
+        var az, ay, ap;
+        if (a.runJump) {
+          var lead = sx === a.lead;
+          az = lead ? 0.3 - down * 0.2 : -0.3 + down * 0.42; ay = lead ? -0.6 - down * 0.18 : -0.62 - down * 0.16; ap = lead ? -0.05 : 0.7 - down * 0.72;
+        } else {
+          az = 0.04 + tuck * (i ? 0.08 : 0.15) + down * 0.06; ay = -0.8 + tuck * 0.28 - push * 0.05; ap = 0.3 + push * 0.4 - down * 0.45;
+        }
+        pz = lerp(pz, az, a.air); py = lerp(py, ay, a.air); pp = lerp(pp, ap, a.air);
+      }
+      legIK(pz, py, ik);
+      var spl = sx * (busy ? 0.08 : 0.03) - tilt - sway / 0.72;
+      legs[i][0].rotation.set(ik.hip, -pYaw, spl);
+      legs[i][1].rotation.set(ik.knee, 0, 0);
+      legs[i][2].rotation.set(pp - ik.hip - ik.knee, 0, -spl * 0.8);
+    }
+    // ---- the arms: swing against the legs (elbows bend more the faster he goes), or hold, aim, throw, drill
+    var sw = Math.cos(cyc2) * G.arm * mw, arms = [[a.armL, a.foreL, a.handL], [a.armR, a.foreR, a.handR]];
+    for (i = 0; i < 2; i++) {
+      var sg = i ? -1 : 1, out = i ? 1 : -1;                                    // sg: + = this arm swings back when the left foot is forward
+      var ax = -0.06 + sg * sw, el = lerp(-0.2, G.elbow, a.move) - G.pump * mw * (1 - sg * Math.cos(cyc2)) / 2, azr = out * (0.2 + 0.06 * a.gait), hand = -0.15;
+      ax += 0.015 * Math.sin(t * 1.7) * (1 - a.move);
+      if (a.air > 0.001) {
+        var bx, bz, be;
+        if (a.runJump) { var fwd = (i ? 1 : -1) !== a.lead; bx = fwd ? -1.5 + down * 0.6 : 0.55 - down * 0.4; be = -0.9; bz = out * (0.3 + 0.4 * down); }
+        else { bx = lerp(-0.35, -2.15, up) * (1 - down) + down * -0.55; be = -0.35 - 0.35 * tuck; bz = out * (0.3 + 0.85 * down); }
+        ax = lerp(ax, bx, a.air); el = lerp(el, be, a.air); azr = lerp(azr, bz, a.air);
+      }
+      ax -= dip * 1.6; el -= dip * 0.8;
+      if (busy) { ax = -0.95 + Math.sin(t * 40) * 0.04; el = -0.7; azr = -out * 0.3; hand = -0.3; }
+      else if (a.throwT > 0) { var kk = a.throwT / 0.35; ax = -0.35 - 2.3 * kk; el = -0.9 * kk; azr = -out * 0.2; hand = -0.4 * kk; }
+      else if (a.carrying) { ax = a.aim ? -2.05 : -1.0; el = a.aim ? -0.5 : -0.55; azr = -out * 0.28; hand = -0.35; }
+      arms[i][0].rotation.set(ax, 0, azr); arms[i][1].rotation.set(el, 0, 0); arms[i][2].rotation.set(hand, 0, 0);
+    }
+    if (busy) lean = 0.2;
+    else if (a.throwT > 0) lean = 0.22 * Math.sin(Math.PI * (1 - a.throwT / 0.35)) + 0.05;
+    else if (a.carrying && a.aim) lean = -0.12;
+    a.body.rotation.set(lean, -pYaw * 1.6, -tilt * 0.85);
+  }
+  // sitting in the rover: thighs on the seat, shins down, hands toward the wheel
+  function poseSeated(a) {
+    a.hips.position.set(0, RIG.hipY - 0.12, 0); a.hips.rotation.set(0, 0, 0); a.headY = 0; a.air = 0; a.move = 0; a.bank = 0;
+    a.legL.rotation.set(-1.5, 0, -0.06); a.legR.rotation.set(-1.5, 0, 0.06);
+    a.shinL.rotation.set(1.42, 0, 0); a.shinR.rotation.set(1.42, 0, 0); a.footL.rotation.set(0.08, 0, 0); a.footR.rotation.set(0.08, 0, 0);
+    a.body.rotation.set(0.04, 0, 0);
+    a.armL.rotation.set(-1.05, 0, 0.12); a.armR.rotation.set(-1.05, 0, -0.12);
+    a.foreL.rotation.set(-0.45, 0, 0); a.foreR.rotation.set(-0.45, 0, 0); a.handL.rotation.set(-0.2, 0, 0); a.handR.rotation.set(-0.2, 0, 0);
   }
 
   function updateRover(dt, input) {
@@ -476,9 +651,10 @@
   // ---------- first-person view ----------
   A.eye = function (out) {
     var p = astro.group.position, s = Math.sin(astro.yaw), c = Math.cos(astro.yaw);
-    return out.set(p.x + s * 0.12, p.y + (astro.mode === 'drive' ? 1.2 : 1.7), p.z + c * 0.12);      // lower when sitting in the rover
+    // lower when sitting in the rover; walking, the head rises and falls with the hips
+    return out.set(p.x + s * 0.12, p.y + (astro.mode === 'drive' ? 1.2 : 1.7 + astro.headY), p.z + c * 0.12);
   };
-  // In first person your own helmet and chest must not block the view, but they still have to throw a shadow.
+  // In first person your own helmet, chest and hips must not block the view, but they still have to throw a shadow.
   // So they swap to a material that draws nothing and still casts shadows. Arms and legs stay visible.
   var ghost = null;
   A.setFirstPerson = function (on) {
@@ -486,8 +662,8 @@
     if (!astro) return;
     astro.fp = A.fp;
     if (!ghost) ghost = new T.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
-    var keep = [astro.armL, astro.armR, astro.legL, astro.legR, astro.drill];
-    astro.body.children.forEach(function (part) {
+    var keep = [astro.armL, astro.armR, astro.legL, astro.legR, astro.drill, astro.body];
+    astro.body.children.concat(astro.hips.children).forEach(function (part) {
       if (keep.indexOf(part) >= 0) return;
       part.traverse(function (o) {
         if (!o.isMesh) return;
