@@ -31,8 +31,4 @@ body.touch #hud .sol-chip, body.touch #hud .meter, body.touch #goals, #hud .icon
 /* ---------- the Settings menu ---------- */
 #settings-menu { padding: 6px; border-radius: 16px; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.4); }
 
-/* ---------- windows: a thin scroll bar that fits the rounded corners ---------- */
-.modal::-webkit-scrollbar { width: 8px; }
-.modal::-webkit-scrollbar-track { margin: 22px 0; background: transparent; }
-.modal::-webkit-scrollbar-thumb { border-radius: 4px; background: rgba(220, 232, 255, 0.35); }
-.modal::-webkit-scrollbar-thumb:hover { background: rgba(220, 232, 255, 0.55); }
+/* (the windows' fonts, hidden scroll bar and edge fades are in windows.css) */

@@ -136,7 +136,7 @@
       var cls = 'goal' + (g.optional ? ' g-opt' : '') + (g.done ? ' done' : g.now ? ' now' : '');
       if (r.cls !== cls) { r.cls = cls; r.el.className = cls; }
       if (r.icon !== g.icon) { r.icon = g.icon; r.ic.textContent = g.icon || '•'; }
-      if (r.text !== g.text) { r.text = g.text; r.tx.textContent = g.text; }
+      if (r.text !== g.text) { r.text = g.text; r.tx.textContent = g.text; r.ic.title = g.text; }   // the icon's tooltip says the job when the list is folded
       rows.push(r.el);
     });
     // put the rows in order, moving only the ones that are out of place
@@ -144,6 +144,42 @@
     while (goalUl.children.length > rows.length) goalUl.removeChild(goalUl.lastChild);
     Object.keys(goalRows).forEach(function (id) { if (!seen[id]) delete goalRows[id]; });
   };
+  // ---------- windows you scroll ----------
+  // They have no scroll bar. A soft fade at the top or bottom edge (windows.css) shows there is more to read that way.
+  function edgeHints(el) {
+    var up = el.scrollTop > 2, down = el.scrollTop + el.clientHeight < el.scrollHeight - 2;
+    if (el.classList.contains('more-up') !== up) el.classList.toggle('more-up', up);
+    if (el.classList.contains('more-down') !== down) el.classList.toggle('more-down', down);
+  }
+  function isWindow(el) { return !!(el && el.classList && (el.classList.contains('modal') || el.classList.contains('holo-panel'))); }
+  function scanEdges() { document.querySelectorAll('.modal, .holo-panel').forEach(edgeHints); }
+  document.addEventListener('scroll', function (e) { if (isWindow(e.target)) edgeHints(e.target); }, true);
+  // a window opens, redraws or opens a section: look again (the observer gathers each burst of changes into one call)
+  if (window.MutationObserver) new MutationObserver(scanEdges).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['open', 'class'] });
+  window.addEventListener('resize', scanEdges);
+  if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', scanEdges);   // a font arriving changes the height
+
+  // The fold button: the list folds into a narrow strip with only the icons, and opens again.
+  // The choice is remembered in this browser.
+  var goalFold = $('goals-fold'), FOLD_KEY = 'ja-goals-folded', calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
+  function foldGoals(on, byUser) {
+    goalBox.classList.toggle('folded', on);
+    goalFold.setAttribute('aria-expanded', String(!on));
+    goalFold.setAttribute('aria-label', on ? 'Open the job list' : 'Fold the job list into a strip of icons');
+    goalFold.title = on ? 'Open the job list' : 'Fold the job list';
+    if (!byUser) return;
+    try { localStorage.setItem(FOLD_KEY, on ? '1' : '0'); } catch (e) { /* private mode: it lasts until the page closes */ }
+    // the rows fade in at their new size, so the change reads as one quick move
+    if (goalUl.animate && !(calm && calm.matches)) goalUl.animate([{ opacity: 0, transform: 'translateX(-6px)' }, { opacity: 1, transform: 'none' }], { duration: 180, easing: 'cubic-bezier(.2, .8, .3, 1)' });
+  }
+  var foldSaved = null;
+  try { foldSaved = localStorage.getItem(FOLD_KEY); } catch (e) { foldSaved = null; }
+  foldGoals(foldSaved === '1', false);
+  goalFold.addEventListener('click', function (e) {
+    foldGoals(!goalBox.classList.contains('folded'), true);
+    JA.audio.play('tap');
+    if (e.detail) goalFold.blur();      // after a mouse click, Space must jump again instead of pressing the button
+  });
 
   // ---------- banner, radio, prompt, hands ----------
   var bannerText = null;

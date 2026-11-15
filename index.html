@@ -14,6 +14,7 @@
 <link rel="stylesheet" href="css/panels.css">
 <link rel="stylesheet" href="css/learn.css">
 <link rel="stylesheet" href="css/holo.css">
+<link rel="stylesheet" href="css/windows.css">
 </head>
 <body>
 <canvas id="scene" aria-label="3D view of your outpost"></canvas>
@@ -87,7 +88,9 @@
 </header>
 
 <aside id="goals" class="hidden" aria-label="Goals">
-  <div class="g-head"><h4 id="goals-title">Today</h4><span class="g-count" title="Must-do jobs done"></span></div>
+  <div class="g-head"><h4 id="goals-title">Today</h4><span class="g-count" title="Must-do jobs done"></span>
+    <!-- folds the list into a narrow strip of icons; press again to open it -->
+    <button id="goals-fold" class="g-fold" type="button" aria-expanded="true" aria-controls="goal-list" aria-label="Fold the job list into a strip of icons" title="Fold the job list"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M7.6 2.4 4 6l3.6 3.6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
   <div class="g-prog" aria-hidden="true"><i></i></div>
   <ul id="goal-list"></ul>
 </aside>

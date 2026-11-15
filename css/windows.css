@@ -1,0 +1,76 @@
+/* Astro Outpost — the windows you scroll: pop-up cards (night report, help, welcome, pause, journal...) and the holo-tablet.
+   - Two modern fonts, only inside these windows: Sora for titles, names and numbers, Figtree for the reading text.
+     (Both ship with the game in assets/fonts, SIL Open Font License, so they work offline.)
+   - No scroll bar. You still scroll with the wheel, a finger or the keys; a soft fade at the top or bottom edge
+     shows there is more to read that way (ui.js sets .more-up / .more-down while you scroll).
+   - Quieter cards: hairline edges instead of thick outlines, a calmer type scale, more air.
+   Loaded last, so it wins over style.css, hud.css, panels.css, learn.css and holo.css. */
+@font-face { font-family: 'Sora'; font-style: normal; font-weight: 100 800; font-display: swap; src: url(../assets/fonts/sora.woff2) format('woff2'); }
+@font-face { font-family: 'Figtree'; font-style: normal; font-weight: 300 900; font-display: swap; src: url(../assets/fonts/figtree.woff2) format('woff2'); }
+
+/* ---------- fonts: the windows swap the two font variables, so every rule inside that uses them follows ---------- */
+.modal, .holo-panel {
+  --font: 'Figtree', 'Lexend', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-display: 'Sora', 'Exo 2', 'Segoe UI', system-ui, sans-serif;
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* ---------- no scroll bar (scrolling still works everywhere) ---------- */
+.modal, .holo-panel { scrollbar-width: none; -ms-overflow-style: none; overscroll-behavior: contain; }
+.modal::-webkit-scrollbar, .holo-panel::-webkit-scrollbar { display: none; width: 0; height: 0; }
+
+/* ---------- the window itself ---------- */
+.modal {
+  --pad-t: 26px; --pad-x: 28px; --pad-b: 22px;
+  --fade-h: 54px;
+  padding: var(--pad-t) var(--pad-x) var(--pad-b); border-radius: 26px;
+  line-height: 1.5;
+}
+/* the edge fades: they ride on the top and bottom edge of the window while the words scroll under them.
+   They take no room (their margins cancel their height) and show only when there is more that way. */
+.modal::before, .modal::after { content: ''; position: sticky; z-index: 4; display: block; height: var(--fade-h); pointer-events: none; opacity: 0; transition: opacity 0.2s ease-out; }
+/* (sticky offsets count from inside the padding, hence the negative top and bottom) */
+.modal::before { top: calc(-1 * var(--pad-t)); margin: calc(-1 * var(--pad-t)) calc(-1 * var(--pad-x)) calc(var(--pad-t) - var(--fade-h));
+  background: linear-gradient(to top, rgba(6, 18, 54, 0), rgba(6, 18, 54, 0.5) 50%, rgba(6, 18, 54, 0.82)); }
+.modal::after { bottom: calc(-1 * var(--pad-b)); margin: calc(-1 * var(--fade-h)) calc(-1 * var(--pad-x)) 0;
+  background: linear-gradient(to bottom, rgba(6, 18, 54, 0), rgba(6, 18, 54, 0.5) 50%, rgba(6, 18, 54, 0.82)); }
+.modal.more-up::before, .modal.more-down::after { opacity: 1; }
+/* the holo-tablet keeps its own hologram look: a cyan glow along the edge that has more */
+.holo-panel.more-down { box-shadow: inset 0 0 0 1.5px rgba(92, 240, 255, 0.5), inset 0 -34px 28px -22px rgba(92, 240, 255, 0.3), 0 0 46px rgba(92, 240, 255, 0.2), 0 24px 70px rgba(0, 0, 0, 0.6); }
+.holo-panel.more-up { box-shadow: inset 0 0 0 1.5px rgba(92, 240, 255, 0.5), inset 0 34px 28px -22px rgba(92, 240, 255, 0.3), 0 0 46px rgba(92, 240, 255, 0.2), 0 24px 70px rgba(0, 0, 0, 0.6); }
+.holo-panel.more-up.more-down { box-shadow: inset 0 0 0 1.5px rgba(92, 240, 255, 0.5), inset 0 34px 28px -22px rgba(92, 240, 255, 0.3), inset 0 -34px 28px -22px rgba(92, 240, 255, 0.3), 0 0 46px rgba(92, 240, 255, 0.2), 0 24px 70px rgba(0, 0, 0, 0.6); }
+
+/* ---------- type: one clear scale ---------- */
+.modal h2 { font-size: 1.6rem; font-weight: 650; line-height: 1.15; letter-spacing: -0.02em; margin: 0 0 6px; }
+.modal h3 { font-family: var(--font-display); font-size: 0.98rem; font-weight: 600; letter-spacing: -0.005em; margin: 20px 0 8px; }
+.modal p { line-height: 1.5; }
+.modal .sub { color: #aab6dc; font-size: 1rem; line-height: 1.45; margin: 0 0 6px; }
+.modal b, .modal strong { font-weight: 650; }
+.modal .btn { font-family: var(--font-display); font-weight: 600; letter-spacing: -0.005em; }
+.modal kbd { font-family: var(--font-display); }
+
+/* ---------- rows and picks: hairline edges, a little more air ---------- */
+.modal .info-row { gap: 14px; padding: 12px 15px; margin: 8px 0; border-radius: 16px; background: rgba(255, 255, 255, 0.045); box-shadow: inset 0 0 0 1px rgba(170, 195, 255, 0.1); }
+.modal .info-row b { font-family: var(--font-display); font-size: 1rem; font-weight: 600; letter-spacing: -0.01em; }
+.modal .info-row p { font-size: 0.96rem; line-height: 1.48; color: #d3dbf5; margin-top: 3px; }
+.modal .info-row.alert { box-shadow: inset 0 0 0 1.5px var(--dose); }
+.modal .info-row.good { box-shadow: inset 0 0 0 1.5px var(--ok); }
+.modal .pick { box-shadow: inset 0 0 0 1px rgba(170, 195, 255, 0.14); }
+.modal .pick:hover { background: rgba(255, 255, 255, 0.09); }
+.modal .pick.sel { box-shadow: inset 0 0 0 2px var(--power); }
+.modal .pick b { font-size: 1.05rem; font-weight: 600; letter-spacing: -0.01em; }
+.modal .pick span { line-height: 1.38; }
+.modal .opt { box-shadow: inset 0 0 0 1px rgba(170, 195, 255, 0.14), 0 3px 0 rgba(0, 0, 0, 0.3); }
+
+/* the night report: names and numbers in Sora, tabular so the columns line up */
+.modal .rep .nm { font-family: var(--font-display); font-weight: 600; font-size: 1.05rem; letter-spacing: -0.01em; }
+.modal .rep .chg { font-family: var(--font-display); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.modal .rep ul { font-size: 0.92rem; }
+
+@media (max-width: 640px) {
+  .modal { --pad-t: 20px; --pad-x: 18px; --pad-b: 18px; --fade-h: 40px; border-radius: 22px; }
+  .modal h2 { font-size: 1.4rem; }
+}
+@media (prefers-reduced-motion: reduce) { .modal::before, .modal::after { transition: none; } }
